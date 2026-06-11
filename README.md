@@ -1,6 +1,6 @@
 # AgentSweep
 
-![AgentSweep](docs/wordmark.jpg)
+![AgentSweep](docs/logo.png)
 
 > Find and redact secrets (API keys, tokens, private keys, DB URLs) that got pasted into your AI coding agent's local history.
 
