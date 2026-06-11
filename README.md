@@ -16,6 +16,8 @@ Claude Code (and every other AI coding CLI) stores your full conversation histor
 
 `agentsweep` scans that history, tells you what leaked, and can redact the secret values in place while preserving the JSONL structure byte-for-byte. It also tells you which keys to rotate, with the right revocation URL for each provider.
 
+> **Scope of protection:** agentsweep removes one attack vector — secrets sitting in local history files. It does not affect what your AI provider sees: when you paste a key into Claude Code, Cursor, or any cloud-backed agent, that key already transited the provider's servers. If that concerns you, consider a locally-hosted model (Ollama, LM Studio, OpenCode) where nothing leaves your machine. agentsweep is most valuable as a cleanup tool for existing history and as a habit-forming reminder to rotate keys you've pasted.
+
 ## Install
 
 ```
