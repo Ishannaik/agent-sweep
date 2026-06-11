@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentsweep"
-version = "0.1.0"
+version = "0.1.1"
 description = "Find and redact secrets in AI coding agent histories (Claude Code, and more)."
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "MIT" }
@@ -37,6 +37,7 @@ dev = ["pytest>=7.0"]
 
 [project.scripts]
 agentsweep = "agentsweep.cli:main"
+asweep = "agentsweep.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Ishannaik/agent-sweep"
