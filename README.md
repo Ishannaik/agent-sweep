@@ -2,11 +2,12 @@
 
 ![AgentSweep](docs/logo.png)
 
-> Find and redact secrets (API keys, tokens, private keys, DB URLs) that got pasted into your AI coding agent's local history.
+> Find and redact secrets (API keys, tokens, private keys, DB URLs) that got pasted into your AI coding agent's local history. **Runs fully offline — your files never leave your machine.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/Ishannaik/agent-sweep)
+[![Offline](https://img.shields.io/badge/runs-fully%20offline-brightgreen.svg)](https://github.com/Ishannaik/agent-sweep)
 
 **Status:** alpha. Works on **Claude Code** and **OpenAI Codex** today. Aider, Cursor, Continue via contributed `Source` adapters — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -16,7 +17,7 @@ Claude Code (and every other AI coding CLI) stores your full conversation histor
 
 `agentsweep` scans that history, tells you what leaked, and can redact the secret values in place while preserving the JSONL structure byte-for-byte. It also tells you which keys to rotate, with the right revocation URL for each provider.
 
-> **Scope of protection:** agentsweep removes one attack vector — secrets sitting in local history files. It does not affect what your AI provider sees: when you paste a key into Claude Code, Cursor, or any cloud-backed agent, that key already transited the provider's servers. If that concerns you, consider a locally-hosted model (Ollama, LM Studio, OpenCode) where nothing leaves your machine. agentsweep is most valuable as a cleanup tool for existing history and as a habit-forming reminder to rotate keys you've pasted.
+> **Scope of protection:** agentsweep itself is fully local and offline — it reads and writes only files on your machine and makes zero network calls. It removes one attack vector: secrets sitting in local history files. It does not affect what your AI provider already received: when you paste a key into Claude Code, Cursor, or any cloud-backed agent, that key already transited the provider's servers before it hit disk. If that concerns you, consider a locally-hosted model (Ollama, LM Studio, OpenCode) where nothing leaves your machine at all — agentsweep pairs especially well with local-model setups.
 
 ## Install
 
