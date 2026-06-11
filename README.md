@@ -21,8 +21,16 @@ Claude Code (and every other AI coding CLI) stores your full conversation histor
 
 ## Install
 
+```bash
+pip install agentsweep          # installs both `agentsweep` and `asweep` commands
+pip install --upgrade agentsweep  # update to latest
 ```
-pip install agentsweep
+
+Or run without installing (via [uv](https://docs.astral.sh/uv/)):
+
+```bash
+uvx agentsweep
+uvx --from agentsweep asweep    # short alias
 ```
 
 Requires Python 3.11+. One dependency: [`rich`](https://github.com/Textualize/rich), for the pipeline terminal UI. Output degrades to plain text automatically when piped, and `--json` is always styling-free.
