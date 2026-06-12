@@ -473,7 +473,10 @@ def purge(args) -> int:
     a sweep isn't finished until they're gone. Deleting them is permanent
     (``undo`` stops working for those files), so this prompts on a
     terminal and refuses without ``--yes`` everywhere else.
-    Exit 0 on success or nothing-to-do, 2 if refused or any delete failed.
+
+    Exit codes: 0 on success, nothing-to-do, or an interactive ``n``
+    (backups kept — a no-op, matching ``undo``); 2 when non-interactive
+    without ``--yes`` (refused to act blind) or if any delete failed.
     """
     source_cls = SOURCES[args.source]
     source: Source = source_cls(root=args.root) if args.root else source_cls()
