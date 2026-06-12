@@ -50,11 +50,33 @@ class Source(ABC):
         value is the full file content to write — str for text formats,
         bytes for binary formats like SQLite. Implementations MUST NOT
         modify `path` itself; the redactor owns the backup and the atomic
-        write. str content MUST preserve structure (line count, JSON
-        validity, line endings) so the redactor's post-write validation
-        passes; bytes content MUST be validated by the implementation
-        (e.g. PRAGMA integrity_check) before it is returned.
+        write. str content MUST satisfy the validation declared by
+        content_format() for this path (JSONL, whole-file JSON, or
+        line-count-preserving text); bytes content MUST be validated by
+        the implementation (e.g. PRAGMA integrity_check) before it is
+        returned.
         """
+
+    def content_format(self, path: Path) -> str:
+        """Declare how the redactor must validate str content for `path`.
+
+        One of "jsonl" (the default: every line parses as JSON, line count
+        preserved), "json" (the whole file parses as one JSON document) or
+        "text" (markdown/plaintext: line count preserved). Only consulted
+        when apply_redactions returns str — bytes returns are validated by
+        the source itself before being handed over.
+        """
+        return "jsonl"
+
+    def roots(self) -> list[Path]:
+        """Every directory tree this source's files may live under.
+
+        Most sources have exactly one (self.root); sources whose history
+        spans extra trees (Cursor agent transcripts, Windsurf memories)
+        override this. files() must stay within these — the redactor's
+        path-containment check and undo's backup discovery rely on it.
+        """
+        return [self.root]
 
 
 class JsonlSource(Source):

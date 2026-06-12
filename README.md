@@ -208,9 +208,9 @@ A redactor that corrupts your history is strictly worse than the leak it's fixin
 
 1. **Redaction happens in parsed JSON, not on raw bytes.** Secrets are replaced as string *values* inside the parsed structure, then re-serialized. Structural damage is impossible by construction.
 2. **Atomic writes.** Every rewrite goes: temp file → `fsync()` → `os.replace()` over the original. A crash at any instant leaves either the complete old file or the complete new file — never a torn write.
-3. **Post-write validation.** Before committing, every non-empty line in the new content must parse as JSON, and the line count must match the original. If either check fails, the write aborts and the original is untouched.
+3. **Post-write validation.** Before committing, the new content must pass a format-aware check: JSONL — every non-empty line parses as JSON and the line count matches the original; whole-file JSON — the document parses; markdown/plaintext — the line count matches the original; SQLite — the rewritten copy passes `PRAGMA integrity_check`. If the check fails, the write aborts and the original is untouched.
 4. **`.bak` backup by default.** Refuses to run if a `.bak` already exists (so prior backups can't be clobbered).
-5. **Path containment.** Refuses any target that doesn't resolve inside the source's root.
+5. **Path containment.** Refuses any target that doesn't resolve inside one of the source's history trees (e.g. Windsurf's User dir and its `~/.codeium/windsurf/memories/`).
 6. **Symlink rejection.** Refuses symlinks outright.
 7. **mtime window.** Refuses files modified in the last 60 seconds (likely an active session). `--force` overrides.
 8. **Running-process check.** Refuses if a Claude Code process appears to be running. `--force` overrides.

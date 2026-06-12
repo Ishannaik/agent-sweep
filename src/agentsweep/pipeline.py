@@ -414,9 +414,11 @@ def _write_text(path: Path, text: str) -> None:
         print(f"Could not write {path}: {e}", file=sys.stderr)
 
 
-# Backup patterns undo restores: JSONL transcripts plus the SQLite stores
-# (Cursor/Windsurf *.vscdb, OpenCode opencode.db).
-_BACKUP_GLOBS = ("*.jsonl.bak", "*.vscdb.bak", "*.db.bak")
+# Backup patterns undo restores: JSONL transcripts, whole-file JSON and
+# markdown histories, plus the SQLite stores (Cursor/Windsurf *.vscdb,
+# OpenCode opencode.db, Hermes/Goose *.db).
+_BACKUP_GLOBS = ("*.jsonl.bak", "*.json.bak", "*.md.bak",
+                 "*.vscdb.bak", "*.db.bak")
 
 
 def undo(args) -> int:
@@ -427,11 +429,13 @@ def undo(args) -> int:
     """
     source_cls = SOURCES[args.source]
     source: Source = source_cls(root=args.root) if args.root else source_cls()
-    if not source.root.exists():
+    roots = [r for r in source.roots() if r.exists()]
+    if not roots:
         print(f"No history root at {source.root}", file=sys.stderr)
         return 0
-    backups = sorted({p for pat in _BACKUP_GLOBS
-                      for p in source.root.rglob(pat)})
+    backups = sorted({p for root in roots
+                      for pat in _BACKUP_GLOBS
+                      for p in root.rglob(pat)})
     if not backups:
         print(f"No .bak backups found under {source.root}", file=sys.stderr)
         return 0
@@ -478,7 +482,7 @@ def _redact_all(
     for path, items in found_by_file.items():
         display = ui.rel(path, source.root)
         try:
-            safety_check(path, source.root, force=force)
+            safety_check(path, source.roots(), force=force)
         except SafetyError as e:
             rows.append(("skip", display, str(e)))
             errors += 1
@@ -487,7 +491,8 @@ def _redact_all(
         redactions = _build_redactions(items)
         try:
             new_content = source.apply_redactions(path, redactions)
-            record = safe_write(path, new_content, backup=backup)
+            record = safe_write(path, new_content, backup=backup,
+                                fmt=source.content_format(path))
             note = f".bak: {record.backup.name}" if record.backup else "no backup"
             rows.append(("ok", display, note))
         except SafetyError as e:

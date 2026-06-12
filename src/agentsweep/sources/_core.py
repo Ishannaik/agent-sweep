@@ -14,8 +14,14 @@ from ..preflight import (
     CODEX_MARKERS,
     OPENCODE_MARKERS,
 )
-from ._base import JsonlSource, KeyPath, Source, _line_ending, _set_by_path, _walk_json, _walk_json_with_base
-from ._helpers import _redact_sqlite_copy
+from ._base import JsonlSource, KeyPath, Source, _walk_json_with_base
+from ._helpers import (
+    _apply_json_file_redactions,
+    _apply_plaintext_redactions,
+    _iter_json_file_strings,
+    _iter_plaintext_lines,
+    _redact_sqlite_copy,
+)
 
 
 class ClaudeCodeSource(JsonlSource):
@@ -120,7 +126,7 @@ class OpenCodeSource(Source):
         if path == self._db_path():
             yield from self._iter_strings_sqlite(path)
         else:
-            yield from self._iter_strings_json(path)
+            yield from _iter_json_file_strings(path)
 
     def apply_redactions(
         self,
@@ -129,7 +135,12 @@ class OpenCodeSource(Source):
     ) -> str | bytes:
         if path == self._db_path():
             return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
-        return self._apply_redactions_json(path, redactions)
+        return _apply_json_file_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        # Only consulted for str returns, i.e. the legacy storage/*.json
+        # files; the SQLite path returns source-validated bytes.
+        return "json"
 
     def _iter_strings_sqlite(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
         try:
@@ -180,35 +191,6 @@ class OpenCodeSource(Source):
                 pairs.append((table, col))
         return pairs
 
-    def _iter_strings_json(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return
-        try:
-            obj = json.loads(text)
-        except json.JSONDecodeError:
-            return
-        yield from _walk_json(obj, [], 1)
-
-    def _apply_redactions_json(
-        self,
-        path: Path,
-        redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return ""
-        try:
-            obj = json.loads(text)
-        except json.JSONDecodeError:
-            return text
-        for _line_num, kp, new_val in redactions:
-            _set_by_path(obj, kp, new_val)
-        return json.dumps(obj, ensure_ascii=False, indent=2)
-
-
 class AiderSource(Source):
     """Aider CLI — per-repo Markdown history files named .aider.chat.history.md.
 
@@ -242,30 +224,14 @@ class AiderSource(Source):
                 yield p
 
     def iter_strings(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return
-        for i, line in enumerate(text.splitlines(), 1):
-            if line.strip():
-                yield (i, [i], line)
+        yield from _iter_plaintext_lines(path)
 
     def apply_redactions(
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
     ) -> str:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return ""
-        lines = text.splitlines(keepends=True)
-        by_line: dict[int, str] = {ln: nv for ln, _kp, nv in redactions}
-        out: list[str] = []
-        for i, line in enumerate(lines, 1):
-            if i in by_line:
-                ending = _line_ending(line)
-                out.append(by_line[i] + ending)
-            else:
-                out.append(line)
-        return "".join(out)
+        return _apply_plaintext_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        return "text"

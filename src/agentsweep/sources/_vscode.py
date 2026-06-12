@@ -139,6 +139,9 @@ class CursorSource(_VSCodeSqliteSource):
     def _agent_transcripts_root(self) -> Path:
         return Path.home() / ".cursor" / "projects"
 
+    def roots(self) -> list[Path]:
+        return [self.root, self._agent_transcripts_root()]
+
     def files(self) -> list[Path]:
         result: list[Path] = []
         if self.root.exists():
@@ -207,6 +210,9 @@ class WindsurfSource(_VSCodeSqliteSource):
     def _memories_root(self) -> Path:
         return Path.home() / ".codeium" / "windsurf" / "memories"
 
+    def roots(self) -> list[Path]:
+        return [self.root, self._memories_root()]
+
     def files(self) -> list[Path]:
         result: list[Path] = []
         if self.root.exists():
@@ -241,3 +247,8 @@ class WindsurfSource(_VSCodeSqliteSource):
         if path.suffix == ".md":
             return _apply_plaintext_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        # .md memories are plaintext; .vscdb redactions return
+        # source-validated bytes (fmt unused).
+        return "text" if path.suffix == ".md" else "jsonl"

@@ -89,8 +89,11 @@ class ClineSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> bytes:
+    ) -> str:
         return _apply_json_file_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        return "json"
 
 
 class GeminiCliSource(JsonlSource):
@@ -99,6 +102,7 @@ class GeminiCliSource(JsonlSource):
     File layout:
       ~/.gemini/tmp/<project_slug>/chats/session-<date>-<id>.jsonl
       ~/.gemini/tmp/<project_slug>/chats/<parent_id>/session-*.jsonl  (subagents)
+      ~/.gemini/tmp/<project_slug>/chats/*.json  (checkpoints, whole-file JSON)
 
     The GEMINI_CLI_HOME env var overrides the home directory base.
     """
@@ -141,6 +145,26 @@ class GeminiCliSource(JsonlSource):
         for p in tmp.rglob("*.json"):
             if p.is_file() and "chats" in p.parts:
                 yield p
+
+    def iter_strings(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
+        # Checkpoint *.json files are one pretty-printed document — the
+        # line-by-line JSONL parser would silently yield nothing for them.
+        if path.suffix == ".json":
+            yield from _iter_json_file_strings(path)
+        else:
+            yield from super().iter_strings(path)
+
+    def apply_redactions(
+        self,
+        path: Path,
+        redactions: list[tuple[int, KeyPath, str]],
+    ) -> str:
+        if path.suffix == ".json":
+            return _apply_json_file_redactions(path, redactions)
+        return super().apply_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        return "json" if path.suffix == ".json" else "jsonl"
 
 
 class ContinueSource(Source):
@@ -197,8 +221,11 @@ class ContinueSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> bytes:
+    ) -> str:
         return _apply_json_file_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        return "json"
 
 
 class GitHubCopilotSource(Source):
@@ -298,7 +325,10 @@ class GitHubCopilotSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str | bytes:
+    ) -> str:
         if path.suffix == ".jsonl":
             return _apply_jsonl_redactions(path, redactions)
         return _apply_json_file_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        return "jsonl" if path.suffix == ".jsonl" else "json"

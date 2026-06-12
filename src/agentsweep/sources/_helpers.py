@@ -174,24 +174,31 @@ def _iter_json_file_strings(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
 def _apply_json_file_redactions(
     path: Path,
     redactions: list[tuple[int, KeyPath, str]],
-) -> bytes:
-    """Apply redactions to a whole-file JSON, returning bytes.
+) -> str:
+    """Apply redactions to a whole-file JSON document, returning str.
 
-    Returns bytes so safe_write skips JSONL per-line validation (which
-    would reject indent=2 multi-line JSON). Structure is validated here
-    by the json.loads → json.dumps round-trip.
+    The pipeline writes the result with fmt="json", so safe_write
+    independently re-validates it as one JSON document. Read or parse
+    failures raise SafetyError: by redaction time the file has already
+    scanned as valid JSON, so anything else is a race or corruption —
+    fail closed rather than silently writing empty or unredacted content.
     """
     try:
         text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return b""
+    except (OSError, UnicodeDecodeError) as e:
+        raise SafetyError(
+            f"Cannot re-read {path.name} for redaction: {e}") from e
     try:
         obj = json.loads(text)
-    except json.JSONDecodeError:
-        return text.encode("utf-8")
+    except json.JSONDecodeError as e:
+        raise SafetyError(
+            f"{path.name} is no longer valid JSON; refusing to redact") from e
     for _line_num, kp, new_val in redactions:
         _set_by_path(obj, kp, new_val)
-    return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+    out = json.dumps(obj, ensure_ascii=False, indent=2)
+    if text.endswith("\n"):
+        out += "\n"
+    return out
 
 
 def _iter_plaintext_lines(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
@@ -208,16 +215,19 @@ def _iter_plaintext_lines(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
 def _apply_plaintext_redactions(
     path: Path,
     redactions: list[tuple[int, KeyPath, str]],
-) -> bytes:
-    """Apply line-level redactions to a plain-text file, returning bytes.
+) -> str:
+    """Apply line-level redactions to a plain-text file, returning str.
 
-    Returns bytes so safe_write skips JSONL per-line validation (which
-    would reject Markdown and other non-JSON text formats).
+    The pipeline writes the result with fmt="text", so safe_write enforces
+    that the line count is unchanged (redaction replaces whole lines 1:1).
+    Read failures raise SafetyError — fail closed rather than silently
+    writing empty content.
     """
     try:
         text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return b""
+    except (OSError, UnicodeDecodeError) as e:
+        raise SafetyError(
+            f"Cannot re-read {path.name} for redaction: {e}") from e
     lines = text.splitlines(keepends=True)
     by_line: dict[int, str] = {ln: nv for ln, _kp, nv in redactions}
     out: list[str] = []
@@ -227,4 +237,4 @@ def _apply_plaintext_redactions(
             out.append(by_line[i] + ending)
         else:
             out.append(line)
-    return "".join(out).encode("utf-8")
+    return "".join(out)
