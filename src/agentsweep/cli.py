@@ -6,6 +6,7 @@ Usage shapes, all supported:
     agentsweep scan [opts]     scan only
     agentsweep fix  [opts]     redact (guided + confirmed on a terminal)
     agentsweep undo [opts]     restore .bak backups
+    agentsweep purge [opts]    delete .bak backups (after rotating the keys)
     agentsweep --fix ...       legacy flag form, kept working as an alias
     agentsweep --update        check PyPI for a newer version
 
@@ -23,7 +24,7 @@ from pathlib import Path
 from . import __version__, ui
 from .sources import SOURCES
 
-VERBS = {"scan", "fix", "undo"}
+VERBS = {"scan", "fix", "undo", "purge"}
 
 _PYPI_URL = "https://pypi.org/pypi/agentsweep/json"
 
@@ -153,6 +154,10 @@ def main(argv: list[str] | None = None) -> int:
             from .pipeline import undo
             return undo(_parse_undo(rest))
 
+        if verb == "purge":
+            from .pipeline import purge
+            return purge(_parse_purge(rest))
+
         args = _parse_run(verb, rest)
         _background_update_notice(args)
         from .pipeline import run
@@ -226,6 +231,21 @@ def _parse_undo(rest: list[str]) -> argparse.Namespace:
         description="Restore *.jsonl.bak backups over their redacted files.",
     )
     _add_common(ap)
+    return ap.parse_args(rest)
+
+
+def _parse_purge(rest: list[str]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="agentsweep purge",
+        description="Delete *.bak backups once the leaked keys are rotated. "
+                    "The backups hold the pre-redaction originals, so this "
+                    "is permanent — `agentsweep undo` stops working for "
+                    "them.",
+    )
+    _add_common(ap)
+    ap.add_argument("--yes", action="store_true",
+                    help="Skip the confirmation prompt (required when not "
+                         "running on a terminal).")
     return ap.parse_args(rest)
 
 

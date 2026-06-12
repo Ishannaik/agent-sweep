@@ -130,6 +130,7 @@ menu entirely and behaves exactly as documented below.
 | `agentsweep scan` | Scan only — read-only, no files are modified (default when no verb given) |
 | `agentsweep fix` | Scan, then offer to redact findings in place (type `REDACT` to confirm) |
 | `agentsweep undo` | Restore all `.bak` backups, reverting any previous redaction |
+| `agentsweep purge` | Delete all `.bak` backups once the leaked keys are rotated (permanent — `undo` stops working) |
 | `agentsweep --version` / `-V` | Print the installed version |
 | `agentsweep --update` | Check PyPI for a newer release |
 
@@ -209,7 +210,7 @@ A redactor that corrupts your history is strictly worse than the leak it's fixin
 1. **Redaction happens in parsed JSON, not on raw bytes.** Secrets are replaced as string *values* inside the parsed structure, then re-serialized. Structural damage is impossible by construction.
 2. **Atomic writes.** Every rewrite goes: temp file → `fsync()` → `os.replace()` over the original. A crash at any instant leaves either the complete old file or the complete new file — never a torn write.
 3. **Post-write validation.** Before committing, the new content must pass a format-aware check: JSONL — every non-empty line parses as JSON and the line count matches the original; whole-file JSON — the document parses; markdown/plaintext — the line count matches the original; SQLite — the rewritten copy passes `PRAGMA integrity_check`. If the check fails, the write aborts and the original is untouched.
-4. **`.bak` backup by default.** Refuses to run if a `.bak` already exists (so prior backups can't be clobbered).
+4. **`.bak` backup by default.** Created owner-readable only (mode `0600`) since it holds the pre-redaction secrets; refuses to run if a `.bak` already exists (so prior backups can't be clobbered).
 5. **Path containment.** Refuses any target that doesn't resolve inside one of the source's history trees (e.g. Windsurf's User dir and its `~/.codeium/windsurf/memories/`).
 6. **Symlink rejection.** Refuses symlinks outright.
 7. **mtime window.** Refuses files modified in the last 60 seconds (likely an active session). `--force` overrides.
@@ -231,6 +232,14 @@ If you need to restore a single file manually (e.g. you deleted the undo command
 
 ```bash
 mv session.jsonl.bak session.jsonl
+```
+
+The backups hold the **pre-redaction originals — plaintext secrets**, so a sweep isn't finished until the leaked keys are rotated and the backups are gone. Once you've rotated:
+
+```bash
+agentsweep purge                       # delete Claude Code backups (asks first)
+agentsweep purge --source windsurf     # delete a specific source's backups
+agentsweep purge --yes                 # non-interactive (scripts / CI)
 ```
 
 ## What's detected

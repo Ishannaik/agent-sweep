@@ -145,12 +145,22 @@ def safe_write(path: Path, new_content: str | bytes,
     backup_path: Path | None = None
     if backup:
         backup_path = path.with_name(path.name + ".bak")
-        if backup_path.exists():
+        try:
+            # O_EXCL makes the no-clobber check race-free; 0o600 keeps the
+            # pre-redaction plaintext secrets in the backup unreadable to
+            # other local users regardless of the umask.
+            bak_fd = os.open(
+                str(backup_path),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+        except FileExistsError:
             raise SafetyError(
                 f"Backup already exists: {backup_path}. "
                 f"Resolve manually before re-running."
-            )
-        backup_path.write_bytes(original_bytes)
+            ) from None
+        with os.fdopen(bak_fd, "wb") as bak_file:
+            bak_file.write(original_bytes)
 
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent),

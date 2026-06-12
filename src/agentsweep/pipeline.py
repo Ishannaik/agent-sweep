@@ -466,6 +466,58 @@ def undo(args) -> int:
     return 0 if errors == 0 else 2
 
 
+def purge(args) -> int:
+    """Delete agentsweep .bak backups once the leaked keys are rotated.
+
+    The backups hold the pre-redaction originals — plaintext secrets — so
+    a sweep isn't finished until they're gone. Deleting them is permanent
+    (``undo`` stops working for those files), so this prompts on a
+    terminal and refuses without ``--yes`` everywhere else.
+    Exit 0 on success or nothing-to-do, 2 if refused or any delete failed.
+    """
+    source_cls = SOURCES[args.source]
+    source: Source = source_cls(root=args.root) if args.root else source_cls()
+    roots = [r for r in source.roots() if r.exists()]
+    if not roots:
+        print(f"No history root at {source.root}", file=sys.stderr)
+        return 0
+    backups = sorted({p for root in roots
+                      for pat in _BACKUP_GLOBS
+                      for p in root.rglob(pat)})
+    if not backups:
+        print(f"No .bak backups found under {source.root}", file=sys.stderr)
+        return 0
+
+    if not getattr(args, "yes", False):
+        interactive = (sys.stdin.isatty() and ui.console.is_terminal
+                       if hasattr(sys.stdin, "isatty") else False)
+        if not interactive:
+            print("purge permanently deletes the pre-redaction originals; "
+                  "re-run with --yes to confirm.", file=sys.stderr)
+            return 2
+        print(f"  {len(backups)} backup(s) found under {source.root}")
+        print("  they hold the PRE-redaction originals — deleting them is "
+              "permanent and `undo` will no longer work")
+        try:
+            if input("  delete them permanently? [y/N]: "
+                     ).strip().lower() != "y":
+                ui.warn_line("cancelled — backups kept as-is")
+                return 0
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+
+    errors = 0
+    for bak in backups:
+        try:
+            bak.unlink()
+            ui.redact_row("ok", ui.rel(bak, source.root), "backup deleted")
+        except OSError as e:
+            ui.redact_row("fail", ui.rel(bak, source.root), str(e))
+            errors += 1
+    return 0 if errors == 0 else 2
+
+
 def _redact_all(
     source: Source,
     found_by_file: dict,
