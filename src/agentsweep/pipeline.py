@@ -414,8 +414,13 @@ def _write_text(path: Path, text: str) -> None:
         print(f"Could not write {path}: {e}", file=sys.stderr)
 
 
+# Backup patterns undo restores: JSONL transcripts plus the SQLite stores
+# (Cursor/Windsurf *.vscdb, OpenCode opencode.db).
+_BACKUP_GLOBS = ("*.jsonl.bak", "*.vscdb.bak", "*.db.bak")
+
+
 def undo(args) -> int:
-    """Restore *.jsonl.bak backups over their redacted files.
+    """Restore agentsweep .bak backups over their redacted files.
 
     Scriptable: prompts for confirmation only on an interactive terminal.
     Exit 0 on success or nothing-to-do, 2 if any restore failed.
@@ -425,7 +430,8 @@ def undo(args) -> int:
     if not source.root.exists():
         print(f"No history root at {source.root}", file=sys.stderr)
         return 0
-    backups = sorted(source.root.rglob("*.jsonl.bak"))
+    backups = sorted({p for pat in _BACKUP_GLOBS
+                      for p in source.root.rglob(pat)})
     if not backups:
         print(f"No .bak backups found under {source.root}", file=sys.stderr)
         return 0

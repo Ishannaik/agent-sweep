@@ -4,10 +4,12 @@ import json
 import os
 import sqlite3
 import sys
+import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterator
 
+from .redactor import SafetyError
 from .preflight import (
     CLAUDE_CODE_MARKERS,
     CODEX_MARKERS,
@@ -65,13 +67,17 @@ class Source(ABC):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
+    ) -> str | bytes:
         """Produce the new file content with string values replaced.
 
-        Each redaction is (line_number, keypath, new_string). The returned
-        string is the full file content to write. Implementations MUST preserve
-        structure (line count, JSON validity, line endings) so the redactor's
-        post-write validation passes.
+        Each redaction is (line_number, keypath, new_string). The return
+        value is the full file content to write — str for text formats,
+        bytes for binary formats like SQLite. Implementations MUST NOT
+        modify `path` itself; the redactor owns the backup and the atomic
+        write. str content MUST preserve structure (line count, JSON
+        validity, line endings) so the redactor's post-write validation
+        passes; bytes content MUST be validated by the implementation
+        (e.g. PRAGMA integrity_check) before it is returned.
         """
 
 
@@ -225,6 +231,103 @@ def _line_ending(line: str) -> str:
     return ""
 
 
+def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
+    """Apply SQLite redactions to a temp copy of `path` and return its bytes.
+
+    The production database is never touched here — the pipeline writes the
+    returned bytes back through redactor.safe_write, which owns the .bak
+    backup, the atomic replace and the audit record (the same contract as
+    text sources). Steps:
+
+      1. Snapshot `path` into a sibling tempfile via sqlite's backup API
+         (page-consistent, checkpoints any WAL into the copy).
+      2. Run the UPDATEs against the copy with secure_delete on, then
+         VACUUM, so the replaced plaintext cannot survive in freelist or
+         page slack space — this is a secret-removal tool, "deleted but
+         still on disk" defeats the point.
+      3. Gate on PRAGMA integrity_check before returning the copy's bytes.
+
+    `columns_fn(con)` returns the source's whitelisted (table, column)
+    pairs; redactions targeting anything outside that whitelist are skipped.
+    """
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".redact")
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        try:
+            src_con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        except sqlite3.Error as e:
+            raise SafetyError(f"Cannot open {path} read-only: {e}") from e
+        try:
+            dst_con = sqlite3.connect(str(tmp))
+            try:
+                src_con.backup(dst_con)
+                dst_con.execute("PRAGMA secure_delete = ON")
+                allowed = set(columns_fn(dst_con))
+                _apply_sqlite_updates(dst_con, redactions, allowed)
+                dst_con.commit()
+                dst_con.execute("VACUUM")
+                row = dst_con.execute("PRAGMA integrity_check").fetchone()
+                if row is None or row[0] != "ok":
+                    raise SafetyError(
+                        f"Redacted copy of {path.name} failed "
+                        f"integrity_check; refusing to write")
+            finally:
+                dst_con.close()
+        finally:
+            src_con.close()
+        return tmp.read_bytes()
+    except sqlite3.Error as e:
+        raise SafetyError(
+            f"SQLite error while redacting {path.name}: {e}") from e
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
+def _apply_sqlite_updates(
+    con: sqlite3.Connection,
+    redactions: list,
+    allowed: set[tuple[str, str]],
+) -> None:
+    """Run redaction UPDATEs on `con`. Keypath encoding per SQLite row:
+    [table, rowid, column] (+ JSON sub-path when the column holds JSON)."""
+    for _line_num, kp, new_val in redactions:
+        if len(kp) < 3:
+            continue
+        table, rowid, col = kp[0], kp[1], kp[2]
+        if (table, col) not in allowed:
+            continue
+        sub_kp = kp[3:]
+        if not sub_kp:
+            # Direct column value
+            con.execute(
+                f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608 (whitelisted)
+                (new_val, rowid),
+            )
+        else:
+            # JSON-embedded value: read, patch, write back
+            cur = con.execute(
+                f"SELECT {col} FROM {table} WHERE rowid = ?",  # noqa: S608 (whitelisted)
+                (rowid,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                continue
+            try:
+                obj = json.loads(row[0])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            _set_by_path(obj, sub_kp, new_val)
+            con.execute(
+                f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608 (whitelisted)
+                (json.dumps(obj, ensure_ascii=False), rowid),
+            )
+
+
 class OpenCodeSource(Source):
     """OpenCode (sst/opencode) — history stored in a SQLite database at
     ~/.local/share/opencode/opencode.db, or (legacy) as JSON files under
@@ -317,9 +420,10 @@ class OpenCodeSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
+    ) -> str | bytes:
         if path == self._db_path():
-            return self._apply_redactions_sqlite(path, redactions)
+            return _redact_sqlite_copy(path, redactions,
+                                       self._sqlite_text_columns)
         return self._apply_redactions_json(path, redactions)
 
     # --- SQLite scanning ------------------------------------------------
@@ -380,60 +484,6 @@ class OpenCodeSource(Source):
             for col in cols:
                 pairs.append((table, col))
         return pairs
-
-    # --- SQLite redaction -----------------------------------------------
-
-    def _apply_redactions_sqlite(
-        self,
-        path: Path,
-        redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
-        """Apply redactions directly to the SQLite DB rows.
-
-        Returns the original DB content read as bytes, decoded as latin-1
-        (a no-op passthrough that satisfies the pipeline's write-back
-        contract).  The actual mutations are applied via UPDATE statements.
-        """
-        try:
-            con = sqlite3.connect(str(path))
-        except sqlite3.OperationalError:
-            return path.read_bytes().decode("latin-1")
-        try:
-            for _line_num, kp, new_val in redactions:
-                if len(kp) < 3:
-                    continue
-                table, rowid, col = kp[0], kp[1], kp[2]
-                sub_kp = kp[3:]
-                if not sub_kp:
-                    # Direct column value
-                    con.execute(
-                        f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608
-                        (new_val, rowid),
-                    )
-                else:
-                    # JSON-embedded value: read, patch, write back
-                    cur = con.execute(
-                        f"SELECT {col} FROM {table} WHERE rowid = ?",  # noqa: S608
-                        (rowid,),
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        continue
-                    try:
-                        obj = json.loads(row[0])
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                    _set_by_path(obj, sub_kp, new_val)
-                    con.execute(
-                        f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608
-                        (json.dumps(obj, ensure_ascii=False), rowid),
-                    )
-            con.commit()
-        finally:
-            con.close()
-        # Return the (now mutated) file bytes decoded as latin-1 so the
-        # pipeline can write it back via path.write_text(content, "latin-1").
-        return path.read_bytes().decode("latin-1")
 
     # --- JSON (legacy) scanning/redaction --------------------------------
 
@@ -554,43 +604,9 @@ class _VSCodeSqliteSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
-        try:
-            con = sqlite3.connect(str(path))
-        except sqlite3.OperationalError:
-            return path.read_bytes().decode("latin-1")
-        try:
-            for _line_num, kp, new_val in redactions:
-                if len(kp) < 3:
-                    continue
-                table, rowid, col = kp[0], kp[1], kp[2]
-                sub_kp = kp[3:]
-                if not sub_kp:
-                    con.execute(
-                        f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608
-                        (new_val, rowid),
-                    )
-                else:
-                    cur = con.execute(
-                        f"SELECT {col} FROM {table} WHERE rowid = ?",  # noqa: S608
-                        (rowid,),
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        continue
-                    try:
-                        obj = json.loads(row[0])
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                    _set_by_path(obj, sub_kp, new_val)
-                    con.execute(
-                        f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608
-                        (json.dumps(obj, ensure_ascii=False), rowid),
-                    )
-            con.commit()
-        finally:
-            con.close()
-        return path.read_bytes().decode("latin-1")
+    ) -> bytes:
+        return _redact_sqlite_copy(path, redactions,
+                                   self._sqlite_text_columns)
 
 
 class CursorSource(_VSCodeSqliteSource):
@@ -662,7 +678,7 @@ class CursorSource(_VSCodeSqliteSource):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
+    ) -> str | bytes:
         if path.suffix == ".jsonl":
             return _apply_jsonl_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
@@ -730,7 +746,7 @@ class WindsurfSource(_VSCodeSqliteSource):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str:
+    ) -> str | bytes:
         if path.suffix == ".md":
             return _apply_plaintext_redactions(path, redactions)
         return super().apply_redactions(path, redactions)

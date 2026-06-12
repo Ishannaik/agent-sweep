@@ -74,12 +74,17 @@ def safety_check(path: Path, source_root: Path, force: bool = False) -> None:
             )
 
 
-def safe_write(path: Path, new_content: str, backup: bool = True) -> WriteRecord:
+def safe_write(path: Path, new_content: str | bytes,
+               backup: bool = True) -> WriteRecord:
     """Atomically replace `path`'s content with `new_content`.
 
     Guarantees:
-      - Post-write validation: every non-empty line in the new content must
-        parse as JSON, and the line count must match the original.
+      - Post-write validation (str content): every non-empty line in the new
+        content must parse as JSON, and the line count must match the
+        original. bytes content is the contract for binary formats (SQLite),
+        where line-oriented checks are meaningless — the producing source
+        MUST validate the bytes itself (e.g. PRAGMA integrity_check on the
+        rewritten copy) before handing them over.
       - Atomic replacement: writes to a sibling tempfile with fsync, then
         os.replace. A crash at any point leaves either the complete old file
         or the complete new file on disk — never a torn write.
@@ -89,21 +94,25 @@ def safe_write(path: Path, new_content: str, backup: bool = True) -> WriteRecord
         SHA256 of both versions.
     """
     original_bytes = path.read_bytes()
-    original_text = original_bytes.decode("utf-8")
     original_hash = _sha256(original_bytes)
 
-    new_bytes = new_content.encode("utf-8")
+    if isinstance(new_content, bytes):
+        new_bytes = new_content
+    else:
+        new_bytes = new_content.encode("utf-8")
+
+        _validate_jsonl(new_content)
+
+        original_text = original_bytes.decode("utf-8")
+        original_line_count = len(original_text.splitlines(keepends=True))
+        new_line_count = len(new_content.splitlines(keepends=True))
+        if original_line_count != new_line_count:
+            raise SafetyError(
+                f"Line count changed after redaction "
+                f"({original_line_count} -> {new_line_count}); refusing to write"
+            )
+
     new_hash = _sha256(new_bytes)
-
-    _validate_jsonl(new_content)
-
-    original_line_count = len(original_text.splitlines(keepends=True))
-    new_line_count = len(new_content.splitlines(keepends=True))
-    if original_line_count != new_line_count:
-        raise SafetyError(
-            f"Line count changed after redaction "
-            f"({original_line_count} -> {new_line_count}); refusing to write"
-        )
 
     backup_path: Path | None = None
     if backup:
