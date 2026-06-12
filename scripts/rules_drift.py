@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Rules-drift checker: compare agentsweep detection rules against upstream gitleaks.
 
 Fetches the canonical gitleaks config and reports three buckets:
@@ -74,6 +74,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     "pypi-token": "pypi-upload-token",
     "sendgrid": "sendgrid-api-token",
     "twilio": "twilio-api-key",
+    "discord-bot-token": None,  # gitleaks ships no dedicated bot-token regex
     # --- ported from gitleaks (see the ported block in scanner.py) ---
     '1password-secret-key': '1password-secret-key',
     '1password-service-account-token': '1password-service-account-token',

@@ -1,4 +1,4 @@
-﻿"""Tests for the detection rules ported from the gitleaks rule pack.
+"""Tests for the detection rules ported from the gitleaks rule pack.
 
 FIXTURES embeds one synthetic (non-live) example secret per ported rule and
 asserts the full scan pipeline -- including overlap dedupe -- attributes it
@@ -232,3 +232,44 @@ def test_rotation_guidance_present_or_cli_default_applies() -> None:
     assert not missing, f"rules lacking guidance: {missing}"
     stale = sorted(set(ROTATION_GUIDANCE) - rule_ids)
     assert not stale, f"guidance for rules that no longer exist: {stale}"
+
+
+# Discord bot tokens are a native rule (no gitleaks equivalent), so they live
+# here as dedicated cases rather than in FIXTURES. Tokens are split across
+# adjacent string literals so this file never holds a contiguous token-shaped
+# string (push-protection hygiene, same as FIXTURES).
+_DISCORD_CLASSIC = "NzkyNzE1NDU0MTk2MDg4ODQy" ".X-hvzA." "Ovy4MCQywSkoMRRclStW4xAYK7I"
+_DISCORD_NEW = "MTk4NjIyNDgzNDcxOTI1MjQ4" ".GhAbCd." "7y8aBcDeFgHiJkLmNoPqRsTuVwXyZ012345678"
+
+
+@pytest.mark.parametrize("token", [_DISCORD_CLASSIC, _DISCORD_NEW])
+def test_discord_bot_token_detected(token: str) -> None:
+    assert any(f.rule == "discord-bot-token" for f in scan_text(token)), (
+        f"discord-bot-token not reported for {token!r}"
+    )
+    # ...and when embedded in a realistic env assignment with quotes.
+    assert any(
+        f.rule == "discord-bot-token"
+        for f in scan_text(f'DISCORD_TOKEN="{token}"')
+    )
+
+
+@pytest.mark.parametrize("text", [
+    # A JWT shares the dotted shape but starts with eyJ, never M/N/O.
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcDEFghiJKLmnoPQRstuvWXYz12",
+    # 40-char git SHA: no dots, no [MNO]-anchored base64 triple.
+    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    # Final segment too short to be a real bot token.
+    "NzkyNzE1NDU0MTk2MDg4ODQy" ".X-hvzA." "tooShort123",
+])
+def test_discord_bot_token_no_false_positive(text: str) -> None:
+    assert not any(f.rule == "discord-bot-token" for f in scan_text(text))
+
+
+def test_discord_keyword_hex_stays_api_token() -> None:
+    # The legacy keyword+64-hex rule (discord-api-token) must keep owning this
+    # shape; the new dotted bot-token rule must not fire on it.
+    hit = "discord_token = " + "0123456789abcdef" * 4
+    rules = {f.rule for f in scan_text(hit)}
+    assert "discord-api-token" in rules
+    assert "discord-bot-token" not in rules

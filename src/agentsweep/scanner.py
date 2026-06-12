@@ -66,6 +66,13 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile(r"\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b")),
     ("twilio", "Twilio API key",
         re.compile(r"\bSK[0-9a-fA-F]{32}\b")),
+    ("discord-bot-token", "Discord bot token",
+        # id.timestamp.hmac in base64url. The first segment is base64 of the
+        # bot's snowflake (a decimal id), so it always begins M/N/O — that
+        # anchor keeps this off JWTs (eyJ…) and other dotted tokens. No
+        # keyword literal anywhere → the prefilter extractor returns () and
+        # the rule always runs.
+        re.compile(r"\b[MNO][\w-]{23,27}\.[\w-]{6,7}\.[\w-]{27,40}(?![\w-])")),
     # --- ported from gitleaks (see scripts/rules_drift.py mapping) ---
     ('1password-secret-key', '1Password secret key',
         re.compile('\\bA3-[A-Z0-9]{6}-(?:(?:[A-Z0-9]{11})|(?:[A-Z0-9]{6}-[A-Z0-9]{5}))-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}\\b')),
@@ -697,6 +704,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",
     "sendgrid": "Rotate: https://app.sendgrid.com/settings/api_keys",
     "twilio": "Rotate: https://console.twilio.com/us1/account/keys-credentials/api-keys",
+    "discord-bot-token": "Reset: https://discord.com/developers/applications (your app > Bot > Reset Token)",
     # --- ported from gitleaks (see scripts/rules_drift.py mapping) ---
     '1password-secret-key': 'Rotate: regenerate the Secret Key in your 1Password account profile (https://support.1password.com/secret-key/)',
     '1password-service-account-token': 'Revoke: https://my.1password.com/developer (Service Accounts > revoke token)',
