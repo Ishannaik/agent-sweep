@@ -2,6 +2,13 @@
 parallel file-scan path added in _scan_all (pipeline.py Task 7)."""
 from __future__ import annotations
 
+import io
+import os
+import pty
+import sys
+import termios
+import threading
+import time
 from unittest.mock import patch
 
 import pytest
@@ -32,6 +39,59 @@ def test_raw_input_unavailable_in_test_subprocess(monkeypatch):
     # RAW_INPUT_AVAILABLE was set at import time, reflect that.
     assert _keys.RAW_INPUT_AVAILABLE is False
 
+# ── keys._read_key_unix real byte parsing (pty regression) ────────────────────
+
+_BYTE_SEQ_CASES = [
+    (b"\x1b[A", _keys.UP),     # CSI up
+    (b"\x1b[B", _keys.DOWN),   # CSI down
+    (b"\x1bOA", _keys.UP),     # SS3 up (application-cursor-key mode)
+    (b"\x1bOB", _keys.DOWN),   # SS3 down
+    (b"\x1b", _keys.QUIT),     # bare ESC key
+    (b"\r", _keys.ENTER),
+    (b" ", _keys.SPACE),
+    (b"q", _keys.QUIT),
+]
+
+def _feed_keys_when_raw(master_fd, slave_fd, data):
+    # Wait until _read_key_unix switches the slave out of canonical mode
+    # (setcbreak clears ICANON) before writing, so the bytes are neither
+    # discarded by setcbreak(TCSAFLUSH) nor held by the canonical line
+    # discipline waiting for a newline.
+    for _ in range(400):
+        if not (termios.tcgetattr(slave_fd)[3] & termios.ICANON):
+            break
+        time.sleep(0.005)
+    os.write(master_fd, data)
+
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="unix key reader")
+@pytest.mark.parametrize("seq,expected", _BYTE_SEQ_CASES)
+def test_read_key_unix_parses_real_byte_sequences(seq, expected, monkeypatch):
+    """Drive the real fd-level parser through a pty.
+
+    Regression guard: an arrow key arrives as a multi-byte escape sequence.
+    Reading via buffered sys.stdin drained the whole sequence into a userspace
+    buffer, so select() on the fd reported no tail and every arrow was misread
+    as a bare ESC (quit). sys.stdin below is a *buffered* TextIOWrapper — the
+    exact shape that triggered the bug — so this fails if the parser regresses
+    to sys.stdin.read.
+    """
+    master, slave = pty.openpty()
+    # Buffered TextIOWrapper over the slave: the exact stdin shape that
+    # triggered the original bug.
+    stdin = io.TextIOWrapper(
+        io.BufferedReader(io.FileIO(slave, "r", closefd=False)), encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "stdin", stdin)
+    feeder = threading.Thread(target=_feed_keys_when_raw, args=(master, slave, seq))
+    feeder.start()
+    try:
+        assert _keys._read_key_unix() == expected
+    finally:
+        feeder.join()
+        os.close(master)
+        os.close(slave)
 
 # ── picker._run_menu single-select ───────────────────────────────────────────
 
