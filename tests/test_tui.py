@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import io
 import os
-import pty
 import sys
-import termios
 import threading
 import time
 from unittest.mock import patch
@@ -53,6 +51,7 @@ _BYTE_SEQ_CASES = [
 ]
 
 def _feed_keys_when_raw(master_fd, slave_fd, data):
+    import termios
     # Wait until _read_key_unix switches the slave out of canonical mode
     # (setcbreak clears ICANON) before writing, so the bytes are neither
     # discarded by setcbreak(TCSAFLUSH) nor held by the canonical line
@@ -77,6 +76,7 @@ def test_read_key_unix_parses_real_byte_sequences(seq, expected, monkeypatch):
     exact shape that triggered the bug — so this fails if the parser regresses
     to sys.stdin.read.
     """
+    import pty
     master, slave = pty.openpty()
     # Buffered TextIOWrapper over the slave: the exact stdin shape that
     # triggered the original bug.
