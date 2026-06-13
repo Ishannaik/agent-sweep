@@ -1,0 +1,37 @@
+name: Feature / source / rule request
+description: Request a new agent source, a new detection rule, or another enhancement
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of request is this?
+      options:
+        - New agent source (a coding agent whose history isn't scanned yet)
+        - New detection rule (a secret type not yet caught)
+        - Other enhancement
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the request
+      description: |
+        - **New source:** where does the agent store its history (path + format: JSONL, JSON, SQLite, Markdown)?
+        - **New rule:** what does the secret look like? Include a *synthetic, non-live* example and how the key is rotated/revoked.
+        - **Enhancement:** what should change and what's the use case?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Links, docs, or context that would help (no real secrets, please).
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: Any example secrets here are synthetic / non-live
+          required: true

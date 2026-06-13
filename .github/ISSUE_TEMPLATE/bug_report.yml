@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in a scan / fix / undo / purge run went wrong
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug!
+
+        ⚠️ **agentsweep handles real secrets.** Never paste a real API key, token,
+        database URL, seed phrase, or the raw contents of a history file. Mask
+        anything sensitive (e.g. `sk-...REDACTED`). A reproduction with a
+        *synthetic* example secret is ideal.
+  - type: input
+    id: version
+    attributes:
+      label: agentsweep version
+      description: Output of `agentsweep --version`
+      placeholder: "0.1.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: command
+    attributes:
+      label: Which command were you running?
+      options:
+        - scan
+        - fix
+        - undo
+        - purge
+        - interactive menu
+        - other / not sure
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source / agent
+      description: e.g. claude-code, codex, opencode, cursor, windsurf — or a custom `--root`
+      placeholder: claude-code
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: The command you ran, what you expected, and what you got (with secrets masked).
+      placeholder: |
+        $ agentsweep fix --source claude-code
+        ... output / traceback (secrets masked) ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS + version, Python version, and how you installed agentsweep.
+      placeholder: |
+        OS: Windows 11 / macOS 14 / Ubuntu 24.04
+        Python: 3.12.8
+        Install: uv tool install agentsweep  (or pipx / pip -e)
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: This report contains no real secrets or raw history-file contents
+          required: true
