@@ -20,6 +20,35 @@ from pathlib import Path
 from . import __version__, ui
 from .pipeline import _suggest_paths
 
+# Menu actions that map straight to a cli verb invocation, with no extra
+# control flow. Both the TUI and the numbered menu dispatch off this single
+# table, so adding/retargeting an action is a one-line edit instead of a new
+# branch in two parallel ladders.
+_SIMPLE_ACTIONS: dict[str, list[str]] = {
+    "redact": ["fix", "--source", "claude-code"],
+    "undo": ["undo", "--source", "claude-code"],
+    "json": ["scan", "--source", "claude-code", "--json"],
+}
+# Numbered-fallback keys onto the same action names.
+_NUMBERED_ACTIONS: dict[str, str] = {"3": "redact", "4": "undo", "5": "json"}
+
+
+def _check_updates_interactive() -> None:
+    """Synchronous 'check for updates', shared by both interactive menus."""
+    from .cli import check_for_update, _version_tuple
+
+    print("  checking for updates…")
+    latest, err = check_for_update(timeout=5)
+    if err is not None:
+        ui.warn_line(f"could not reach PyPI — {err}")
+    elif _version_tuple(latest) > _version_tuple(__version__):
+        print(
+            f"  agentsweep {latest} is available — run: "
+            f"uv tool upgrade agentsweep  (or: pip install --upgrade agentsweep)"
+        )
+    else:
+        print(f"  agentsweep {__version__} is up to date")
+
 
 def _passive_update_check() -> None:
     """Fire a background thread to check PyPI for a newer version.
@@ -98,31 +127,12 @@ def _run_tui_menu(main) -> int:
                     main(["scan", "--source", name])
             _pause()
 
-        elif action == "redact":
-            main(["fix", "--source", "claude-code"])
-            _pause()
-
-        elif action == "undo":
-            main(["undo", "--source", "claude-code"])
-            _pause()
-
-        elif action == "json":
-            main(["scan", "--source", "claude-code", "--json"])
+        elif action in _SIMPLE_ACTIONS:
+            main(_SIMPLE_ACTIONS[action])
             _pause()
 
         elif action == "updates":
-            from .cli import check_for_update, _version_tuple
-            print("  checking for updates…")
-            latest, err = check_for_update(timeout=5)
-            if err is not None:
-                ui.warn_line(f"could not reach PyPI — {err}")
-            elif _version_tuple(latest) > _version_tuple(__version__):
-                print(
-                    f"  agentsweep {latest} is available — run: "
-                    f"uv tool upgrade agentsweep  (or: pip install --upgrade agentsweep)"
-                )
-            else:
-                print(f"  agentsweep {__version__} is up to date")
+            _check_updates_interactive()
             _pause()
 
 
@@ -154,25 +164,10 @@ def _run_numbered_menu(main) -> int:
             root = _ask_folder()
             if root is not None:
                 main(["scan", "--root", str(root)])
-        elif choice == "3":
-            main(["fix", "--source", "claude-code"])
-        elif choice == "4":
-            main(["undo", "--source", "claude-code"])
-        elif choice == "5":
-            main(["scan", "--source", "claude-code", "--json"])
+        elif choice in _NUMBERED_ACTIONS:
+            main(_SIMPLE_ACTIONS[_NUMBERED_ACTIONS[choice]])
         elif choice == "6":
-            from .cli import check_for_update, _version_tuple
-            print("  checking for updates…")
-            latest, err = check_for_update(timeout=5)
-            if err is not None:
-                ui.warn_line(f"could not reach PyPI — {err}")
-            elif _version_tuple(latest) > _version_tuple(__version__):
-                print(
-                    f"  agentsweep {latest} is available — run: "
-                    f"uv tool upgrade agentsweep  (or: pip install --upgrade agentsweep)"
-                )
-            else:
-                print(f"  agentsweep {__version__} is up to date")
+            _check_updates_interactive()
         elif choice in {"7", "q", "quit", "exit"}:
             return 0
         else:

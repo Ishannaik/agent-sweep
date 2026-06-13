@@ -27,48 +27,6 @@ def _check(selected: bool, target: "console") -> str:  # type: ignore[valid-type
     return "x" if selected else " "
 
 
-def _render_rows(
-    rows: list[tuple[str, str]],  # (label, hint)
-    focus: int,
-    checked: set[int] | None = None,
-    is_button: set[int] | None = None,
-) -> Table:
-    """Build a Rich Table for a picker panel."""
-    grid = Table.grid(padding=(0, 1))
-    grid.add_column(width=3, justify="center")  # check / bullet
-    grid.add_column()                             # label
-    grid.add_column(style="dim")                  # hint
-
-    for i, (label, hint) in enumerate(rows):
-        focused = (i == focus)
-        is_btn = is_button and i in is_button
-
-        if focused and is_btn:
-            lbl_style = "bold white on red"
-            pfx = ""
-        elif focused:
-            lbl_style = "bold white on red"
-            pfx = ""
-        else:
-            lbl_style = "white"
-            pfx = ""
-
-        if checked is not None and i not in (is_button or set()):
-            ch = _check(i in checked, console)
-            prefix_text = Text(f"[{ch}]", style=("bold red" if i in checked else "dim"))
-        elif is_btn and i in (is_button or set()):
-            prefix_text = Text("", style="")
-        else:
-            prefix_text = Text("", style="")
-
-        lbl_text = Text(_safe(console, label), style=lbl_style)
-        hint_text = Text(_safe(console, hint), style="dim")
-
-        grid.add_row(prefix_text, lbl_text, hint_text)
-
-    return grid
-
-
 def _run_menu(
     title: str,
     rows: list[tuple[str, str]],
@@ -197,11 +155,6 @@ def source_picker() -> list[str] | None:
     from ..sources import SOURCES  # late import: avoids top-level cycle
 
     source_entries: list[tuple[str, str]] = [
-        (src.display_name, f"~/{src.name}")
-        for src in (SOURCES[k]() for k in SOURCES)
-    ]
-    # Add display_name without instantiating (cheaper)
-    source_entries = [
         (SOURCES[k].display_name, k)
         for k in SOURCES
     ]

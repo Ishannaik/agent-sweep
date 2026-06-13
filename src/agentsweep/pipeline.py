@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -135,6 +136,15 @@ def run(args, *, _findings_out: list | None = None) -> int:
         force=args.force,
     )
 
+    return _render_redact_result(rows, errors, found_by_file)
+
+
+def _render_redact_result(rows, errors: int, found_by_file: dict) -> int:
+    """Render the REDACT + ROTATE stage lines and rows for a redaction run.
+
+    Shared by run() and redact_findings() so the two never drift. Returns the
+    exit code: 0 if every write succeeded, else 2.
+    """
     ok_count = sum(1 for status, _, _ in rows if status == "ok")
     if errors == 0:
         ui.stage(4, "ok", "REDACT", f"{ok_count}/{len(rows)} file(s) rewritten")
@@ -150,7 +160,6 @@ def run(args, *, _findings_out: list | None = None) -> int:
     else:
         ui.stage(5, "warn", "ROTATE", "nothing redacted", "these keys are still live")
     ui.rotation_panel(_rotation_items(found_by_file))
-
     return 0 if errors == 0 else 2
 
 
@@ -174,22 +183,7 @@ def redact_findings(args, source: Source, found_by_file: dict) -> int:
         backup=not args.no_backup,
         force=args.force,
     )
-    ok_count = sum(1 for status, _, _ in rows if status == "ok")
-    if errors == 0:
-        ui.stage(4, "ok", "REDACT", f"{ok_count}/{len(rows)} file(s) rewritten")
-    elif ok_count:
-        ui.stage(4, "warn", "REDACT", f"{ok_count}/{len(rows)} file(s) rewritten")
-    else:
-        ui.stage(4, "fail", "REDACT", f"0/{len(rows)} file(s) rewritten")
-    for status, path_display, note in rows:
-        ui.redact_row(status, path_display, note)
-
-    if ok_count:
-        ui.stage(5, "warn", "ROTATE", "redacted locally", "keys live until rotated")
-    else:
-        ui.stage(5, "warn", "ROTATE", "nothing redacted", "these keys are still live")
-    ui.rotation_panel(_rotation_items(found_by_file))
-    return 0 if errors == 0 else 2
+    return _render_redact_result(rows, errors, found_by_file)
 
 
 def _suggest_paths(missing: Path) -> list[str]:
@@ -457,7 +451,6 @@ def undo(args) -> int:
     for bak in backups:
         original = bak.with_name(bak.name[: -len(".bak")])
         try:
-            import os
             os.replace(bak, original)
             ui.redact_row("ok", ui.rel(original, source.root), "restored from .bak")
         except OSError as e:
