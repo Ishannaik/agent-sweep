@@ -7,6 +7,7 @@ Usage shapes, all supported:
     agentsweep fix  [opts]     redact (guided + confirmed on a terminal)
     agentsweep undo [opts]     restore .bak backups
     agentsweep purge [opts]    delete .bak backups (after rotating the keys)
+    agentsweep list-sources    list supported agents + which are on this machine
     agentsweep --fix ...       legacy flag form, kept working as an alias
     agentsweep --update        check PyPI for a newer version
 
@@ -139,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] in ("--update",):
         return _run_update_check()
 
+    if argv and argv[0] == "list-sources":
+        from .pipeline import list_sources
+        return list_sources(_parse_list_sources(argv[1:]))
+
     if not argv and _interactive():
         from .menu import run_menu
         try:
@@ -223,6 +228,19 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     args = ap.parse_args(rest)
     args.fix = (verb == "fix")
     return args
+
+
+def _parse_list_sources(rest: list[str]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="agentsweep list-sources",
+        description="List every supported agent source and whether its "
+                    "history root exists on this machine. Read-only.",
+    )
+    ap.add_argument("--json", action="store_true",
+                    help="Emit the source list as JSON to stdout.")
+    ap.add_argument("--detected", action="store_true",
+                    help="Show only sources whose history root exists here.")
+    return ap.parse_args(rest)
 
 
 def _parse_undo(rest: list[str]) -> argparse.Namespace:

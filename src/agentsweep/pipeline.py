@@ -214,6 +214,55 @@ def redact_findings(args, source: Source, found_by_file: dict, *,
     return _render_redact_result(rows, errors, found_by_file)
 
 
+def _source_rows() -> list[dict]:
+    """Describe every registered source: key, name, default root, detection.
+
+    ``detected`` is True when the source's default history root exists on this
+    machine — a cheap, deterministic install signal (no directory walk, no file
+    reads). Instantiating a source only computes its default_root(); it never
+    touches history contents, so this stays fast and side-effect free.
+    """
+    rows: list[dict] = []
+    for key, cls in SOURCES.items():
+        try:
+            src = cls()
+            root = src.root
+            detected = root.exists()
+        except Exception:
+            root, detected = None, False
+        rows.append({
+            "source": key,
+            "display": getattr(cls, "display_name", key),
+            "experimental": bool(getattr(cls, "experimental", False)),
+            "root": str(root) if root is not None else "",
+            "detected": detected,
+        })
+    return rows
+
+
+def list_sources(args) -> int:
+    """List every supported agent source and whether its history root exists.
+
+    Read-only and side-effect free — reads no history, writes nothing. Always
+    exits 0. With ``--detected`` only sources found on this machine are shown;
+    with ``--json`` the list is emitted as machine-readable JSON to stdout.
+    """
+    rows = _source_rows()
+    if getattr(args, "detected", False):
+        rows = [r for r in rows if r["detected"]]
+
+    if getattr(args, "json", False):
+        print(json.dumps(rows, indent=2))
+        return 0
+
+    ui.banner(__version__)
+    if not rows:
+        ui.warn_line("no agent history found on this machine")
+        return 0
+    ui.sources_table(rows)
+    return 0
+
+
 def _suggest_paths(missing: Path) -> list[str]:
     """Typo forgiveness: close-matching sibling directory names."""
     parent = missing.parent

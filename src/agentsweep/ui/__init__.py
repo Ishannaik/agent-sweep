@@ -31,6 +31,7 @@ from .widgets import (  # noqa: F401
     redact_row,
     rel,
     rotation_panel,
+    sources_table,
     stage,
     warn_line,
 )

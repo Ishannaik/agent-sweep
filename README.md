@@ -133,6 +133,7 @@ menu entirely and behaves exactly as documented below.
 | `agentsweep fix` | Scan, then offer to redact findings in place (type `REDACT` to confirm) |
 | `agentsweep undo` | Restore all `.bak` backups, reverting any previous redaction |
 | `agentsweep purge` | Delete all `.bak` backups once the leaked keys are rotated (permanent — `undo` stops working) |
+| `agentsweep list-sources` | List every supported agent and show which ones have history on this machine (read-only) |
 | `agentsweep --version` / `-V` | Print the installed version |
 | `agentsweep --update` | Check PyPI for a newer release |
 
@@ -156,6 +157,17 @@ agentsweep scan --source github-copilot-chat  # GitHub Copilot Chat history
 agentsweep scan --source openclaw             # OpenClaw ~/.openclaw/
 agentsweep scan --source hermes               # Hermes Agent ~/.hermes/state.db
 agentsweep scan --source goose                # Goose ~/.local/share/goose/
+```
+
+Not sure which agents you have installed? `list-sources` prints every supported
+source, its history location, and whether that history exists on this machine —
+so you know which `--source` values are worth scanning. It reads nothing and
+writes nothing.
+
+```bash
+agentsweep list-sources             # all 29 sources + which are on disk
+agentsweep list-sources --detected  # only the ones found on this machine
+agentsweep list-sources --json      # machine-readable (for scripts/CI)
 ```
 
 Override the default root directory to scan any arbitrary folder:

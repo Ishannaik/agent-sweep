@@ -89,6 +89,46 @@ def findings_table(rows: list[tuple[str, str, Path, int]], root: Path) -> None:
     console.print(Padding(table, (0, 0, 0, 8)))
 
 
+def sources_table(rows: list[dict]) -> None:
+    """Table of every supported source: key, name, on-disk root, detection.
+
+    Each row is a dict with keys ``source``, ``display``, ``experimental``,
+    ``root`` and ``detected`` (matching pipeline.list_sources' payload). A
+    green ``● found`` marks a root that exists on this machine; a dim ``–``
+    marks one that doesn't. Cells are wrapped in Text so bracketed path
+    segments are never parsed as rich markup.
+    """
+    ic = _icons(console)
+    found = ic.get("ok", "●")
+    table = Table(
+        box=_box(console, box.HEAVY_HEAD),
+        border_style="cyan",
+        header_style="bold cyan",
+    )
+    table.add_column("SOURCE", style="bold")
+    table.add_column("AGENT")
+    table.add_column("HISTORY ROOT")
+    table.add_column("ON DISK", justify="center")
+    for r in rows:
+        name = r["display"]
+        if r.get("experimental"):
+            name += " (experimental)"
+        if r.get("detected"):
+            mark = Text(f"{found} found", style="green")
+        else:
+            mark = Text("–", style="dim")
+        table.add_row(
+            Text(_safe(console, r["source"])),
+            Text(_safe(console, name)),
+            Text(_safe(console, r["root"]), style="dim"),
+            mark,
+        )
+    console.print(Padding(table, (0, 0, 0, 2)))
+    detected = sum(1 for r in rows if r.get("detected"))
+    warn_line(f"{detected} of {len(rows)} source(s) have history on this "
+              f"machine — scan one with:  agentsweep scan --source <SOURCE>")
+
+
 def rel(path: Path, root: Path) -> str:
     try:
         return str(path.relative_to(root))
