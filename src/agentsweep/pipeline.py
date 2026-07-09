@@ -510,7 +510,12 @@ def _write_text(path: Path, text: str) -> None:
 # markdown histories, plus the SQLite stores (Cursor/Windsurf *.vscdb,
 # OpenCode opencode.db, Hermes/Goose *.db).
 _BACKUP_GLOBS = ("*.jsonl.bak", "*.json.bak", "*.md.bak",
-                 "*.vscdb.bak", "*.db.bak")
+                 "*.vscdb.bak", "*.db.bak",
+                 # SQLite WAL sidecars, retired with their database by
+                 # safe_write. undo restores them; purge deletes them.
+                 "*.db-wal.bak", "*.db-shm.bak",
+                 "*.vscdb-wal.bak", "*.vscdb-shm.bak",
+                 "*.sqlite.bak", "*.sqlite-wal.bak", "*.sqlite-shm.bak")
 
 
 def undo(args) -> int:
@@ -643,7 +648,8 @@ def _redact_all(
         try:
             new_content = source.apply_redactions(path, redactions)
             record = safe_write(path, new_content, backup=backup,
-                                fmt=source.content_format(path))
+                                fmt=source.content_format(path),
+                                sidecars=source.sidecars(path))
             if record.unchanged:
                 # File was already in the redacted state — calm skip, not a fail.
                 rows.append(("skip", display, "already redacted (no change)"))

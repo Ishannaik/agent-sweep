@@ -17,6 +17,7 @@ from ._helpers import (
     _apply_jsonl_redactions,
     _iter_jsonl_strings,
     _redact_sqlite_copy,
+    sqlite_sidecars,
 )
 
 
@@ -126,6 +127,11 @@ class HermesSource(Source):
             return _apply_jsonl_redactions(path, redactions)
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
 
+    def sidecars(self, path: Path) -> list[Path]:
+        if path.suffix == ".jsonl":
+            return []
+        return sqlite_sidecars(path)
+
 
 class GooseSource(Source):
     """Goose (block/goose) — SQLite sessions.db + legacy per-session JSONL.
@@ -208,5 +214,10 @@ class GooseSource(Source):
         if path.suffix == ".jsonl":
             return _apply_jsonl_redactions(path, redactions)
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
+
+    def sidecars(self, path: Path) -> list[Path]:
+        if path.suffix == ".jsonl":
+            return []
+        return sqlite_sidecars(path)
 
 

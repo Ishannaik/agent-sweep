@@ -19,6 +19,7 @@ from ._helpers import (
     _iter_jsonl_strings,
     _iter_plaintext_lines,
     _redact_sqlite_copy,
+    sqlite_sidecars,
 )
 
 
@@ -105,6 +106,9 @@ class _VSCodeSqliteSource(Source):
         redactions: list[tuple[int, KeyPath, str]],
     ) -> bytes:
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
+
+    def sidecars(self, path: Path) -> list[Path]:
+        return sqlite_sidecars(path)
 
 
 class CursorSource(_VSCodeSqliteSource):

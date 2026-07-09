@@ -73,6 +73,23 @@ class Source(ABC):
         """
         return "jsonl"
 
+    def sidecars(self, path: Path) -> list[Path]:
+        """Files that carry part of `path`'s committed state on disk.
+
+        A SQLite database in WAL mode keeps freshly committed pages in
+        `<db>-wal` until a checkpoint folds them back into the database.
+        Those pages hold the same plaintext the database does, and SQLite
+        replays them over whatever database file it finds on the next open.
+        Replacing the database without also retiring them would leave the
+        secret on disk and let the next open undo the redaction.
+
+        Only files that exist are returned. Sources whose apply_redactions
+        returns bytes built from a full `sqlite3.Connection.backup()` — which
+        folds the WAL into the copy — override this so the redactor can back
+        the sidecars up and delete them after the atomic replace.
+        """
+        return []
+
     def roots(self) -> list[Path]:
         """Every directory tree this source's files may live under.
 

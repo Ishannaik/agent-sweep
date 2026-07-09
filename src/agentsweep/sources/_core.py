@@ -21,6 +21,7 @@ from ._helpers import (
     _iter_json_file_strings,
     _iter_plaintext_lines,
     _redact_sqlite_copy,
+    sqlite_sidecars,
 )
 
 
@@ -136,6 +137,11 @@ class OpenCodeSource(Source):
         if path == self._db_path():
             return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
         return _apply_json_file_redactions(path, redactions)
+
+    def sidecars(self, path: Path) -> list[Path]:
+        if path == self._db_path():
+            return sqlite_sidecars(path)
+        return []
 
     def content_format(self, path: Path) -> str:
         # Only consulted for str returns, i.e. the legacy storage/*.json

@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -101,10 +101,19 @@ def safety_check(path: Path, source_root: Path | Iterable[Path],
 
 
 def safe_write(path: Path, new_content: str | bytes,
-               backup: bool = True, fmt: str = "jsonl") -> WriteRecord:
+               backup: bool = True, fmt: str = "jsonl",
+               sidecars: Sequence[Path] = ()) -> WriteRecord:
     """Atomically replace `path`'s content with `new_content`.
 
     Guarantees:
+      - Sidecars: files listed in `sidecars` (a SQLite database's `-wal` and
+        `-shm`) are backed up alongside `path` and deleted once the replace
+        lands. The caller MUST only pass sidecars whose committed contents
+        are already folded into `new_content` — for SQLite that is what
+        `Connection.backup()` does. Deleting them is what makes the
+        redaction stick: a `-wal` left beside a replaced database still
+        holds the pre-redaction plaintext, and SQLite replays it over the
+        new file on the next open, silently restoring the secret.
       - Post-write validation (str content), selected by `fmt`:
           "jsonl" — every non-empty line must parse as JSON and the line
                     count must match the original (the default);
@@ -164,6 +173,11 @@ def safe_write(path: Path, new_content: str | bytes,
         return WriteRecord(path, original_hash, new_hash, None,
                            len(original_bytes), len(new_bytes), unchanged=True)
 
+    # Sidecars are backed up before the replace and removed after it, so a
+    # crash in between leaves the original database recoverable from the pair
+    # of .bak files rather than half-retired.
+    sidecar_backups: list[Path] = []
+
     backup_path: Path | None = None
     if backup:
         backup_path = path.with_name(path.name + ".bak")
@@ -183,6 +197,35 @@ def safe_write(path: Path, new_content: str | bytes,
             ) from None
         with os.fdopen(bak_fd, "wb") as bak_file:
             bak_file.write(original_bytes)
+
+        for sidecar in sidecars:
+            sidecar_bak = sidecar.with_name(sidecar.name + ".bak")
+            try:
+                # 0o600 for the same reason as the main backup: a `-wal`
+                # holds the very plaintext we are about to redact.
+                sc_fd = os.open(
+                    str(sidecar_bak),
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+            except FileExistsError:
+                for done in sidecar_backups:
+                    try:
+                        done.unlink()
+                    except OSError:
+                        pass
+                if backup_path.exists():
+                    try:
+                        backup_path.unlink()
+                    except OSError:
+                        pass
+                raise SafetyError(
+                    f"Backup already exists: {sidecar_bak}. "
+                    f"Resolve manually before re-running."
+                ) from None
+            with os.fdopen(sc_fd, "wb") as sc_file:
+                sc_file.write(sidecar.read_bytes())
+            sidecar_backups.append(sidecar_bak)
 
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent),
@@ -207,7 +250,28 @@ def safe_write(path: Path, new_content: str | bytes,
                 backup_path.unlink()
             except OSError:
                 pass
+        for sidecar_bak in sidecar_backups:
+            try:
+                sidecar_bak.unlink()
+            except OSError:
+                pass
         raise
+
+    # The replace landed. Every committed page these sidecars held is already
+    # inside the bytes we just wrote, so they are now stale *and* still hold
+    # pre-redaction plaintext. Retire them, or SQLite replays them on the next
+    # open and the secret comes back.
+    for sidecar in sidecars:
+        try:
+            sidecar.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            raise SafetyError(
+                f"Redacted {path.name} but could not remove {sidecar.name}: {e}. "
+                f"The stale WAL may restore the secret on next open — "
+                f"delete it manually."
+            ) from e
 
     record = WriteRecord(
         path=path,

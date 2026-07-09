@@ -16,6 +16,16 @@ from ._base import KeyPath, _line_ending, _set_by_path, _walk_json
 # SQLite helpers
 # ---------------------------------------------------------------------------
 
+def sqlite_sidecars(db: Path) -> list[Path]:
+    """The `-wal` / `-shm` files SQLite keeps beside `db`, if they exist.
+
+    `_redact_sqlite_copy` folds the WAL into the copy it returns, so once
+    that copy replaces `db` these two are both stale and — in the `-wal`'s
+    case — still full of the plaintext we just redacted.
+    """
+    return [p for p in (Path(f"{db}-wal"), Path(f"{db}-shm")) if p.is_file()]
+
+
 def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
     """Apply SQLite redactions to a temp copy of `path` and return its bytes.
 

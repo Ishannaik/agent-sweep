@@ -44,6 +44,7 @@ from ._helpers import (
     _iter_jsonl_strings,
     _iter_plaintext_lines,
     _redact_sqlite_copy,
+    sqlite_sidecars,
 )
 from ._vscode import _VSCodeSqliteSource
 
@@ -143,6 +144,9 @@ class _GenericSqliteSource(Source):
 
     def apply_redactions(self, path: Path, redactions: list) -> bytes:
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
+
+    def sidecars(self, path: Path) -> list[Path]:
+        return sqlite_sidecars(path)
 
 
 # ── SQLite agents ─────────────────────────────────────────────────────────────
