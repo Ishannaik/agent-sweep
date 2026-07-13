@@ -11,6 +11,7 @@ TIPS: list[str] = [
     "agentsweep --json pipes clean JSON into jq or any downstream tool",
     "Type REDACT to confirm in-place redaction — backups are always kept",
     "agentsweep scan --source codex scans your OpenAI Codex history too",
+    "agentsweep scan --all aggregates every agent; --detected limits to installed ones",
     "Seed phrases are validated by BIP-39 checksum, so prose never false-positives",
     "Set AGENTSWEEP_NO_ANIM=1 to disable animations and the live progress bar",
     "Use --root /path/to/copy to scan an offline archive without touching production",

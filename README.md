@@ -170,6 +170,15 @@ agentsweep list-sources --detected  # only the ones found on this machine
 agentsweep list-sources --json      # machine-readable (for scripts/CI)
 ```
 
+Scan **every** registered agent in one pass (aggregated findings; redaction stays per-source):
+
+```bash
+agentsweep scan --all                 # all registered sources
+agentsweep scan --all --detected      # only sources with a history root on disk
+agentsweep scan --all --json          # aggregated JSON (each finding has "source")
+agentsweep scan --all --json -o out.json
+```
+
 Override the default root directory to scan any arbitrary folder:
 
 ```bash

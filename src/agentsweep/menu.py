@@ -213,102 +213,24 @@ def _run_numbered_menu(main) -> int:
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _scan_all_sources() -> None:
-    """Scan all registered sources in parallel and display combined results."""
-    import sys
-    import time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    """Scan all registered sources; delegates to pipeline.run_all (CLI path)."""
+    import argparse
 
-    from .sources import SOURCES
-    from .pipeline import _scan_file
-    from .scanner import ROTATION_GUIDANCE
+    from .pipeline import run_all
 
-    # Step 1: discover all source files in parallel
-    source_data: list = []
-
-    def _try_discover(item):
-        name, cls = item
-        try:
-            src = cls()
-            files = list(src.iter_files())
-            return name, src, files
-        except Exception:
-            return name, None, []
-
-    with ui.console.status("[dim]Discovering history files across all sources…[/]"):
-        with ThreadPoolExecutor(max_workers=min(10, len(SOURCES))) as pool:
-            for name, src, files in pool.map(_try_discover, list(SOURCES.items())):
-                if src and files:
-                    source_data.append((name, src, files))
-
-    total_files = sum(len(f) for _, _, f in source_data)
-    if total_files == 0:
-        print("No history files found for any source.", file=sys.stderr)
-        return
-
-    source_count = len(source_data)
-    ui.stage(1, "ok", "DISCOVER", f"{source_count} source(s)", f"{total_files} file(s)")
-
-    # Step 2: scan all files in parallel
-    findings_by_source: dict = {}
-    total_strings = 0
-    all_tasks = [(name, src, f) for name, src, files in source_data for f in files]
-
-    t0 = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        future_meta = {
-            pool.submit(_scan_file, src, f, None): (name, src)
-            for name, src, f in all_tasks
-        }
-        with ui.scan_progress(total_files) as progress:
-            for fut in as_completed(future_meta):
-                name, src = future_meta[fut]
-                try:
-                    path, items, sc, _, _trunc = fut.result()
-                except Exception:
-                    continue
-                total_strings += sc
-                progress.advance(ui.rel(path, src.root))
-                if items:
-                    findings_by_source.setdefault(name, {})[path] = items
-
-    elapsed = time.perf_counter() - t0
-    ui.stage(2, "ok", "SCAN", f"{total_files} file(s)", f"{total_strings} string(s)", f"{elapsed:.1f}s")
-
-    if not findings_by_source:
-        ui.stage(3, "ok", "FINDINGS", "no secrets found")
-        return
-
-    grand_total = sum(
-        len(items)
-        for fd in findings_by_source.values()
-        for items in fd.values()
-    )
-    ui.stage(3, "fail", "FINDINGS", f"{grand_total} secret(s) across {len(findings_by_source)} source(s)")
-
-    for src_name, found_by_file in findings_by_source.items():
-        src = next(s for n, s, _ in source_data if n == src_name)
-        src_total = sum(len(v) for v in found_by_file.values())
-        ui.warn_line(f"{src_name}: {src_total} secret(s)")
-        rows = [
-            (f.display, f.masked, path, ln)
-            for path, items in found_by_file.items()
-            for ln, _, _, f in items
-        ]
-        ui.findings_table(rows, src.root)
-
-    rules = sorted({
-        f.rule
-        for fd in findings_by_source.values()
-        for items in fd.values()
-        for _, _, _, f in items
-    })
-    rotation_items = [
-        (rule, ROTATION_GUIDANCE.get(rule, "rotate via the issuing provider"))
-        for rule in rules
-    ]
-    ui.rotation_panel(rotation_items)
-    ui.stage(4, "skip", "REDACT", "run: agentsweep fix --source <name>  to redact")
-    ui.stage(5, "warn", "ROTATE", "these keys are still live")
+    run_all(argparse.Namespace(
+        all=True,
+        detected=False,
+        json=False,
+        fix=False,
+        no_ignore=False,
+        output=None,
+        source="claude-code",
+        root=None,
+        no_backup=False,
+        force=False,
+        allow_production=False,
+    ))
 
 
 def _ask_folder() -> Path | None:

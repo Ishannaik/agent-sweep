@@ -4,6 +4,9 @@ Usage shapes, all supported:
 
     agentsweep                 bare → interactive menu (on a real terminal)
     agentsweep scan [opts]     scan only
+    agentsweep scan --all      scan every registered agent (aggregate report)
+    agentsweep scan --all --detected
+                               scan only agents whose history root exists
     agentsweep fix  [opts]     redact (guided + confirmed on a terminal)
     agentsweep undo [opts]     restore .bak backups
     agentsweep purge [opts]    delete .bak backups (after rotating the keys)
@@ -165,8 +168,13 @@ def main(argv: list[str] | None = None) -> int:
 
         args = _parse_run(verb, rest)
         _background_update_notice(args)
-        from .pipeline import run
+        from .pipeline import run, run_all
         from .menu import offer_redaction
+
+        # Multi-source scan is read-only and has no interactive redact offer
+        # (fix stays per-source). Dispatch before the single-source path.
+        if getattr(args, "all", False):
+            return run_all(args)
 
         if verb == "fix" and not _interactive():
             args.fix = True  # script path: explicit gate flags required
@@ -210,7 +218,19 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         prog=f"agentsweep {verb}",
         description="Find and redact secrets in AI coding agent histories.",
     )
-    _add_common(ap)
+    # default=None so we can tell "user passed --source" from the implicit
+    # default when validating mutual exclusion with --all.
+    ap.add_argument("--source", choices=list(SOURCES), default=None,
+                    help="Which agent's history (default: claude-code).")
+    ap.add_argument("--root", type=Path,
+                    help="Override the source's default root directory.")
+    ap.add_argument("--all", action="store_true",
+                    help="Scan every registered agent source and aggregate "
+                         "findings (scan only; not valid with fix).")
+    ap.add_argument("--detected", action="store_true",
+                    help="With --all, only scan sources whose history root "
+                         "exists on this machine (same signal as "
+                         "list-sources --detected).")
     ap.add_argument("-o", "--output", type=Path,
                     help="Write findings as JSON to this file instead of "
                          "flooding the terminal.")
@@ -227,6 +247,25 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
                     help="Allow --fix against the default production root.")
     args = ap.parse_args(rest)
     args.fix = (verb == "fix")
+
+    if args.all:
+        if args.source is not None:
+            ap.error("cannot use --source with --all")
+        if args.root is not None:
+            ap.error("cannot use --root with --all")
+        if args.fix:
+            ap.error(
+                "fix --all is not supported; "
+                "run: agentsweep fix --source <name>"
+            )
+        # Placeholder so any code that still reads args.source is safe.
+        args.source = "claude-code"
+    else:
+        if args.detected:
+            ap.error("--detected requires --all "
+                     "(or use: agentsweep list-sources --detected)")
+        if args.source is None:
+            args.source = "claude-code"
     return args
 
 
