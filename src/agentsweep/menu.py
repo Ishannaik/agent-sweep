@@ -213,24 +213,10 @@ def _run_numbered_menu(main) -> int:
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _scan_all_sources() -> None:
-    """Scan all registered sources; delegates to pipeline.run_all (CLI path)."""
-    import argparse
+    """Scan all registered sources via cli.main — no duplicated pipeline logic."""
+    from .cli import main
 
-    from .pipeline import run_all
-
-    run_all(argparse.Namespace(
-        all=True,
-        detected=False,
-        json=False,
-        fix=False,
-        no_ignore=False,
-        output=None,
-        source="claude-code",
-        root=None,
-        no_backup=False,
-        force=False,
-        allow_production=False,
-    ))
+    main(["scan", "--all"])
 
 
 def _ask_folder() -> Path | None:

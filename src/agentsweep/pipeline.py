@@ -273,7 +273,7 @@ def run_all(args) -> int:
     under root → 0". ``--detected`` restricts to sources whose default root
     exists (same signal as ``list-sources --detected``).
     """
-    if getattr(args, "fix", False):
+    if _opt(args, "fix", False):
         print(
             "fix --all is not supported; "
             "run: agentsweep fix --source <name>",
@@ -282,8 +282,9 @@ def run_all(args) -> int:
         return 2
 
     output: Path | None = _opt(args, "output")
-    detected_only = bool(getattr(args, "detected", False))
-    no_ignore = bool(_opt(args, "no_ignore"))
+    as_json = bool(_opt(args, "json", False))
+    detected_only = bool(_opt(args, "detected", False))
+    no_ignore = bool(_opt(args, "no_ignore", False))
 
     selected: list[tuple[str, Source]] = []
     experimental: list[str] = []
@@ -302,14 +303,14 @@ def run_all(args) -> int:
         msg = ("no agent history roots found on this machine"
                if detected_only else "no sources available to scan")
         print(msg, file=sys.stderr)
-        if args.json:
+        if as_json:
             print("[]")
-        elif not args.json:
+        else:
             ui.banner(__version__)
             ui.warn_line(msg)
         return 0
 
-    if not args.json:
+    if not as_json:
         ui.banner(__version__)
         if experimental:
             ui.warn_line(
@@ -317,21 +318,38 @@ def run_all(args) -> int:
                 f"— history path/format not yet verified against a real install"
             )
 
-    # Phase 1: discover files per source (no scan yet).
+    # Phase 1: discover files per source (stream status so large roots
+    # don't look hung — same contract as single-source run()).
     discovered: list[tuple[str, Source, list[Path]]] = []
-    for key, source in selected:
-        try:
-            files = list(source.iter_files())
-        except Exception:
-            files = []
-        if files:
-            discovered.append((key, source, files))
+    if as_json:
+        for key, source in selected:
+            try:
+                files = list(source.iter_files())
+            except Exception:
+                files = []
+            if files:
+                discovered.append((key, source, files))
+    else:
+        with ui.console.status("") as status:
+            for key, source in selected:
+                try:
+                    files: list[Path] = []
+                    for f in source.iter_files():
+                        files.append(f)
+                        status.update(
+                            f"[dim]Discovering[/] [bold]{key}[/bold]"
+                            f" … [yellow]{len(files):,}[/] file(s)"
+                        )
+                except Exception:
+                    files = []
+                if files:
+                    discovered.append((key, source, files))
 
     total_files = sum(len(f) for _, _, f in discovered)
 
     if total_files == 0:
         print("No history files found under any selected source", file=sys.stderr)
-        if args.json:
+        if as_json:
             print("[]")
         else:
             ui.stage(1, "warn", "DISCOVER", f"{len(selected)} source(s)",
@@ -343,39 +361,58 @@ def run_all(args) -> int:
             ui.contribute_line()
         return 0
 
-    if not args.json:
+    if not as_json:
         ui.stage(1, "ok", "DISCOVER", f"{len(discovered)} source(s)",
                  f"{total_files} file(s)")
 
-    # Phase 2: scan each source sequentially (inner pool still parallelizes files).
+    # Phase 2: scan sources sequentially; one shared progress bar over all
+    # files (inner _scan still parallelizes within a source).
     per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]] = []
     total_strings = 0
     total_suppressed = 0
     total_truncated: list[Path] = []
 
     t0 = time.perf_counter()
-    for key, source, files in discovered:
-        ignores = (ignore_mod.IgnoreSet() if no_ignore
-                   else ignore_mod.load([source.root, Path.cwd()]))
-        if args.json:
+    if as_json:
+        for key, source, files in discovered:
+            ignores = (ignore_mod.IgnoreSet() if no_ignore
+                       else ignore_mod.load([source.root, Path.cwd()]))
             found_by_file, strings_scanned, suppressed, truncated = _scan(
                 source, files, ignores)
-        else:
-            with ui.scan_progress(len(files)) as progress:
+            per_source.append(
+                (key, source, files, found_by_file, strings_scanned,
+                 suppressed, truncated)
+            )
+            total_strings += strings_scanned
+            total_suppressed += suppressed
+            total_truncated.extend(truncated)
+    else:
+        with ui.scan_progress(total_files) as progress:
+            for key, source, files in discovered:
+                ignores = (ignore_mod.IgnoreSet() if no_ignore
+                           else ignore_mod.load([source.root, Path.cwd()]))
                 found_by_file, strings_scanned, suppressed, truncated = _scan(
                     source, files, ignores, progress)
-        per_source.append(
-            (key, source, files, found_by_file, strings_scanned, suppressed, truncated)
-        )
-        total_strings += strings_scanned
-        total_suppressed += suppressed
-        total_truncated.extend(truncated)
+                per_source.append(
+                    (key, source, files, found_by_file, strings_scanned,
+                     suppressed, truncated)
+                )
+                total_strings += strings_scanned
+                total_suppressed += suppressed
+                total_truncated.extend(truncated)
     elapsed = time.perf_counter() - t0
 
-    if args.json:
+    if as_json:
         payload: list[dict] = []
         for _key, source, _files, found_by_file, _sc, _sup, _tr in per_source:
             payload.extend(_json_payload(found_by_file, source))
+        # Match single-source run(): scan-budget cap is reported, never silent.
+        if total_truncated:
+            print(
+                f"warning: {len(total_truncated)} file(s) exceeded the scan budget "
+                f"and were truncated",
+                file=sys.stderr,
+            )
         return _emit_json_payload(payload, output, total_suppressed)
 
     ui.stage(2, "ok", "SCAN", f"{total_files} file(s)",
@@ -402,26 +439,56 @@ def run_all(args) -> int:
     ui.stage(3, "fail", "FINDINGS",
              f"{grand} secret(s) across {len(dirty)} source(s)")
 
-    # Aggregate for rotation + optional -o file; show per-source tables.
-    combined: dict = {}
+    # Display tables per source without writing the fixed overflow report
+    # path (that would clobber across sources). One aggregated report after.
     combined_payload: list[dict] = []
+    any_source_capped = False
+    rows_shown = 0
+    on_tty = ui.console.is_terminal
     for key, source, fbf in dirty:
         src_total = sum(len(v) for v in fbf.values())
         ui.warn_line(f"{key}: {src_total} secret(s) under {source.root}")
-        _show_findings(fbf, source, output=None)
-        combined.update(fbf)
+        rows = _table_rows(fbf)
+        remaining_budget = max(0, MAX_TABLE_ROWS - rows_shown) if on_tty else len(rows)
+        if on_tty and (len(rows) > remaining_budget or remaining_budget == 0):
+            any_source_capped = True
+            if remaining_budget > 0:
+                ui.findings_table(rows[:remaining_budget], source.root)
+                rows_shown += remaining_budget
+                ui.warn_line(
+                    f"{key}: …and {len(rows) - remaining_budget} more "
+                    f"(full multi-source list written after all sources)"
+                )
+            else:
+                ui.warn_line(
+                    f"{key}: {src_total} secret(s) omitted from table "
+                    f"(global cap {MAX_TABLE_ROWS}; see full report)"
+                )
+        else:
+            ui.findings_table(rows, source.root)
+            rows_shown += len(rows)
         combined_payload.extend(_json_payload(fbf, source))
 
+    # Single overflow destination: -o JSON if given, else one text report
+    # that includes every source (never per-source clobber of DEFAULT_REPORT).
+    needs_overflow = on_tty and (any_source_capped or grand > MAX_TABLE_ROWS)
     if output is not None:
         _write_text(output, json.dumps(combined_payload, indent=2) + "\n")
         ui.warn_line(f"{len(combined_payload)} finding(s) also written to {output}")
+    elif needs_overflow:
+        report = Path.cwd() / DEFAULT_REPORT_NAME
+        _write_text(report, _text_report_multi(combined_payload))
+        ui.warn_line(
+            f"full multi-source findings ({grand}) written to {report}"
+        )
 
     dirty_names = ", ".join(k for k, _s, _f in dirty)
     ui.stage(4, "skip", "REDACT",
              f"skipped — run: agentsweep fix --source <name>  "
              f"(dirty: {dirty_names})")
     ui.stage(5, "warn", "ROTATE", "these keys are still live")
-    ui.rotation_panel(_rotation_items(combined))
+    # Flatten across sources — do not merge by Path (collisions across roots).
+    ui.rotation_panel(_rotation_items_multi(dirty))
     ui.contribute_line()
     return 1
 
@@ -581,6 +648,22 @@ def _rotation_items(found_by_file: dict) -> list[tuple[str, str]]:
     ]
 
 
+def _rotation_items_multi(
+    dirty: list[tuple[str, Source, dict]],
+) -> list[tuple[str, str]]:
+    """Union of rotation guidance across sources (Path-merge-safe)."""
+    rules = sorted({
+        finding.rule
+        for _key, _source, fbf in dirty
+        for items in fbf.values()
+        for _, _, _, finding in items
+    })
+    return [
+        (rule, ROTATION_GUIDANCE.get(rule, "rotate via the issuing provider"))
+        for rule in rules
+    ]
+
+
 def _json_payload(found_by_file: dict, source: Source) -> list[dict]:
     payload = []
     for path, items in found_by_file.items():
@@ -666,6 +749,19 @@ def _text_report(found_by_file: dict, source: Source) -> str:
         lines.append(f"    {item['display']}  {item['masked']}")
     lines.append("")
     lines.append("Rotate these — see the provider URLs printed by the scan.")
+    return "\n".join(lines) + "\n"
+
+
+def _text_report_multi(payload: list[dict]) -> str:
+    """Aggregated human report for scan --all (includes source on every row)."""
+    lines = ["agentsweep findings report (all sources)", ""]
+    for item in payload:
+        src = item.get("source", "?")
+        lines.append(f"[{src}] {item['fingerprint']}")
+        lines.append(f"    {item['display']}  {item['masked']}")
+    lines.append("")
+    lines.append("Rotate these — see the provider URLs printed by the scan.")
+    lines.append("Redact per source: agentsweep fix --source <name>")
     return "\n".join(lines) + "\n"
 
 

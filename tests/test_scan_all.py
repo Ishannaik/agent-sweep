@@ -12,19 +12,27 @@ Covers:
   (i) ignore file suppresses only the source it sits under
   (j) single-source scan still works and includes "source" field
   (k) legacy form: agentsweep --all --json
+  (l) multi-source overflow report is aggregated (not clobbered per source)
+  (m) scan --all --json emits truncation warning on stderr
+  (n) menu._scan_all_sources shells out via cli.main(["scan", "--all"])
+  (o) -o with multi-source overflow does not write agentsweep-report.txt
 """
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from agentsweep import pipeline  # noqa: E402
+from agentsweep import menu as menu_mod  # noqa: E402
 from agentsweep.cli import main  # noqa: E402
 from agentsweep.sources import SOURCES  # noqa: E402
+from rich.console import Console  # noqa: E402
 
 AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
 GH_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
@@ -308,3 +316,110 @@ def test_scan_all_sources_order_stable(_isolate_env, capsys):
             seen.append(item["source"])
     registered = [k for k in SOURCES if k in seen]
     assert seen == registered
+
+
+# ---------------------------------------------------------------------------
+# (l) multi-source overflow report is not clobbered
+# ---------------------------------------------------------------------------
+
+def _seed_many_claude(home: Path, n: int) -> None:
+    root = home / ".claude" / "projects"
+    root.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        (root / f"session_{i}.jsonl").write_text(CLAUDE_LINE, encoding="utf-8")
+
+
+def _seed_many_codex(home: Path, n: int) -> None:
+    root = home / ".codex" / "sessions" / "2026" / "01" / "01"
+    root.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        (root / f"rollout-{i}.jsonl").write_text(CODEX_LINE, encoding="utf-8")
+
+
+def test_scan_all_overflow_report_includes_all_sources(
+    _isolate_env, tmp_path, monkeypatch, capsys,
+):
+    """Two large sources must not clobber agentsweep-report.txt to last-only."""
+    _seed_many_claude(_isolate_env, 45)
+    _seed_many_codex(_isolate_env, 45)
+    monkeypatch.chdir(tmp_path)
+
+    with patch.object(
+        Console, "is_terminal", new_callable=lambda: property(lambda self: True)
+    ):
+        code = main(["scan", "--all"])
+        captured = capsys.readouterr()
+
+    assert code == 1
+    report = tmp_path / pipeline.DEFAULT_REPORT_NAME
+    assert report.exists(), "aggregated overflow report must be written once"
+    text = report.read_text(encoding="utf-8")
+    assert "[claude-code]" in text
+    assert "[codex]" in text
+    assert "all sources" in text.lower()
+    # Raw secrets never land in the report
+    assert AWS_KEY not in text
+    assert GH_TOKEN not in text
+    combined = captured.out + captured.err
+    assert report.name in combined or "full multi-source" in combined.lower()
+
+
+def test_scan_all_overflow_with_dash_o_skips_default_report(
+    _isolate_env, tmp_path, monkeypatch, capsys,
+):
+    """When -o is set, full JSON goes there — no agentsweep-report.txt clobber path."""
+    _seed_many_claude(_isolate_env, 45)
+    _seed_many_codex(_isolate_env, 45)
+    monkeypatch.chdir(tmp_path)
+    out_file = tmp_path / "multi.json"
+
+    with patch.object(
+        Console, "is_terminal", new_callable=lambda: property(lambda self: True)
+    ):
+        code = main(["scan", "--all", "-o", str(out_file)])
+
+    assert code == 1
+    assert out_file.exists()
+    payload = json.loads(out_file.read_text(encoding="utf-8"))
+    sources = {item["source"] for item in payload}
+    assert "claude-code" in sources and "codex" in sources
+    assert not (tmp_path / pipeline.DEFAULT_REPORT_NAME).exists()
+
+
+# ---------------------------------------------------------------------------
+# (m) JSON truncation warning
+# ---------------------------------------------------------------------------
+
+def test_scan_all_json_emits_truncation_warning(_isolate_env, monkeypatch, capsys):
+    """scan --all --json must stderr-warn when the scan budget truncates files."""
+    _seed_claude(_isolate_env)
+    # Tiny budget forces every non-empty string walk to truncate.
+    monkeypatch.setattr(pipeline, "_MAX_FILE_SCAN_CHARS", 1)
+
+    code = main(["scan", "--all", "--json"])
+    captured = capsys.readouterr()
+
+    # May be 0 or 1 depending on whether any secret fit before the cap;
+    # the contract under test is the warning, not the findings.
+    assert code in (0, 1)
+    assert "truncated" in captured.err.lower()
+    assert "scan budget" in captured.err.lower()
+    # stdout still parseable JSON
+    json.loads(captured.out)
+
+
+# ---------------------------------------------------------------------------
+# (n) menu uses cli.main
+# ---------------------------------------------------------------------------
+
+def test_menu_scan_all_shells_out_to_cli_main(monkeypatch):
+    """_scan_all_sources must call cli.main(['scan', '--all']), not hand-roll args."""
+    seen: list[list[str]] = []
+
+    def fake_main(argv=None):
+        seen.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr("agentsweep.cli.main", fake_main)
+    menu_mod._scan_all_sources()
+    assert seen == [["scan", "--all"]]
