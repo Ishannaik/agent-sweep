@@ -14,6 +14,45 @@ _MAX_FEED = 6
 # Rotate to a new tip every this many seconds.
 _TIP_INTERVAL = 7
 
+# How long the found-count stays flashed after a new detection.
+_FLASH_SECS = 0.4
+
+
+def _flash_style(t: float) -> str:
+    """Found-count colour for flash progress `t`: 0.0 (just hit, white) →
+    1.0 (settled red). Linear white→red3 fade; rich downgrades the rgb to
+    the nearest ANSI on non-truecolor terminals."""
+    t = min(max(t, 0.0), 1.0)
+    r = int(255 - (255 - 215) * t)
+    g = int(255 - (255 - 40) * t)
+    b = int(255 - (255 - 40) * t)
+    return f"bold rgb({r},{g},{b})"
+
+
+class _FlashHeader:
+    """The '⚡ N secrets found' line, rendered fresh on every Live refresh so
+    the flash fades on the clock — not only when a file advances."""
+
+    def __init__(self, progress: "_RichScanProgress"):
+        self._p = progress
+
+    def __rich__(self):
+        from rich.text import Text
+
+        p = self._p
+        bolt = p._lightning()
+        header = Text("        ")
+        if p._hits == 0:
+            header.append(f"{bolt} scanning…", style="dim")
+            return header
+        t = (time.monotonic() - p._flash_time) / _FLASH_SECS
+        style = _flash_style(t)
+        header.append(f"{bolt} ", style=style)
+        header.append(str(p._hits), style=style)
+        noun = "secret" if p._hits == 1 else "secrets"
+        header.append(f" {noun} found", style=style)
+        return header
+
 
 class _NullScanProgress:
     """No-op progress for pipes/CI — keeps the call sites unconditional."""
@@ -68,6 +107,7 @@ class _RichScanProgress:
         self._feed: deque[tuple[str, str, str]] = deque(maxlen=_MAX_FEED)
         self._live: object | None = None  # rich.live.Live
         self._start_time: float = 0.0
+        self._flash_time: float = 0.0  # monotonic ts of the last detection
 
     # ------------------------------------------------------------------ render
 
@@ -86,16 +126,8 @@ class _RichScanProgress:
         parts: list[object] = []
 
         # ── header ──────────────────────────────────────────────────────────
-        bolt = self._lightning()
-        header = Text("        ")
-        if self._hits == 0:
-            header.append(f"{bolt} scanning…", style="dim")
-        else:
-            header.append(f"{bolt} ", style="bold red")
-            header.append(str(self._hits), style="bold red")
-            noun = "secret" if self._hits == 1 else "secrets"
-            header.append(f" {noun} found", style="bold red")
-        parts.append(header)
+        # Self-rendering so the flash fades on the Live clock, not per-file.
+        parts.append(_FlashHeader(self))
 
         # ── detection feed ───────────────────────────────────────────────────
         feed_list = list(self._feed)
@@ -176,6 +208,7 @@ class _RichScanProgress:
     def detection(self, rule_display: str, masked: str, location: str) -> None:
         """Record a secret hit and refresh the live feed immediately."""
         self._hits += 1
+        self._flash_time = time.monotonic()
         self._feed.append((rule_display, masked, location))
         if self._live is not None:
             self._live.update(self._build_renderable())
