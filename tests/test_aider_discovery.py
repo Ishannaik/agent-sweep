@@ -62,19 +62,40 @@ def test_skips_node_modules_and_git(tmp_path: Path) -> None:
     assert decoy_git not in found
 
 
-def test_skips_appdata_and_library(tmp_path: Path) -> None:
-    root = tmp_path / "homeish"
-    real = _write_history(root / "Projects" / "app" / _AIDER_HISTORY_NAME)
-    decoy_app = _write_history(
-        root / "AppData" / "Local" / "junk" / _AIDER_HISTORY_NAME,
-    )
-    decoy_lib = _write_history(
-        root / "Library" / "Caches" / "junk" / _AIDER_HISTORY_NAME,
-    )
-    found = set(AiderSource(root=root).files())
+def test_prunes_os_profile_dirs_directly_under_home(_isolate_home: Path) -> None:
+    # Default root is $HOME: AppData/Library/.local/.Trash directly under it
+    # are OS-profile junk and must be pruned.
+    home = _isolate_home
+    real = _write_history(home / "Projects" / "app" / _AIDER_HISTORY_NAME)
+    decoy_app = _write_history(home / "AppData" / "Local" / "j" / _AIDER_HISTORY_NAME)
+    decoy_lib = _write_history(home / "Library" / "Caches" / "j" / _AIDER_HISTORY_NAME)
+    decoy_local = _write_history(home / ".local" / "share" / "j" / _AIDER_HISTORY_NAME)
+    found = set(AiderSource().files())
     assert real in found
     assert decoy_app not in found
     assert decoy_lib not in found
+    assert decoy_local not in found
+
+
+def test_os_profile_named_project_dir_is_scanned(tmp_path: Path) -> None:
+    # A *project* named "Library"/"AppData" that is NOT a direct child of $HOME
+    # is a real repo and must be scanned — the old flat skip-set dropped it,
+    # silently hiding any secret inside (regression this PR's fix repairs).
+    root = tmp_path / "work"
+    lib = _write_history(root / "clients" / "Library" / _AIDER_HISTORY_NAME)
+    app = _write_history(root / "src" / "AppData" / _AIDER_HISTORY_NAME)
+    found = set(AiderSource(root=root).files())
+    assert lib in found
+    assert app in found
+
+
+def test_config_dotfiles_history_is_found(_isolate_home: Path) -> None:
+    # Dotfiles repos (e.g. ~/.config/nvim) are a real Aider workflow; ~/.config
+    # must be walked, not blanket-pruned. Previously silently missed.
+    home = _isolate_home
+    hist = _write_history(home / ".config" / "nvim" / _AIDER_HISTORY_NAME)
+    found = set(AiderSource().files())
+    assert hist in found
 
 
 def test_depth_cap_stops_deep_trees(tmp_path: Path) -> None:
@@ -88,6 +109,30 @@ def test_depth_cap_stops_deep_trees(tmp_path: Path) -> None:
     found = set(_iter_aider_histories(root))
     assert shallow in found
     assert deep_hist not in found
+
+
+def test_depth_cap_is_surfaced_on_scan(tmp_path: Path, capsys) -> None:
+    # A reached depth cap must NOT be silent (project rule): scan path warns.
+    root = tmp_path / "work"
+    deep = root
+    for i in range(_AIDER_MAX_DEPTH + 2):
+        deep = deep / f"d{i}"
+    _write_history(deep / _AIDER_HISTORY_NAME)
+    list(_iter_aider_histories(root, warn=True))
+    err = capsys.readouterr().err
+    assert "depth cap" in err
+    assert "--root" in err
+
+
+def test_depth_cap_silent_during_detection(tmp_path: Path, capsys) -> None:
+    # warn=False (detection / list-sources) must print nothing.
+    root = tmp_path / "work"
+    deep = root
+    for i in range(_AIDER_MAX_DEPTH + 2):
+        deep = deep / f"d{i}"
+    _write_history(deep / _AIDER_HISTORY_NAME)
+    list(_iter_aider_histories(root, warn=False))
+    assert capsys.readouterr().err == ""
 
 
 def test_is_detected_false_on_empty_home(_isolate_home: Path) -> None:

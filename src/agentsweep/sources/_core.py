@@ -219,10 +219,9 @@ class OpenCodeSource(Source):
             pairs.extend((table, c) for c in present)
         return pairs
 
-# Directory basenames never descended into when looking for Aider histories.
-# Aider writes `.aider.chat.history.md` at project/repo roots, so vendor trees,
-# VCS metadata, tool caches, and OS profile junk are pure noise — and walking
-# them from $HOME is what made default `scan --source aider` thrash disks.
+# Vendor / VCS / build-cache dirs — never an Aider repo root, so they are
+# pruned at ANY depth. A directory with one of these names holds tooling, not
+# a project the user ran Aider in, so dropping it can't hide a real history.
 _AIDER_SKIP_DIRS: frozenset[str] = frozenset({
     ".git",
     "node_modules",
@@ -240,19 +239,30 @@ _AIDER_SKIP_DIRS: frozenset[str] = frozenset({
     ".pnpm-store",
     ".cargo",
     ".rustup",
-    ".Trash",
-    "Trash",
-    # OS profile trees full of caches, not project roots.
+})
+
+# OS-profile trees (caches, not project roots) — pruned ONLY when they sit
+# directly under $HOME. Unlike the vendor set, these are ordinary words a real
+# project directory can legitimately be named ("Library", "AppData", "Trash"),
+# so pruning them at any depth silently dropped real histories — a secret
+# scanner reporting a false all-clear. `.config` is deliberately NOT here:
+# people keep git-tracked dotfiles (e.g. ~/.config/nvim) there and run Aider in
+# them, so it must be walked; the depth cap + vendor set above bound the cost.
+# ponytail: home-top-only prune, not per-name cache-child pruning. If ~/.config
+# on some box (large browser profiles) makes a scan slow, add the specific
+# cache-child dir names — don't re-blanket-prune .config and lose real repos.
+_AIDER_SKIP_DIRS_HOME_TOP: frozenset[str] = frozenset({
     "AppData",
     "Library",
-    # Linux XDG data/cache homes (not where Aider drops chat history).
+    ".Trash",
+    "Trash",
     ".local",
-    ".config",
 })
 
 _AIDER_HISTORY_NAME = ".aider.chat.history.md"
 # Soft cap from the discovery root. Aider histories live at repo roots, not
 # deep inside nested vendor trees. Users with odd layouts can pass --root.
+# Hitting the cap is surfaced on stderr (never silent) — see below.
 _AIDER_MAX_DEPTH = 12
 
 
@@ -280,16 +290,18 @@ class AiderSource(Source):
         return sorted(self.iter_files())
 
     def iter_files(self) -> Iterator[Path]:
-        yield from _iter_aider_histories(self.root)
+        # warn=True: this is the scan path, so a reached depth cap is surfaced.
+        yield from _iter_aider_histories(self.root, warn=True)
 
     def is_detected(self) -> bool:
         # Home always exists, so root.exists() would always report Aider as
         # installed. Prefer cheap config markers, then an early-exit pruned walk.
+        # warn=False: detection / list-sources must not print scan-time warnings.
         home = Path.home()
         for name in (".aider.conf.yml", ".aider.conf.yaml", ".aider.conf.json"):
             if (home / name).is_file():
                 return True
-        for _ in self.iter_files():
+        for _ in _iter_aider_histories(self.root, warn=False):
             return True
         return False
 
@@ -307,11 +319,21 @@ class AiderSource(Source):
         return "text"
 
 
-def _iter_aider_histories(root: Path) -> Iterator[Path]:
-    """Yield Aider chat histories under root with junk dirs pruned."""
+def _iter_aider_histories(root: Path, *, warn: bool = False) -> Iterator[Path]:
+    """Yield Aider chat histories under root with junk dirs pruned.
+
+    Vendor/cache dirs are pruned at any depth; OS-profile dirs only when they
+    sit directly under $HOME (so a project named "Library" or a dotfiles repo
+    under ~/.config is still scanned). Descent stops at _AIDER_MAX_DEPTH; when
+    that happens and ``warn`` is True (the scan path, not detection), a one-line
+    stderr warning is emitted so the cap is never silent — a scanner that
+    quietly skips files hides live secrets.
+    """
     if not root.exists():
         return
     root = root.resolve()
+    home = Path.home().resolve()
+    capped = 0
 
     def _onerror(_err: OSError) -> None:
         # Permission / reparse-point noise under $HOME is expected. Skip and
@@ -322,19 +344,38 @@ def _iter_aider_histories(root: Path) -> Iterator[Path]:
     for dirpath, dirnames, filenames in os.walk(
         root, topdown=True, onerror=_onerror,
     ):
-        # Depth relative to root (root itself is depth 0).
+        # Depth relative to root (root itself is depth 0). ``resolved`` is
+        # reused for the home-top check, so there's no extra resolve() per dir.
         try:
-            rel = Path(dirpath).resolve().relative_to(root)
+            resolved = Path(dirpath).resolve()
+            rel = resolved.relative_to(root)
             depth = 0 if str(rel) == "." else len(rel.parts)
         except ValueError:
             # Walked outside root (symlink / mount edge case). Stop descending.
             dirnames.clear()
             continue
         if depth >= _AIDER_MAX_DEPTH:
+            if dirnames:
+                capped += 1
             dirnames.clear()
         else:
-            dirnames[:] = [d for d in dirnames if d not in _AIDER_SKIP_DIRS]
+            at_home_top = resolved == home
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in _AIDER_SKIP_DIRS
+                and not (at_home_top and d in _AIDER_SKIP_DIRS_HOME_TOP)
+            ]
         if _AIDER_HISTORY_NAME in filenames:
             p = Path(dirpath) / _AIDER_HISTORY_NAME
             if p.is_file():
                 yield p
+
+    if warn and capped:
+        print(
+            f"warning: aider discovery reached the depth cap "
+            f"({_AIDER_MAX_DEPTH}) in {capped} "
+            f"director{'y' if capped == 1 else 'ies'}; any "
+            f"{_AIDER_HISTORY_NAME} nested deeper was not scanned — "
+            f"pass --root <path> to reach it",
+            file=sys.stderr,
+        )
