@@ -233,13 +233,14 @@ class LlmSource(Source):
       - Windows:     ``%APPDATA%\\io.datasette.llm``
 
     The store is a single SQLite file, ``logs.db``. Scanned columns are the
-    free text a user can paste a secret into: ``responses.prompt`` /
-    ``responses.system`` / ``responses.response``, ``fragments.content``
-    (files attached with ``llm -f``), and ``conversations.name``. The parallel
-    JSON columns (``prompt_json`` / ``response_json`` / ``options_json``) are
-    deliberately skipped — ``llm`` condenses fragment and response text out of
-    them into ``f:``/``r:`` placeholders, so they yield duplicate hits, not new
-    coverage.
+    free text a user, model, or tool can put a secret into: ``responses``
+    prompt/system/response/reasoning, ``fragments`` content/source (files and
+    URLs attached with ``llm -f``), ``conversations.name``, and — for llm's
+    tool calls (>= 0.26) — ``tool_calls.arguments``, ``tool_results``
+    output/exception, and ``schemas.content``. The parallel JSON columns
+    (``prompt_json`` / ``response_json`` / ``options_json``) are deliberately
+    skipped — ``llm`` condenses fragment and response text out of them into
+    ``f:``/``r:`` placeholders, so they yield duplicate hits, not new coverage.
 
     Redaction goes through the shared SQLite copy-and-rewrite path. ``logs.db``
     also keeps a full-text index (``responses_fts``, an FTS5 *external-content*
@@ -260,9 +261,15 @@ class LlmSource(Source):
     # ALL of its expected columns raises rather than silently scanning nothing
     # — the same false-all-clear guard OpenCode added for issue #14.
     _KNOWN_COLUMNS: dict[str, list[str]] = {
-        "responses": ["prompt", "system", "response"],
-        "fragments": ["content"],
+        "responses": ["prompt", "system", "response", "reasoning"],
+        "fragments": ["content", "source"],
         "conversations": ["name"],
+        # llm >= 0.26 tool support: a tool that reads a secret (e.g. cats a
+        # .env) lands it here, not in responses. Absent tables/columns are
+        # skipped, so older logs.db still work (see the drift guard below).
+        "tool_calls": ["arguments"],
+        "tool_results": ["output", "exception"],
+        "schemas": ["content"],
     }
 
     def __init__(self, root: Path | None = None):

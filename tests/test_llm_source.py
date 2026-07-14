@@ -35,6 +35,10 @@ KEY_CONVNAME = "AKIAQRSTUVWXYZ012345"
 # Only ever written into responses.prompt_json — a column we deliberately do
 # NOT scan (in real llm its text also lives in responses.prompt).
 KEY_JSON_ONLY = "AKIA9NEVER8SCANNED70"
+# Secrets a model/tool emits (not the user): a reasoning trace and a tool that
+# read a .env — these live in responses.reasoning and tool_results.output.
+KEY_REASONING = "AKIAREASONING567890Z"
+KEY_TOOL_OUTPUT = "AKIATOOLOUTPUT01234X"
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +62,10 @@ def _make_logs_db(db: Path) -> bytes:
         CREATE TABLE responses (
             id TEXT PRIMARY KEY, model TEXT, prompt TEXT, system TEXT,
             prompt_json TEXT, options_json TEXT, response TEXT,
-            response_json TEXT, conversation_id TEXT
+            response_json TEXT, conversation_id TEXT, reasoning TEXT
+        );
+        CREATE TABLE tool_results (
+            id INTEGER PRIMARY KEY, name TEXT, output TEXT, exception TEXT
         );
         CREATE VIRTUAL TABLE responses_fts USING FTS5 (
             "prompt", "response", content="responses"
@@ -89,7 +96,8 @@ def _make_logs_db(db: Path) -> bytes:
     )
     con.execute(
         "INSERT INTO responses (id, prompt, system, prompt_json, response, "
-        "response_json, conversation_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "response_json, conversation_id, reasoning) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "r1",
             f"deploy using {KEY_PROMPT} please",
@@ -99,7 +107,12 @@ def _make_logs_db(db: Path) -> bytes:
             f"sure, here it is: {KEY_RESPONSE}",
             '{"content": "r:r1"}',  # llm condenses response text to a placeholder
             "c1",
+            f"the deploy key must be {KEY_REASONING}",  # reasoning trace
         ),
+    )
+    con.execute(
+        "INSERT INTO tool_results (id, name, output) VALUES (?, ?, ?)",
+        (1, "read_file", f"AWS_ACCESS_KEY_ID={KEY_TOOL_OUTPUT}"),  # tool cat .env
     )
     con.commit()
     con.close()
@@ -141,11 +154,30 @@ def test_llm_iter_strings_finds_secret(tmp_path: Path) -> None:
 
     # Every free-text column secret is found...
     assert {KEY_PROMPT, KEY_SYSTEM, KEY_RESPONSE, KEY_FRAGMENT, KEY_CONVNAME} <= found
-    # ...across exactly the whitelisted columns...
-    assert cols == {"prompt", "system", "response", "content", "name"}
+    # ...across exactly the whitelisted columns present in this db...
+    assert cols == {"prompt", "system", "response", "reasoning", "content",
+                    "name", "output"}
     # ...and the *_json duplicate-noise columns are never scanned.
     assert KEY_JSON_ONLY not in found
     assert "prompt_json" not in cols
+
+
+def test_llm_scans_model_and_tool_columns(tmp_path: Path) -> None:
+    """A secret the *model* reasons about or a *tool* prints (reasoning trace,
+    tool_results.output) is scanned and redacted — not just user prompts."""
+    db = tmp_path / "io.datasette.llm" / "logs.db"
+    _make_logs_db(db)
+    source = LlmSource(root=db.parent)
+
+    _, items, _, _, _ = _scan_file(source, db, ignores=None)
+    found = {fd.value for *_rest, fd in items}
+    assert {KEY_REASONING, KEY_TOOL_OUTPUT} <= found
+
+    safe_write(db, _redact(source, db), backup=True,
+               fmt=source.content_format(db), sidecars=source.sidecars(db))
+    redacted = db.read_bytes()
+    for key in (KEY_REASONING, KEY_TOOL_OUTPUT):
+        assert key.encode() not in redacted, f"{key} survived redaction"
 
 
 def test_llm_redactions_preserve_structure_and_scrub_fts(tmp_path: Path) -> None:
