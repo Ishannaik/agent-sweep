@@ -5,7 +5,7 @@ All external code imports from here:
     from .sources import ClaudeCodeSource, ...
 """
 from ._base import JsonlSource, KeyPath, Source
-from ._community import GooseSource, HermesSource, OpenClawSource
+from ._community import GooseSource, HermesSource, LlmSource, OpenClawSource
 from ._core import AiderSource, ClaudeCodeSource, CodexSource, OpenCodeSource
 from ._extended import (
     ClineSource,
@@ -54,6 +54,7 @@ SOURCES: dict[str, type[Source]] = {
     "openclaw":              OpenClawSource,
     "hermes":                HermesSource,
     "goose":                 GooseSource,
+    "llm":                   LlmSource,
     "warp":                  WarpSource,
     "grok-cli":              GrokCliSource,
     "kiro-cli":              KiroCliSource,
@@ -90,6 +91,7 @@ __all__ = [
     "OpenClawSource",
     "HermesSource",
     "GooseSource",
+    "LlmSource",
     "WarpSource",
     "GrokCliSource",
     "KiroCliSource",

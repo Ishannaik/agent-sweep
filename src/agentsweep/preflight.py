@@ -108,6 +108,18 @@ GOOSE_MARKERS: tuple[str, ...] = (
     " goose ",
 )
 
+# Only delimited forms — a bare "llm" substring would match "vllm" and any
+# path that happens to contain the letters (llm is a short, common token), so
+# the gate keys on the executable / invocation shapes instead.
+LLM_MARKERS: tuple[str, ...] = (
+    "/llm ",
+    "llm.exe",
+    "llm.cmd",
+    " llm ",
+    "datasette/llm",
+    "simonw/llm",
+)
+
 KILO_CODE_MARKERS: tuple[str, ...] = (
     "kilocode.kilo-code",
     "kilo-code",

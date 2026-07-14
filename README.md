@@ -21,7 +21,7 @@
 
 ---
 
-**29 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · Warp · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
+**30 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
 
 > **Experimental sources** (Warp, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe — a wrong path simply finds nothing — but they may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
 
@@ -157,6 +157,7 @@ agentsweep scan --source github-copilot-chat  # GitHub Copilot Chat history
 agentsweep scan --source openclaw             # OpenClaw ~/.openclaw/
 agentsweep scan --source hermes               # Hermes Agent ~/.hermes/state.db
 agentsweep scan --source goose                # Goose ~/.local/share/goose/
+agentsweep scan --source llm                   # Datasette llm CLI logs.db (io.datasette.llm/)
 ```
 
 Not sure which agents you have installed? `list-sources` prints every supported
