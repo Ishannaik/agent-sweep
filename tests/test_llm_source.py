@@ -177,6 +177,10 @@ def test_llm_redactions_preserve_structure_and_scrub_fts(tmp_path: Path) -> None
     redacted = db.read_bytes()
     for key in (KEY_PROMPT, KEY_SYSTEM, KEY_RESPONSE, KEY_FRAGMENT, KEY_CONVNAME):
         assert key.encode() not in redacted, f"{key} survived in the db file"
+        # The FTS5 unicode61 tokenizer stores a case-folded copy; the secret
+        # must be physically gone in that form too, not merely un-MATCH-able.
+        assert key.lower().encode() not in redacted, \
+            f"{key} survived case-folded in the FTS index"
 
     con = sqlite3.connect(db)
     try:

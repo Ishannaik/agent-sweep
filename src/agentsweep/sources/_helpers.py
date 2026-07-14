@@ -61,6 +61,14 @@ def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
                 allowed = set(columns_fn(dst_con))
                 _apply_sqlite_updates(dst_con, redactions, allowed)
                 dst_con.commit()
+                # FTS5 external-content indexes keep their own tokenized (and
+                # case-folded) copy of the text. The sync triggers only write a
+                # 'delete' marker on UPDATE, so the old term stays physically
+                # present in a live segment page that VACUUM can't reach. Merge
+                # the segments first, which applies the deletes and drops the
+                # freed content — then secure_delete + VACUUM scrub the pages.
+                _fts5_optimize(dst_con)
+                dst_con.commit()
                 dst_con.execute("VACUUM")
                 row = dst_con.execute("PRAGMA integrity_check").fetchone()
                 if row is None or row[0] != "ok":
@@ -80,6 +88,25 @@ def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
             tmp.unlink()
         except OSError:
             pass
+
+
+def _fts5_optimize(con: sqlite3.Connection) -> None:
+    """Run the FTS5 'optimize' command on every FTS5 index in the database.
+
+    An external-content FTS5 table is synced by triggers that, on UPDATE,
+    only insert a 'delete' marker — the redacted term survives, case-folded,
+    in a live segment page. 'optimize' merges all segments into one, applying
+    those deletes so the term physically leaves the index. Generic (keys off
+    sqlite_master) so any FTS5-bearing source is covered, not just llm. The
+    fts5vocab virtual tables are excluded — they carry no content and don't
+    accept 'optimize'."""
+    rows = con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND lower(sql) LIKE '%using fts5%' "
+        "AND lower(sql) NOT LIKE '%using fts5vocab%'"
+    ).fetchall()
+    for (name,) in rows:
+        con.execute(f'INSERT INTO "{name}"("{name}") VALUES (\'optimize\')')
 
 
 def _apply_sqlite_updates(
