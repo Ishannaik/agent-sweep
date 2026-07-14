@@ -296,7 +296,11 @@ No. It is fully offline — zero network calls during scanning or redacting. The
 
 Thanks to everyone who has contributed code, bug reports, and ideas.
 
-[![Contributors](https://contrib.rocks/image?repo=Ishannaik/agent-sweep&max=100)](https://github.com/Ishannaik/agent-sweep/graphs/contributors)
+[![Contributors](https://readme-contribs.as93.net/contributors/Ishannaik/agent-sweep?shape=circle)](https://github.com/Ishannaik/agent-sweep/graphs/contributors)
+
+## Star Gazers
+
+[![Star Gazers](https://readme-contribs.as93.net/stargazers/Ishannaik/agent-sweep?shape=circle)](https://github.com/Ishannaik/agent-sweep/stargazers)
 
 ## License
 
