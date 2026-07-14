@@ -100,6 +100,15 @@ class Source(ABC):
         """
         return [self.root]
 
+    def is_detected(self) -> bool:
+        """Cheap install signal for list-sources / scan --all --detected.
+
+        Default: the source's default history root exists on this machine.
+        Sources whose root is always present (e.g. Path.home()) override
+        this so detection reflects real history, not a universal path.
+        """
+        return self.root.exists()
+
 
 class JsonlSource(Source):
     """Shared implementation for agents that store history as JSONL files."""

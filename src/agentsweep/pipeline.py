@@ -217,17 +217,16 @@ def redact_findings(args, source: Source, found_by_file: dict, *,
 def _source_rows() -> list[dict]:
     """Describe every registered source: key, name, default root, detection.
 
-    ``detected`` is True when the source's default history root exists on this
-    machine — a cheap, deterministic install signal (no directory walk, no file
-    reads). Instantiating a source only computes its default_root(); it never
-    touches history contents, so this stays fast and side-effect free.
+    ``detected`` comes from ``Source.is_detected()`` (default: history root
+    exists). Most sources stay O(1). Aider overrides this because its root is
+    the home directory, which always exists.
     """
     rows: list[dict] = []
     for key, cls in SOURCES.items():
         try:
             src = cls()
             root = src.root
-            detected = root.exists()
+            detected = src.is_detected()
         except Exception:
             root, detected = None, False
         rows.append({
@@ -270,8 +269,8 @@ def run_all(args) -> int:
 
     Exit codes: 0 clean / nothing scanned · 1 findings · 2 misuse (e.g. fix).
     Missing roots are skipped (not errors), matching single-source "no files
-    under root → 0". ``--detected`` restricts to sources whose default root
-    exists (same signal as ``list-sources --detected``).
+    under root → 0". ``--detected`` restricts to sources that report history
+    on this machine (same signal as ``list-sources --detected``).
     """
     if _opt(args, "fix", False):
         print(
@@ -293,7 +292,7 @@ def run_all(args) -> int:
             src = cls()
         except Exception:
             continue
-        if detected_only and not src.root.exists():
+        if detected_only and not src.is_detected():
             continue
         selected.append((key, src))
         if getattr(src, "experimental", False):

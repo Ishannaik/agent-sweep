@@ -14,6 +14,12 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 - **Mnemonic gate.** `detect_mnemonics` returns early when a string has
   fewer than 11 word separators — it cannot hold a 12-word phrase — so big
   tokenless blobs (base64, minified JS, long paths) skip tokenization.
+- **Single-pass Aho-Corasick anchors.** `pyahocorasick` collapses per-string
+  prefilter checks into one O(n) pass (substring fallback if the wheel is
+  absent). See `scanner.py:_triggered_indices`.
+- **Aider discovery prune.** Default Aider scans no longer `rglob` the
+  entire home tree. Junk dirs (`node_modules`, `.git`, `AppData`, …) are
+  skipped and depth is capped. See `sources._core._iter_aider_histories`.
 
 ## Evaluated and dropped
 
@@ -27,9 +33,5 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 
 ## Open levers (under research)
 
-- **Single-pass keyword matcher (Aho-Corasick).** Collapse the 189
-  per-string prefilter checks into one scan. Must handle overlapping
-  literals correctly (`git` vs `gitlab`), which a single `re` alternation
-  does not — needs an automaton (`pyahocorasick`) or careful dedup.
 - **Native multi-pattern engines** (`google-re2`, `hyperscan`) — large
   speedups but a portability/packaging cost (Windows wheels?).

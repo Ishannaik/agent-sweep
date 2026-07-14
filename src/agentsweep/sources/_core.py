@@ -219,11 +219,50 @@ class OpenCodeSource(Source):
             pairs.extend((table, c) for c in present)
         return pairs
 
+# Directory basenames never descended into when looking for Aider histories.
+# Aider writes `.aider.chat.history.md` at project/repo roots, so vendor trees,
+# VCS metadata, tool caches, and OS profile junk are pure noise — and walking
+# them from $HOME is what made default `scan --source aider` thrash disks.
+_AIDER_SKIP_DIRS: frozenset[str] = frozenset({
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".cache",
+    ".npm",
+    ".yarn",
+    ".pnpm-store",
+    ".cargo",
+    ".rustup",
+    ".Trash",
+    "Trash",
+    # OS profile trees full of caches, not project roots.
+    "AppData",
+    "Library",
+    # Linux XDG data/cache homes (not where Aider drops chat history).
+    ".local",
+    ".config",
+})
+
+_AIDER_HISTORY_NAME = ".aider.chat.history.md"
+# Soft cap from the discovery root. Aider histories live at repo roots, not
+# deep inside nested vendor trees. Users with odd layouts can pass --root.
+_AIDER_MAX_DEPTH = 12
+
+
 class AiderSource(Source):
     """Aider CLI — per-repo Markdown history files named .aider.chat.history.md.
 
     Aider places one file in the root of each git repo (or CWD) the user works
-    in. There is no central history directory, so we rglob from Path.home().
+    in. There is no central history directory, so discovery walks from
+    Path.home() (or an explicit --root), pruning junk directories and capping
+    depth so a default scan does not walk the entire home tree.
     """
 
     name = "aider"
@@ -238,18 +277,21 @@ class AiderSource(Source):
         return Path.home()
 
     def files(self) -> list[Path]:
-        if not self.root.exists():
-            return []
-        return sorted(
-            p for p in self.root.rglob(".aider.chat.history.md") if p.is_file()
-        )
+        return sorted(self.iter_files())
 
     def iter_files(self) -> Iterator[Path]:
-        if not self.root.exists():
-            return
-        for p in self.root.rglob(".aider.chat.history.md"):
-            if p.is_file():
-                yield p
+        yield from _iter_aider_histories(self.root)
+
+    def is_detected(self) -> bool:
+        # Home always exists, so root.exists() would always report Aider as
+        # installed. Prefer cheap config markers, then an early-exit pruned walk.
+        home = Path.home()
+        for name in (".aider.conf.yml", ".aider.conf.yaml", ".aider.conf.json"):
+            if (home / name).is_file():
+                return True
+        for _ in self.iter_files():
+            return True
+        return False
 
     def iter_strings(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
         yield from _iter_plaintext_lines(path)
@@ -263,3 +305,36 @@ class AiderSource(Source):
 
     def content_format(self, path: Path) -> str:
         return "text"
+
+
+def _iter_aider_histories(root: Path) -> Iterator[Path]:
+    """Yield Aider chat histories under root with junk dirs pruned."""
+    if not root.exists():
+        return
+    root = root.resolve()
+
+    def _onerror(_err: OSError) -> None:
+        # Permission / reparse-point noise under $HOME is expected. Skip and
+        # keep walking the rest of the tree.
+        return
+
+    # os.walk so we can mutate dirs in place and skip huge subtrees.
+    for dirpath, dirnames, filenames in os.walk(
+        root, topdown=True, onerror=_onerror,
+    ):
+        # Depth relative to root (root itself is depth 0).
+        try:
+            rel = Path(dirpath).resolve().relative_to(root)
+            depth = 0 if str(rel) == "." else len(rel.parts)
+        except ValueError:
+            # Walked outside root (symlink / mount edge case). Stop descending.
+            dirnames.clear()
+            continue
+        if depth >= _AIDER_MAX_DEPTH:
+            dirnames.clear()
+        else:
+            dirnames[:] = [d for d in dirnames if d not in _AIDER_SKIP_DIRS]
+        if _AIDER_HISTORY_NAME in filenames:
+            p = Path(dirpath) / _AIDER_HISTORY_NAME
+            if p.is_file():
+                yield p

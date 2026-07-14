@@ -149,7 +149,7 @@ agentsweep scan --source codex                # ~/.codex/sessions/
 agentsweep scan --source opencode             # OpenCode SQLite store
 agentsweep scan --source cursor               # Cursor history
 agentsweep scan --source windsurf             # Windsurf history
-agentsweep scan --source aider                # ~/.aider/
+agentsweep scan --source aider                # per-repo .aider.chat.history.md under $HOME
 agentsweep scan --source cline                # Cline history
 agentsweep scan --source gemini-cli           # Gemini CLI history
 agentsweep scan --source continue-vscode      # Continue (VS Code) history
