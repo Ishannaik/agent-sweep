@@ -152,7 +152,7 @@ class JsonlSource(Source):
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
     ) -> str:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")
         lines = text.splitlines(keepends=True)
 
         by_line: dict[int, list[tuple[KeyPath, str]]] = {}

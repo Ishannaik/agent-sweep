@@ -172,7 +172,7 @@ def _apply_jsonl_redactions(
     redactions: list[tuple[int, KeyPath, str]],
 ) -> str:
     """Apply redactions to a JSONL file, preserving line count and endings."""
-    text = path.read_text(encoding="utf-8")
+    text = path.read_bytes().decode("utf-8")
     lines = text.splitlines(keepends=True)
     by_line: dict[int, list[tuple[KeyPath, str]]] = {}
     for line_num, kp, new_val in redactions:
@@ -269,7 +269,7 @@ def _apply_plaintext_redactions(
     writing empty content.
     """
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise SafetyError(
             f"Cannot re-read {path.name} for redaction: {e}") from e
