@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 """Entry point: verb dispatch and flag parsing.
 
 Usage shapes, all supported:
@@ -136,6 +137,13 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
+    try:
+        import argcomplete
+        completion_parser = _get_completion_parser()
+        argcomplete.autocomplete(completion_parser)
+    except Exception:
+        pass
+
     if argv and argv[0] in ("-V", "--version"):
         print(f"agentsweep {__version__}")
         return 0
@@ -146,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "list-sources":
         from .pipeline import list_sources
         return list_sources(_parse_list_sources(argv[1:]))
+
+    if argv and argv[0] == "completion":
+        return _run_completion(argv[1:])
 
     if not argv and _interactive():
         from .menu import run_menu
@@ -304,6 +315,101 @@ def _parse_purge(rest: list[str]) -> argparse.Namespace:
                     help="Skip the confirmation prompt (required when not "
                          "running on a terminal).")
     return ap.parse_args(rest)
+
+
+def source_completer(prefix: str, **kwargs) -> list[str]:
+    """Dynamically complete --source values from the SOURCES registry."""
+    return [s for s in SOURCES if s.startswith(prefix)]
+
+
+def _get_completion_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="agentsweep",
+        description="Find and redact secrets in AI coding agent histories.",
+    )
+    ap.add_argument("-V", "--version", action="store_true")
+    ap.add_argument("--update", action="store_true")
+
+    subparsers = ap.add_subparsers(dest="subcommand")
+
+    # scan
+    scan_p = subparsers.add_parser("scan", description="Scan history files.")
+    scan_source = scan_p.add_argument("--source", choices=list(SOURCES), default=None,
+                                      help="Which agent's history (default: claude-code).")
+    scan_source.completer = source_completer
+    scan_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
+    scan_p.add_argument("--all", action="store_true", help="Scan every registered agent source.")
+    scan_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
+    scan_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
+    scan_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
+    scan_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
+    scan_p.add_argument("--no-backup", action="store_true", help="Skip .bak file creation.")
+    scan_p.add_argument("--force", action="store_true", help="Bypass safety checks.")
+    scan_p.add_argument("--allow-production", action="store_true", help="Allow against default production root.")
+
+    # fix
+    fix_p = subparsers.add_parser("fix", description="Redact secrets in history.")
+    fix_source = fix_p.add_argument("--source", choices=list(SOURCES), default=None,
+                                     help="Which agent's history (default: claude-code).")
+    fix_source.completer = source_completer
+    fix_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
+    fix_p.add_argument("--all", action="store_true", help="Scan every registered agent source.")
+    fix_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
+    fix_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
+    fix_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
+    fix_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
+    fix_p.add_argument("--no-backup", action="store_true", help="Skip .bak file creation.")
+    fix_p.add_argument("--force", action="store_true", help="Bypass safety checks.")
+    fix_p.add_argument("--allow-production", action="store_true", help="Allow against default production root.")
+
+    # undo
+    undo_p = subparsers.add_parser("undo", description="Restore backups.")
+    undo_source = undo_p.add_argument("--source", choices=list(SOURCES), default="claude-code",
+                                       help="Which agent's history.")
+    undo_source.completer = source_completer
+    undo_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
+
+    # purge
+    purge_p = subparsers.add_parser("purge", description="Delete backups.")
+    purge_source = purge_p.add_argument("--source", choices=list(SOURCES), default="claude-code",
+                                         help="Which agent's history.")
+    purge_source.completer = source_completer
+    purge_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
+    purge_p.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
+
+    # list-sources
+    ls_p = subparsers.add_parser("list-sources", description="List supported agent sources.")
+    ls_p.add_argument("--json", action="store_true", help="Emit the source list as JSON to stdout.")
+    ls_p.add_argument("--detected", action="store_true", help="Show only sources whose history root exists.")
+
+    # completion
+    comp_p = subparsers.add_parser("completion", description="Generate shell completion scripts.")
+    comp_p.add_argument("shell", choices=["bash", "zsh", "fish"], help="The shell to generate completions for.")
+
+    return ap
+
+
+def _parse_completion(rest: list[str]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="agentsweep completion",
+        description="Generate shell completion scripts for agentsweep.",
+    )
+    ap.add_argument("shell", choices=["bash", "zsh", "fish"],
+                    help="The shell to generate completions for.")
+    return ap.parse_args(rest)
+
+
+def _run_completion(rest: list[str]) -> int:
+    args = _parse_completion(rest)
+    try:
+        from argcomplete import shellcode
+    except ImportError:
+        print("  error: argcomplete is not installed.", file=sys.stderr)
+        print("  Install it using: pip install argcomplete", file=sys.stderr)
+        return 1
+
+    print(shellcode(["agentsweep", "asweep"], shell=args.shell))
+    return 0
 
 
 if __name__ == "__main__":

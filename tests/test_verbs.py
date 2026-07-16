@@ -456,3 +456,35 @@ def test_scan_json_flag_produces_parseable_output(tmp_path, capsys):
     assert "rule" in findings[0]
     assert "file" in findings[0]
     assert "line" in findings[0]
+
+
+def test_completion_bash(capsys):
+    code = main(["completion", "bash"])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "complete" in captured.out
+    assert "agentsweep" in captured.out
+
+
+def test_completion_zsh(capsys):
+    code = main(["completion", "zsh"])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "complete" in captured.out or "agentsweep" in captured.out
+
+
+def test_completion_fish(capsys):
+    code = main(["completion", "fish"])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "complete" in captured.out
+    assert "agentsweep" in captured.out
+
+
+def test_source_completer_matches():
+    from agentsweep.cli import source_completer
+    res = source_completer("clau")
+    assert "claude-code" in res
+    res_all = source_completer("")
+    assert len(res_all) > 10
+

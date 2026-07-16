@@ -30,7 +30,7 @@ classifiers = [
 # prebuilt wheels for Linux (manylinux x86_64/aarch64), macOS (x86_64/arm64)
 # and Windows (amd64) on CPython 3.8-3.13 — no compiler needed on install.
 # scanner.py degrades to a pure-Python substring fallback if it's absent.
-dependencies = ["rich>=13.0", "pyahocorasick>=2.0"]
+dependencies = ["rich>=13.0", "pyahocorasick>=2.0", "argcomplete>=3.0.0"]
 
 [project.optional-dependencies]
 # Dev/test + code-quality tooling. These are NEVER shipped in the published

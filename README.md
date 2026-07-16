@@ -109,6 +109,46 @@ pip install --upgrade agentsweep
 
 > Don't have `uv`? `pip install uv` or see [astral.sh/uv](https://docs.astral.sh/uv/). Requires Python 3.11+.
 
+### Shell completions
+
+`agentsweep` supports tab-completion for subcommands, flags, and dynamically lists source names for the `--source` option.
+
+#### Bash
+
+To activate completions for the current session:
+```bash
+eval "$(agentsweep completion bash)"
+# Or using the register-python-argcomplete utility:
+eval "$(register-python-argcomplete agentsweep)"
+```
+To make it permanent, add the eval line to your `~/.bashrc` (or equivalent).
+
+#### Zsh
+
+Zsh uses the `bashcompinit` compatibility layer. Add the following to your `~/.zshrc`:
+```zsh
+# Initialize shell completion if not already done
+autoload -U +X compinit && compinit
+autoload -U +X bashcompinit && bashcompinit
+
+eval "$(agentsweep completion zsh)"
+# Or using the register-python-argcomplete utility:
+eval "$(register-python-argcomplete agentsweep)"
+```
+
+#### Fish
+
+To activate completions for the current session:
+```fish
+agentsweep completion fish | source
+```
+To make it permanent, save the completion script:
+```fish
+agentsweep completion fish > ~/.config/fish/completions/agentsweep.fish
+# Or using the register-python-argcomplete utility:
+register-python-argcomplete --shell fish agentsweep > ~/.config/fish/completions/agentsweep.fish
+```
+
 ## Usage
 
 ### Interactive mode
