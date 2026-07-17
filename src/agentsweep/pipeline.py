@@ -108,6 +108,7 @@ def run(args, *, _findings_out: list | None = None,
         if truncated:
             print(f"warning: {len(truncated)} file(s) exceeded the scan budget "
                   f"and were truncated", file=sys.stderr)
+        _warn_leftover_backups(source, as_json=True)
         if as_sarif:
             return _emit_sarif(_json_payload(found_by_file, source),
                                output, suppressed)
@@ -135,6 +136,7 @@ def run(args, *, _findings_out: list | None = None,
         ui.stage(3, "ok", "FINDINGS", "no secrets found")
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
+        _warn_leftover_backups(source, as_json=False)
         ui.contribute_line()
         return 0
 
@@ -147,6 +149,7 @@ def run(args, *, _findings_out: list | None = None,
                  "skipped — run with --fix to redact in place (.bak backups)")
         ui.stage(5, "warn", "ROTATE", "these keys are still live")
         ui.rotation_panel(_rotation_items(found_by_file))
+        _warn_leftover_backups(source, as_json=False)
         ui.contribute_line()
         if _findings_out is not None:
             _findings_out.append((source, found_by_file))
@@ -423,6 +426,8 @@ def run_all(args) -> int:
                 f"and were truncated",
                 file=sys.stderr,
             )
+        _warn_leftover_backups_multi([s for _k, s, *_ in per_source],
+                                     as_json=True)
         if as_sarif:
             return _emit_sarif(payload, output, total_suppressed)
         return _emit_json_payload(payload, output, total_suppressed)
@@ -444,6 +449,8 @@ def run_all(args) -> int:
         ui.stage(3, "ok", "FINDINGS", "no secrets found")
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
+        _warn_leftover_backups_multi([s for _k, s, *_ in per_source],
+                                     as_json=False)
         ui.contribute_line()
         return 0
 
@@ -504,6 +511,7 @@ def run_all(args) -> int:
     ui.stage(5, "warn", "ROTATE", "these keys are still live")
     # Flatten across sources — do not merge by Path (collisions across roots).
     ui.rotation_panel(_rotation_items_multi(dirty))
+    _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=False)
     ui.contribute_line()
     return 1
 
@@ -969,6 +977,52 @@ _BACKUP_GLOBS = ("*.jsonl.bak", "*.json.bak", "*.md.bak",
                  "*.db-wal.bak", "*.db-shm.bak",
                  "*.vscdb-wal.bak", "*.vscdb-shm.bak",
                  "*.sqlite.bak", "*.sqlite-wal.bak", "*.sqlite-shm.bak")
+
+
+def _leftover_backups(source: Source) -> list[Path]:
+    """Existing .bak sidecars under the source's roots.
+
+    Each still holds the pre-redaction plaintext secret — safe_write writes
+    it before replacing the file, and only `purge` deletes it. Same discovery
+    undo/purge use, so scan flags exactly what they would act on.
+    """
+    return sorted({p for root in source.roots() if root.exists()
+                   for pat in _BACKUP_GLOBS
+                   for p in root.rglob(pat)})
+
+
+def _warn_leftover_backups(source: Source, as_json: bool) -> None:
+    """After a scan, note any .bak sidecars still holding plaintext secrets.
+
+    A user who ran `fix` but not `purge` is not actually clean — the secret
+    lives on in the backup. A scan that finds nothing in the redacted files
+    would otherwise report an all-clear over those live secrets. Existence and
+    count only; the .bak contents are not scanned or shown.
+    """
+    _emit_backup_warning(len(_leftover_backups(source)), as_json)
+
+
+def _warn_leftover_backups_multi(sources: list[Source], as_json: bool) -> None:
+    """Aggregate leftover-.bak warning across the sources a --all scan visited.
+
+    scan --all is the CI-facing entry point (and what the pre-commit hook
+    runs), so it must flag leftover backups too. Counts distinct .bak paths so
+    sources sharing a root can't double-count.
+    """
+    baks = {p for s in sources for p in _leftover_backups(s)}
+    _emit_backup_warning(len(baks), as_json)
+
+
+def _emit_backup_warning(count: int, as_json: bool) -> None:
+    if not count:
+        return
+    msg = (f"{count} leftover .bak backup(s) still contain plaintext secrets "
+           f"— run `agentsweep purge` after rotating, or `agentsweep undo` to "
+           f"restore them")
+    if as_json:
+        print(f"warning: {msg}", file=sys.stderr)
+    else:
+        ui.warn_line(msg)
 
 
 def undo(args) -> int:
