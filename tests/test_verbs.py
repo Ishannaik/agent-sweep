@@ -13,9 +13,11 @@ Covers:
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import time
+import types
 from pathlib import Path
 
 import pytest
@@ -492,6 +494,51 @@ def test_completion_powershell(capsys):
 def test_completion_rejects_unknown_shell():
     with pytest.raises(SystemExit):
         main(["completion", "tcsh"])
+def test_completion_missing_argcomplete_exits_2(monkeypatch, capsys):
+    fake_argcomplete = types.ModuleType("argcomplete")
+    setattr(fake_argcomplete, "autocomplete", lambda parser: None)
+    monkeypatch.setitem(sys.modules, "argcomplete", fake_argcomplete)
+
+    code = main(["completion", "bash"])
+
+    assert code == 2
+    assert "argcomplete is not installed" in capsys.readouterr().err
+
+
+def test_completion_setup_does_not_swallow_parser_errors(monkeypatch):
+    import agentsweep.cli as cli
+
+    fake_argcomplete = types.ModuleType("argcomplete")
+    setattr(fake_argcomplete, "autocomplete", lambda parser: None)
+    monkeypatch.setitem(sys.modules, "argcomplete", fake_argcomplete)
+
+    def _fail_parser():
+        raise RuntimeError("broken completion parser")
+
+    monkeypatch.setattr(cli, "_get_completion_parser", _fail_parser)
+
+    with pytest.raises(RuntimeError, match="broken completion parser"):
+        main(["--version"])
+
+
+def test_fix_completion_does_not_advertise_unsupported_flags():
+    from agentsweep.cli import _get_completion_parser
+
+    parser = _get_completion_parser()
+    subparsers_action = next(
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    fix_parser = subparsers_action.choices["fix"]
+    fix_options = {
+        option
+        for action in fix_parser._actions
+        for option in action.option_strings
+    }
+
+    assert "--all" not in fix_options
+    assert "--detected" not in fix_options
 
 
 def test_source_completer_matches():
@@ -500,4 +547,3 @@ def test_source_completer_matches():
     assert "claude-code" in res
     res_all = source_completer("")
     assert len(res_all) > 10
-

@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         import argcomplete
         completion_parser = _get_completion_parser()
         argcomplete.autocomplete(completion_parser)
-    except Exception:
+    except ImportError:
         pass
 
     if argv and argv[0] in ("-V", "--version"):
@@ -353,8 +353,6 @@ def _get_completion_parser() -> argparse.ArgumentParser:
                                      help="Which agent's history (default: claude-code).")
     fix_source.completer = source_completer
     fix_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
-    fix_p.add_argument("--all", action="store_true", help="Scan every registered agent source.")
-    fix_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
     fix_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
     fix_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
     fix_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
@@ -407,7 +405,7 @@ def _run_completion(rest: list[str]) -> int:
     except ImportError:
         print("  error: argcomplete is not installed.", file=sys.stderr)
         print("  Install it using: pip install argcomplete", file=sys.stderr)
-        return 1
+        return 2
 
     print(shellcode(["agentsweep", "asweep"], shell=args.shell))
     return 0
