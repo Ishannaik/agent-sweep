@@ -9,6 +9,8 @@ Usage shapes, all supported:
     agentsweep scan --all --detected
                                scan only agents whose history root exists
     agentsweep fix  [opts]     redact (guided + confirmed on a terminal)
+    agentsweep fix --all       redact every agent with findings, one at a time
+                               (each source gated + confirmed separately)
     agentsweep undo [opts]     restore .bak backups
     agentsweep purge [opts]    delete .bak backups (after rotating the keys)
     agentsweep list-sources    list supported agents + which are on this machine
@@ -236,8 +238,9 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     ap.add_argument("--root", type=Path,
                     help="Override the source's default root directory.")
     ap.add_argument("--all", action="store_true",
-                    help="Scan every registered agent source and aggregate "
-                         "findings (scan only; not valid with fix).")
+                    help="Every registered agent source: scan aggregates "
+                         "findings; fix redacts each source in turn, gated "
+                         "and confirmed separately.")
     ap.add_argument("--detected", action="store_true",
                     help="With --all, only scan sources whose history root "
                          "exists on this machine (same signal as "
@@ -264,11 +267,6 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
             ap.error("cannot use --source with --all")
         if args.root is not None:
             ap.error("cannot use --root with --all")
-        if args.fix:
-            ap.error(
-                "fix --all is not supported; "
-                "run: agentsweep fix --source <name>"
-            )
         # Placeholder so any code that still reads args.source is safe.
         args.source = "claude-code"
     else:
@@ -353,6 +351,8 @@ def _get_completion_parser() -> argparse.ArgumentParser:
                                      help="Which agent's history (default: claude-code).")
     fix_source.completer = source_completer
     fix_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
+    fix_p.add_argument("--all", action="store_true", help="Redact every agent source with findings, one at a time.")
+    fix_p.add_argument("--detected", action="store_true", help="With --all, only sources whose history root exists.")
     fix_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
     fix_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
     fix_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")

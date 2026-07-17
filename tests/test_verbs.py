@@ -521,7 +521,7 @@ def test_completion_setup_does_not_swallow_parser_errors(monkeypatch):
         main(["--version"])
 
 
-def test_fix_completion_does_not_advertise_unsupported_flags():
+def test_fix_completion_matches_the_cli_contract():
     from agentsweep.cli import _get_completion_parser
 
     parser = _get_completion_parser()
@@ -537,8 +537,10 @@ def test_fix_completion_does_not_advertise_unsupported_flags():
         for option in action.option_strings
     }
 
-    assert "--all" not in fix_options
-    assert "--detected" not in fix_options
+    # #53's contract: completions advertise exactly what fix accepts. fix --all
+    # is supported now, so advertising it is what keeps that contract true.
+    assert "--all" in fix_options
+    assert "--detected" in fix_options
 
 
 def test_source_completer_matches():

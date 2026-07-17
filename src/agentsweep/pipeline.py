@@ -265,21 +265,15 @@ def list_sources(args) -> int:
 def run_all(args) -> int:
     """Scan every registered (or detected) source and aggregate findings.
 
-    Scan-only — redaction stays per-source via ``fix --source <name>``.
+    With ``--fix``, each source with findings is then redacted through the
+    single-source path — see _fix_all_sources.
 
-    Exit codes: 0 clean / nothing scanned · 1 findings · 2 misuse (e.g. fix).
+    Exit codes: 0 clean / nothing scanned / everything redacted · 1 findings
+    (scan-only) · 2 a source was gate-blocked or errored during --fix.
     Missing roots are skipped (not errors), matching single-source "no files
     under root → 0". ``--detected`` restricts to sources that report history
     on this machine (same signal as ``list-sources --detected``).
     """
-    if _opt(args, "fix", False):
-        print(
-            "fix --all is not supported; "
-            "run: agentsweep fix --source <name>",
-            file=sys.stderr,
-        )
-        return 2
-
     output: Path | None = _opt(args, "output")
     as_json = bool(_opt(args, "json", False))
     detected_only = bool(_opt(args, "detected", False))
@@ -481,15 +475,98 @@ def run_all(args) -> int:
             f"full multi-source findings ({grand}) written to {report}"
         )
 
+    if _opt(args, "fix", False):
+        return _fix_all_sources(args, dirty)
+
     dirty_names = ", ".join(k for k, _s, _f in dirty)
     ui.stage(4, "skip", "REDACT",
-             f"skipped — run: agentsweep fix --source <name>  "
+             f"skipped — run with --fix to redact in place (.bak backups)  "
              f"(dirty: {dirty_names})")
     ui.stage(5, "warn", "ROTATE", "these keys are still live")
     # Flatten across sources — do not merge by Path (collisions across roots).
     ui.rotation_panel(_rotation_items_multi(dirty))
     ui.contribute_line()
     return 1
+
+
+def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:
+    """Redact every source with findings, one at a time.
+
+    Each source runs the same path a single-source fix does — its own
+    _preflight_gates, its own _redact_all, and therefore its own safe_write
+    with backup, validation and audit. Nothing is batched across sources and
+    no write happens outside safe_write().
+
+    A source that is gate-blocked, declined, or errors does not abort the
+    others: finishing the sweep is the point of --all, and stopping early
+    would leave the user worse off than the per-source loop they're replacing.
+    On a terminal each source needs its own typed REDACT, so the blast radius
+    is never hidden behind one blanket confirm.
+
+    Returns 0 only if every source redacted cleanly, else 2.
+    """
+    interactive = (sys.stdin.isatty() and ui.console.is_terminal
+                   if hasattr(sys.stdin, "isatty") else False)
+
+    total = len(dirty)
+    redacted: list[str] = []
+    unresolved: list[str] = []
+
+    for key, source, found_by_file in dirty:
+        source_cls = SOURCES[key]
+        src_total = sum(len(v) for v in found_by_file.values())
+
+        if interactive:
+            print()
+            ui.warn_line(
+                f"{key}: {src_total} secret(s) in {len(found_by_file)} file(s) "
+                f"under {source.root} — redact now? "
+                f"(.bak backups kept; `agentsweep undo --source {key}` reverts)"
+            )
+            try:
+                typed = input(
+                    f"  type REDACT to confirm {key} (anything else skips it): "
+                ).strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                unresolved.append(key)
+                break
+            if typed != "REDACT":
+                ui.redact_row("skip", key, "cancelled — nothing written")
+                unresolved.append(key)
+                continue
+
+        gate_err, _recoverable = _preflight_gates(source, source_cls, args)
+        if gate_err is not None:
+            unresolved.append(key)
+            continue
+
+        rows, errors, _recoverable = _redact_all(
+            source=source,
+            found_by_file=found_by_file,
+            backup=not args.no_backup,
+            force=args.force,
+        )
+        for status, path_display, note in rows:
+            ui.redact_row(status, f"{key}: {path_display}", note)
+        if errors:
+            unresolved.append(key)
+        else:
+            redacted.append(key)
+
+    if unresolved:
+        ui.stage(4, "warn", "REDACT",
+                 f"{len(redacted)}/{total} source(s) redacted",
+                 f"unresolved: {', '.join(unresolved)}")
+    else:
+        ui.stage(4, "ok", "REDACT", f"{len(redacted)}/{total} source(s) redacted")
+
+    # Every scanned key is still live until rotated — including those under a
+    # source we could not redact, who need the guidance most.
+    ui.stage(5, "warn", "ROTATE", "redacted locally", "keys live until rotated")
+    ui.rotation_panel(_rotation_items_multi(dirty))
+    ui.contribute_line()
+    return 2 if unresolved else 0
 
 
 def _suggest_paths(missing: Path) -> list[str]:

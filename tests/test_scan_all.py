@@ -5,7 +5,7 @@ Covers:
   (b) one seeded source → exit 1, findings tagged with that source
   (c) two seeded sources → findings from both, distinguished by "source"
   (d) --all --detected only visits roots that exist
-  (e) --all + --source / --root / fix --all rejected
+  (e) --all + --source / --root rejected; fix --all accepted
   (f) --detected without --all rejected
   (g) human mode stages + no raw secrets
   (h) --json -o writes aggregated file, clean stdout
@@ -188,10 +188,14 @@ def test_scan_all_rejects_root_flag(tmp_path):
     assert ei.value.code == 2
 
 
-def test_fix_all_rejected():
-    with pytest.raises(SystemExit) as ei:
-        main(["fix", "--all"])
-    assert ei.value.code == 2
+def test_fix_all_is_accepted():
+    # Parse-level only: fix --all is supported now, so calling main() here
+    # would scan the real machine instead of tmp_path.
+    from agentsweep.cli import _parse_run
+
+    args = _parse_run("fix", ["--all"])
+    assert args.all is True
+    assert args.fix is True
 
 
 def test_detected_without_all_rejected():
@@ -217,8 +221,8 @@ def test_scan_all_human_mode_stages(_isolate_env, capsys):
     assert "codex" in out
     assert AWS_KEY not in out
     assert GH_TOKEN not in out
-    # Points at per-source fix, not fix --all
-    assert "fix --source" in out
+    # Scan stops at FINDINGS and points at the redaction flag, never redacting.
+    assert "--fix" in out
 
 
 def test_scan_all_human_clean(_isolate_env, capsys):
