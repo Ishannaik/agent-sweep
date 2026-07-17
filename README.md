@@ -218,7 +218,7 @@ The legacy flag form `agentsweep --fix` is still accepted and behaves identicall
 Pick which agent's history to target with `--source`. The default is `claude-code`.
 
 ```bash
-agentsweep scan --source claude-code          # ~/.claude/projects/ (default)
+agentsweep scan --source claude-code          # ~/.claude/projects/ (or $CLAUDE_CONFIG_DIR)
 agentsweep scan --source codex                # ~/.codex/sessions/
 agentsweep scan --source opencode             # OpenCode SQLite store
 agentsweep scan --source cursor               # Cursor history
@@ -233,6 +233,12 @@ agentsweep scan --source openclaw             # OpenClaw ~/.openclaw/
 agentsweep scan --source hermes               # Hermes Agent ~/.hermes/state.db
 agentsweep scan --source goose                # Goose ~/.local/share/goose/
 agentsweep scan --source llm                   # Datasette llm CLI logs.db (io.datasette.llm/)
+```
+
+Running Claude Code under a custom profile? Set `CLAUDE_CONFIG_DIR` (the same variable Claude Code honors) and agentsweep scans that profile's `projects/` instead of `~/.claude`. Several profiles at once — e.g. a personal side-project profile alongside your work one — go in a comma-separated list, and all are scanned:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude,~/.claude-personal agentsweep scan --source claude-code
 ```
 
 Not sure which agents you have installed? `list-sources` prints every supported
