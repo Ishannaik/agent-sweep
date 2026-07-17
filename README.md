@@ -295,6 +295,20 @@ agentsweep scan --no-ignore
 
 `|| true` keeps the upload step reachable — `scan` exits 1 when it finds something, which is what you want the SARIF to report rather than a failed step.
 
+### Use with pre-commit
+
+Stop yourself from committing while your agent history holds a live key. Add this to your repo's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/Ishannaik/agent-sweep
+    rev: v0.1.9  # pin to a released tag
+    hooks:
+      - id: agentsweep
+```
+
+Then `pre-commit install`. The hook runs `agentsweep scan --all --detected` on every commit and blocks it (exit 1) if any detected agent history contains a secret. It scans your **history roots** (`~/.claude`, `~/.codex`, ...), not the repo's staged files, so it runs once per commit regardless of what changed — a checkpoint, not a diff scanner. With no agent history on the machine it exits 0 and stays out of the way.
+
 ### Fix-only flags
 
 ```bash
