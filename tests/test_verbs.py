@@ -481,6 +481,19 @@ def test_completion_fish(capsys):
     assert "agentsweep" in captured.out
 
 
+def test_completion_powershell(capsys):
+    code = main(["completion", "powershell"])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "Register-ArgumentCompleter" in captured.out
+    assert "agentsweep" in captured.out
+
+
+def test_completion_rejects_unknown_shell():
+    with pytest.raises(SystemExit):
+        main(["completion", "tcsh"])
+
+
 def test_source_completer_matches():
     from agentsweep.cli import source_completer
     res = source_completer("clau")

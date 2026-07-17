@@ -149,6 +149,20 @@ agentsweep completion fish > ~/.config/fish/completions/agentsweep.fish
 register-python-argcomplete --shell fish agentsweep > ~/.config/fish/completions/agentsweep.fish
 ```
 
+#### PowerShell
+
+Works in both Windows PowerShell 5.1 and PowerShell 7+. To activate completions for the current session:
+```powershell
+agentsweep completion powershell | Out-String | Invoke-Expression
+```
+To make it permanent, append the completion script to your profile:
+```powershell
+if (-not (Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force }
+agentsweep completion powershell | Out-String | Add-Content $PROFILE
+```
+If your profile blocks script execution, allow local scripts first with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
 ## Usage
 
 ### Interactive mode

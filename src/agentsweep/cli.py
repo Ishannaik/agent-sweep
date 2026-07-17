@@ -384,7 +384,8 @@ def _get_completion_parser() -> argparse.ArgumentParser:
 
     # completion
     comp_p = subparsers.add_parser("completion", description="Generate shell completion scripts.")
-    comp_p.add_argument("shell", choices=["bash", "zsh", "fish"], help="The shell to generate completions for.")
+    comp_p.add_argument("shell", choices=["bash", "zsh", "fish", "powershell"],
+                        help="The shell to generate completions for.")
 
     return ap
 
@@ -394,7 +395,7 @@ def _parse_completion(rest: list[str]) -> argparse.Namespace:
         prog="agentsweep completion",
         description="Generate shell completion scripts for agentsweep.",
     )
-    ap.add_argument("shell", choices=["bash", "zsh", "fish"],
+    ap.add_argument("shell", choices=["bash", "zsh", "fish", "powershell"],
                     help="The shell to generate completions for.")
     return ap.parse_args(rest)
 
