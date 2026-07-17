@@ -64,3 +64,21 @@ class Source(ABC):
 4. Run the suite; `test_ported_rules.py` enforces that every rule has both a fixture and rotation guidance.
 
 ## Running tests
+
+```
+pip install -e ".[dev]"
+pytest -v
+```
+
+The test suite is fully hermetic — it never touches `~/.claude/` or any real history directory. Every test uses `tmp_path`. If you add a test that reaches outside `tmp_path`, the PR will be rejected.
+
+## Safety-first review
+
+Any PR that touches `redactor.py` or the write path must:
+
+- Preserve all post-write validations (JSON re-parse, line count match).
+- Preserve atomic write semantics (tempfile → fsync → replace).
+- Preserve `.bak` creation.
+- Not add any code path that writes without going through `safe_write()`.
+
+If you're unsure, open a draft PR and ask.
