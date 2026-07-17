@@ -5,11 +5,44 @@ encoding probes, icon sets, box fallbacks, and the _safe() escape hatch.
 """
 from __future__ import annotations
 
+import os
+
 from rich import box
 from rich.console import Console
 
 console = Console(highlight=False)
 err_console = Console(stderr=True, highlight=False)
+
+
+def resolve_no_color(flag: bool = False) -> bool:
+    """Decide whether human output should drop all color/styling.
+
+    True when ``--no-color`` was passed (``flag``) or the ``NO_COLOR``
+    convention (https://no-color.org) is in effect: the env var present with
+    any value. ``FORCE_COLOR`` wins over ``NO_COLOR`` when both are set, per
+    the informal precedence most tools follow.
+    """
+    if flag:
+        return True
+    if os.environ.get("FORCE_COLOR"):
+        return False
+    return "NO_COLOR" in os.environ
+
+
+def apply_no_color(enabled: bool) -> None:
+    """Strip color/styling from the shared consoles in place when enabled.
+
+    Dropping the color system makes rich emit plain text with no ANSI escapes
+    at all (color *and* bold/dim), so ``NO_COLOR=1`` output stays clean even on
+    a real terminal. Mutating the existing objects rather than rebinding keeps
+    every ``ui.console`` reference already imported elsewhere in sync. A no-op
+    when ``enabled`` is False so styled output is the default.
+    """
+    if not enabled:
+        return
+    for c in (console, err_console):
+        c.no_color = True
+        c._color_system = None
 
 TOTAL_STAGES = 5
 

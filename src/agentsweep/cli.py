@@ -139,6 +139,11 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
+    # Honor NO_COLOR / --no-color before any styled output (menu, banner,
+    # update notice). The flag is parsed per-verb below; catch it here too so
+    # it applies to the interactive menu and the early --version/--update paths.
+    ui.apply_no_color(ui.resolve_no_color("--no-color" in argv))
+
     try:
         import argcomplete
         completion_parser = _get_completion_parser()
@@ -250,6 +255,9 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
                          "flooding the terminal.")
     ap.add_argument("--json", action="store_true",
                     help="Emit findings as JSON to stdout (no banner/styling).")
+    ap.add_argument("--no-color", action="store_true",
+                    help="Disable ANSI colors/styling in human output "
+                         "(also honored via the NO_COLOR env var).")
     ap.add_argument("--format", choices=["sarif"],
                     help="Emit findings in an interchange format instead of "
                          "the default report: sarif = SARIF 2.1.0 for GitHub "
@@ -351,6 +359,7 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     scan_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
     scan_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
     scan_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
+    scan_p.add_argument("--no-color", action="store_true", help="Disable ANSI colors/styling in human output.")
     scan_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
     scan_p.add_argument("--no-backup", action="store_true", help="Skip .bak file creation.")
     scan_p.add_argument("--force", action="store_true", help="Bypass safety checks.")
@@ -366,6 +375,7 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     fix_p.add_argument("--detected", action="store_true", help="With --all, only sources whose history root exists.")
     fix_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
     fix_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
+    fix_p.add_argument("--no-color", action="store_true", help="Disable ANSI colors/styling in human output.")
     fix_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
     fix_p.add_argument("--no-backup", action="store_true", help="Skip .bak file creation.")
     fix_p.add_argument("--force", action="store_true", help="Bypass safety checks.")

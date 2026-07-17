@@ -278,6 +278,10 @@ agentsweep scan --all --format sarif -o agentsweep.sarif
 
 # Skip .agentsweepignore files
 agentsweep scan --no-ignore
+
+# Plain output with no ANSI colors/styling (also honored via NO_COLOR=1)
+agentsweep scan --no-color
+NO_COLOR=1 agentsweep scan
 ```
 
 #### SARIF in CI

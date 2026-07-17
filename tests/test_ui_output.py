@@ -265,6 +265,55 @@ def test_root_not_found_json_keeps_stdout_parseable(tmp_path, capsys):
     assert "Path not found" in captured.err
 
 
+# --------------------------------------------------------------- no color
+
+def _force_color(monkeypatch):
+    """Make the shared consoles emit color as if on a terminal.
+
+    capsys stdout is not a tty, so rich stays plain by default — force a color
+    system on so a no-color regression would actually show escapes to catch.
+    """
+    monkeypatch.setattr(ui.console, "_color_system", ui.console._color_system
+                        or __import__("rich.color", fromlist=["ColorSystem"])
+                        .ColorSystem.TRUECOLOR, raising=False)
+
+
+def test_resolve_no_color_reads_env_and_flag(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    assert ui.resolve_no_color() is False
+    assert ui.resolve_no_color(flag=True) is True
+
+    monkeypatch.setenv("NO_COLOR", "")  # present with any value, per the spec
+    assert ui.resolve_no_color() is True
+
+    monkeypatch.setenv("FORCE_COLOR", "1")  # FORCE_COLOR wins over NO_COLOR
+    assert ui.resolve_no_color() is False
+
+
+def test_no_color_env_suppresses_ansi(tmp_path, monkeypatch, capsys):
+    _force_color(monkeypatch)
+    monkeypatch.setenv("NO_COLOR", "1")
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out          # human report still rendered
+    assert not ANSI_ESCAPE.search(out)  # ...just without escapes
+
+
+def test_no_color_flag_suppresses_ansi(tmp_path, monkeypatch, capsys):
+    _force_color(monkeypatch)
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root), "--no-color"])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out
+    assert not ANSI_ESCAPE.search(out)
+
+
 # ----------------------------------------------------------------- menu
 
 def _feed_menu(monkeypatch, answers: list[str]):
