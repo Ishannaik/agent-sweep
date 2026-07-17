@@ -21,6 +21,7 @@ from typing import Iterator
 
 from ..preflight import (
     CODEBUFF_MARKERS,
+    CRUSH_MARKERS,
     GROK_CLI_MARKERS,
     JETBRAINS_AI_MARKERS,
     JUNIE_MARKERS,
@@ -43,6 +44,7 @@ from ._helpers import (
     _iter_json_file_strings,
     _iter_jsonl_strings,
     _iter_plaintext_lines,
+    _iter_project_histories,
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
@@ -150,6 +152,79 @@ class _GenericSqliteSource(Source):
 
 
 # ── SQLite agents ─────────────────────────────────────────────────────────────
+
+_CRUSH_DATA_DIR = ".crush"
+_CRUSH_DB_NAME = "crush.db"
+_CRUSH_ARTIFACT = f"{_CRUSH_DATA_DIR}/{_CRUSH_DB_NAME}"
+# Crush resolves its data dir upward only as far as the git worktree root, so a
+# db sits at a project root, not deep inside one. Same soft cap as Aider, the
+# other per-project source; users with odd layouts can pass --root.
+_CRUSH_MAX_DEPTH = 12
+
+
+def _find_crush_db(
+    dirpath: Path, dirnames: list[str], _filenames: list[str],
+) -> Iterator[Path]:
+    if _CRUSH_DATA_DIR in dirnames:
+        db = dirpath / _CRUSH_DATA_DIR / _CRUSH_DB_NAME
+        if db.is_file():
+            yield db
+
+
+class CrushSource(_GenericSqliteSource):
+    """Crush (Charm) — per-project SQLite db at <project>/.crush/crush.db.
+
+    Crush resolves its data directory relative to the working directory,
+    searching upward no further than the git worktree root, so there is no
+    central history store: every project the user ran Crush in has its own db.
+    Discovery therefore walks from Path.home() (or an explicit --root) like
+    Aider, rather than reading one fixed platform path.
+
+    Message text lives in messages.parts as JSON, session titles in
+    sessions.title, and files.content holds whole file bodies Crush read — so a
+    .env it opened is in the db verbatim. _GenericSqliteSource scans every text
+    column of every table, which covers all three without hard-coding a schema
+    that upstream may change.
+    """
+
+    name = "crush"
+    display_name = "Crush"
+    process_markers = CRUSH_MARKERS
+
+    @classmethod
+    def default_root(cls) -> Path:
+        return Path.home()
+
+    def files(self) -> list[Path]:
+        return sorted(self.iter_files())
+
+    def iter_files(self) -> Iterator[Path]:
+        # warn=True: this is the scan path, so a reached depth cap is surfaced.
+        yield from _iter_project_histories(
+            self.root,
+            find=_find_crush_db,
+            max_depth=_CRUSH_MAX_DEPTH,
+            source_label="crush",
+            artifact_desc=_CRUSH_ARTIFACT,
+            warn=True,
+        )
+
+    def is_detected(self) -> bool:
+        # Home always exists, so root.exists() would report Crush as installed
+        # on every machine. An early-exit pruned walk instead, so detection
+        # reflects real history. warn=False: detection must not print
+        # scan-time warnings.
+        for _ in _iter_project_histories(
+            self.root,
+            find=_find_crush_db,
+            max_depth=_CRUSH_MAX_DEPTH,
+            source_label="crush",
+            artifact_desc=_CRUSH_ARTIFACT,
+            warn=False,
+        ):
+            return True
+        return False
+
 
 class WarpSource(_GenericSqliteSource):
     """Warp terminal — single warp.sqlite (agent_conversations, ai_queries,

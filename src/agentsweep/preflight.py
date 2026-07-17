@@ -161,6 +161,14 @@ KIRO_CLI_MARKERS: tuple[str, ...] = (
     "kiro.exe",
 )
 
+# No bare "crush": it is an ordinary word that matches unrelated processes
+# (crushftp, image-crush), and a false "agent is running" gate blocks redaction.
+CRUSH_MARKERS: tuple[str, ...] = (
+    "charmbracelet/crush",
+    "/crush ",
+    "crush.exe",
+)
+
 KIRO_MARKERS: tuple[str, ...] = (
     "kiro.kiroagent",
     "kirodotdev",

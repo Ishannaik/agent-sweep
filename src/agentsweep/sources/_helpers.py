@@ -1,12 +1,14 @@
-"""Format-specific helpers: SQLite copy-and-redact, JSONL, JSON, plaintext."""
+"""Format-specific helpers: SQLite copy-and-redact, JSONL, JSON, plaintext,
+plus discovery for agents that store history beside each project."""
 from __future__ import annotations
 
 import json
 import os
 import sqlite3
+import sys
 import tempfile
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 from ..redactor import SafetyError
 from ._base import KeyPath, _line_ending, _set_by_path, _walk_json
@@ -255,6 +257,123 @@ def _iter_plaintext_lines(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
     for i, line in enumerate(text.splitlines(), 1):
         if line.strip():
             yield (i, [i], line)
+
+
+# ---------------------------------------------------------------------------
+# Per-project discovery (agents that keep history beside each project rather
+# than in one central directory: Aider, Crush)
+# ---------------------------------------------------------------------------
+
+# Vendor / VCS / build-cache dirs — never a project root, so they are pruned at
+# ANY depth. A directory with one of these names holds tooling, not a project
+# the user ran an agent in, so dropping it can't hide a real history.
+_PROJECT_SKIP_DIRS: frozenset[str] = frozenset({
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".cache",
+    ".npm",
+    ".yarn",
+    ".pnpm-store",
+    ".cargo",
+    ".rustup",
+})
+
+# OS-profile trees (caches, not project roots) — pruned ONLY when they sit
+# directly under $HOME. Unlike the vendor set, these are ordinary words a real
+# project directory can legitimately be named ("Library", "AppData", "Trash"),
+# so pruning them at any depth silently dropped real histories — a secret
+# scanner reporting a false all-clear. `.config` is deliberately NOT here:
+# people keep git-tracked dotfiles (e.g. ~/.config/nvim) there and run agents in
+# them, so it must be walked; the depth cap + vendor set above bound the cost.
+# ponytail: home-top-only prune, not per-name cache-child pruning. If ~/.config
+# on some box (large browser profiles) makes a scan slow, add the specific
+# cache-child dir names — don't re-blanket-prune .config and lose real repos.
+_PROJECT_SKIP_DIRS_HOME_TOP: frozenset[str] = frozenset({
+    "AppData",
+    "Library",
+    ".Trash",
+    "Trash",
+    ".local",
+})
+
+
+def _iter_project_histories(
+    root: Path,
+    *,
+    find: Callable[[Path, list[str], list[str]], Iterator[Path]],
+    max_depth: int,
+    source_label: str,
+    artifact_desc: str,
+    warn: bool = False,
+) -> Iterator[Path]:
+    """Yield history artifacts under root with junk dirs pruned.
+
+    `find` receives each walked (dirpath, dirnames, filenames) and yields the
+    artifacts it recognises there, so a source can match a file at a project
+    root (Aider) or a file inside a data dir (Crush).
+
+    Vendor/cache dirs are pruned at any depth; OS-profile dirs only when they
+    sit directly under $HOME (so a project named "Library" or a dotfiles repo
+    under ~/.config is still scanned). Descent stops at `max_depth`; when that
+    happens and `warn` is True (the scan path, not detection), a one-line stderr
+    warning naming `source_label`/`artifact_desc` is emitted so the cap is never
+    silent — a scanner that quietly skips files hides live secrets.
+    """
+    if not root.exists():
+        return
+    root = root.resolve()
+    home = Path.home().resolve()
+    capped = 0
+
+    def _onerror(_err: OSError) -> None:
+        # Permission / reparse-point noise under $HOME is expected. Skip and
+        # keep walking the rest of the tree.
+        return
+
+    # os.walk so we can mutate dirs in place and skip huge subtrees.
+    for dirpath, dirnames, filenames in os.walk(
+        root, topdown=True, onerror=_onerror,
+    ):
+        # Depth relative to root (root itself is depth 0). ``resolved`` is
+        # reused for the home-top check, so there's no extra resolve() per dir.
+        try:
+            resolved = Path(dirpath).resolve()
+            rel = resolved.relative_to(root)
+            depth = 0 if str(rel) == "." else len(rel.parts)
+        except ValueError:
+            # Walked outside root (symlink / mount edge case). Stop descending.
+            dirnames.clear()
+            continue
+        if depth >= max_depth:
+            if dirnames:
+                capped += 1
+            dirnames.clear()
+        else:
+            at_home_top = resolved == home
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in _PROJECT_SKIP_DIRS
+                and not (at_home_top and d in _PROJECT_SKIP_DIRS_HOME_TOP)
+            ]
+        yield from find(Path(dirpath), dirnames, filenames)
+
+    if warn and capped:
+        print(
+            f"warning: {source_label} discovery reached the depth cap "
+            f"({max_depth}) in {capped} "
+            f"director{'y' if capped == 1 else 'ies'}; any "
+            f"{artifact_desc} nested deeper was not scanned — "
+            f"pass --root <path> to reach it",
+            file=sys.stderr,
+        )
 
 
 def _apply_plaintext_redactions(

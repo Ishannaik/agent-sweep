@@ -21,9 +21,9 @@
 
 ---
 
-**30 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
+**31 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Crush · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
 
-> **Experimental sources** (Warp, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe — a wrong path simply finds nothing — but they may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
+> **Experimental sources** (Warp, Crush, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe — a wrong path simply finds nothing — but they may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
 
 **191 detection rules** — AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
 
@@ -204,6 +204,7 @@ agentsweep scan --source opencode             # OpenCode SQLite store
 agentsweep scan --source cursor               # Cursor history
 agentsweep scan --source windsurf             # Windsurf history
 agentsweep scan --source aider                # per-repo .aider.chat.history.md under $HOME
+agentsweep scan --source crush                # per-project .crush/crush.db under $HOME
 agentsweep scan --source cline                # Cline history
 agentsweep scan --source gemini-cli           # Gemini CLI history
 agentsweep scan --source continue-vscode      # Continue (VS Code) history
