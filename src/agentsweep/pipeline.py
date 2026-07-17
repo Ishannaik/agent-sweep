@@ -17,7 +17,7 @@ from . import __version__, ui
 from . import ignore as ignore_mod
 from .preflight import is_agent_running, is_production_root
 from .redactor import SafetyError, safe_write, safety_check
-from .scanner import ROTATION_GUIDANCE, Finding, scan_text
+from .scanner import ROTATION_GUIDANCE, RULES, Finding, scan_text
 from .sources import SOURCES, Source
 
 
@@ -51,15 +51,28 @@ def run(args, *, _findings_out: list | None = None,
     source: Source = source_cls(root=args.root) if args.root else source_cls()
     output: Path | None = _opt(args, "output")
 
+    as_sarif = _opt(args, "format") == "sarif"
+    # Both machine formats share every no-banner/no-styling branch below; they
+    # differ only in what an empty result set looks like on stdout.
+    machine = bool(args.json) or as_sarif
+
+    def _print_empty_machine_output() -> None:
+        # stdout must stay parseable in every machine-format run, including
+        # user errors — for SARIF that means a valid document, not "[]".
+        if as_sarif:
+            print(json.dumps(_sarif_document([]), indent=2))
+        elif args.json:
+            print("[]")
+
     if args.root is not None and not source.root.exists():
         print(f"Path not found: {source.root}", file=sys.stderr)
         for hint in _suggest_paths(source.root):
             print(f"  did you mean: {source.root.parent / hint}", file=sys.stderr)
-        if args.json:
-            print("[]")  # stdout stays parseable JSON even on user error
+        if machine:
+            _print_empty_machine_output()
         return 2
 
-    if not args.json:
+    if not machine:
         ui.banner(__version__)
         if getattr(source, "experimental", False):
             ui.warn_line(
@@ -67,7 +80,7 @@ def run(args, *, _findings_out: list | None = None,
                 f"path/format is inferred from research and not yet verified "
                 f"against a real install, so it may find nothing")
 
-    if not args.json:
+    if not machine:
         files: list[Path] = []
         with ui.console.status("") as status:
             for f in source.iter_files():
@@ -80,8 +93,8 @@ def run(args, *, _findings_out: list | None = None,
         files = list(source.iter_files())
     if not files:
         print(f"No history files found under {source.root}", file=sys.stderr)
-        if args.json:
-            print("[]")  # stdout must stay parseable JSON in every --json run
+        if machine:
+            _print_empty_machine_output()
         else:
             ui.stage(1, "warn", "DISCOVER", source.name,
                      f"no history files under {source.root}", err=True)
@@ -90,11 +103,14 @@ def run(args, *, _findings_out: list | None = None,
     ignores = (ignore_mod.IgnoreSet() if _opt(args, "no_ignore")
                else ignore_mod.load([source.root, Path.cwd()]))
 
-    if args.json:
+    if machine:
         found_by_file, _, suppressed, truncated = _scan(source, files, ignores)
         if truncated:
             print(f"warning: {len(truncated)} file(s) exceeded the scan budget "
                   f"and were truncated", file=sys.stderr)
+        if as_sarif:
+            return _emit_sarif(_json_payload(found_by_file, source),
+                               output, suppressed)
         return _output_json(found_by_file, source, output, suppressed)
 
     ui.stage(1, "ok", "DISCOVER", source.name, f"{len(files)} file(s)", source.root)
@@ -281,7 +297,8 @@ def run_all(args) -> int:
         return 2
 
     output: Path | None = _opt(args, "output")
-    as_json = bool(_opt(args, "json", False))
+    as_sarif = _opt(args, "format") == "sarif"
+    as_json = bool(_opt(args, "json", False)) or as_sarif
     detected_only = bool(_opt(args, "detected", False))
     no_ignore = bool(_opt(args, "no_ignore", False))
 
@@ -412,6 +429,8 @@ def run_all(args) -> int:
                 f"and were truncated",
                 file=sys.stderr,
             )
+        if as_sarif:
+            return _emit_sarif(payload, output, total_suppressed)
         return _emit_json_payload(payload, output, total_suppressed)
 
     ui.stage(2, "ok", "SCAN", f"{total_files} file(s)",
@@ -679,6 +698,98 @@ def _json_payload(found_by_file: dict, source: Source) -> list[dict]:
                 "masked": finding.masked,
             })
     return payload
+
+
+SARIF_SCHEMA = (
+    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/"
+    "sarif-schema-2.1.0.json"
+)
+SARIF_VERSION = "2.1.0"
+_PROJECT_URL = "https://github.com/Ishannaik/agent-sweep"
+
+
+def _sarif_document(payload: list[dict]) -> dict:
+    """Build a SARIF 2.1.0 document from the JSON findings payload.
+
+    Only rules that actually matched become tool.driver.rules, so a run
+    carries guidance for what was found rather than all of RULES. Message
+    text reuses each finding's `masked` preview; the plaintext secret is
+    never read here, so it cannot reach the report.
+    """
+    displays = {rule: display for rule, display, _pattern in RULES}
+
+    rule_ids: list[str] = []
+    for f in payload:
+        if f["rule"] not in rule_ids:
+            rule_ids.append(f["rule"])
+
+    rules: list[dict] = []
+    for rule_id in rule_ids:
+        descriptor: dict = {
+            "id": rule_id,
+            "name": displays.get(rule_id, rule_id),
+            "shortDescription": {"text": displays.get(rule_id, rule_id)},
+        }
+        guidance = ROTATION_GUIDANCE.get(rule_id)
+        if guidance:
+            descriptor["help"] = {"text": guidance}
+        rules.append(descriptor)
+
+    index_of = {rule_id: i for i, rule_id in enumerate(rule_ids)}
+    results: list[dict] = []
+    for f in payload:
+        results.append({
+            "ruleId": f["rule"],
+            "ruleIndex": index_of[f["rule"]],
+            "level": "error",
+            "message": {
+                "text": (f"{f['display']} found in {f['source']} history: "
+                         f"{f['masked']}"),
+            },
+            "locations": [{
+                "physicalLocation": {
+                    "artifactLocation": {
+                        "uri": Path(f["file"]).resolve().as_uri(),
+                    },
+                    "region": {"startLine": max(1, int(f["line"]))},
+                },
+            }],
+        })
+
+    return {
+        "$schema": SARIF_SCHEMA,
+        "version": SARIF_VERSION,
+        "runs": [{
+            "tool": {"driver": {
+                "name": "agentsweep",
+                "version": __version__,
+                "informationUri": _PROJECT_URL,
+                "rules": rules,
+            }},
+            "results": results,
+        }],
+    }
+
+
+def _emit_sarif(payload: list[dict], output: Path | None,
+                suppressed: int) -> int:
+    """Emit a SARIF report to `output` or stdout.
+
+    Machine-clean like the JSON path — no banner, no styling — and the exit
+    code matches it: 1 with findings, 0 clean.
+    """
+    code = 0 if not payload else 1
+    text = json.dumps(_sarif_document(payload), indent=2) + "\n"
+
+    if output is not None:
+        _write_text(output, text)
+        print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
+        return code
+
+    print(text, end="")
+    if suppressed:
+        print(f"({suppressed} suppressed by .agentsweepignore)", file=sys.stderr)
+    return code
 
 
 def _emit_json_payload(payload: list[dict], output: Path | None,

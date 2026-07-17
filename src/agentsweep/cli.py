@@ -247,6 +247,10 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
                          "flooding the terminal.")
     ap.add_argument("--json", action="store_true",
                     help="Emit findings as JSON to stdout (no banner/styling).")
+    ap.add_argument("--format", choices=["sarif"],
+                    help="Emit findings in an interchange format instead of "
+                         "the default report: sarif = SARIF 2.1.0 for GitHub "
+                         "code scanning and SARIF viewers (scan only).")
     ap.add_argument("--no-ignore", action="store_true",
                     help="Ignore any .agentsweepignore files.")
     # Redaction flags (used by `fix` / legacy --fix; harmless on `scan`).
@@ -258,6 +262,13 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
                     help="Allow --fix against the default production root.")
     args = ap.parse_args(rest)
     args.fix = (verb == "fix")
+
+    if args.format is not None:
+        if args.json:
+            ap.error("cannot use --json with --format sarif; pick one output "
+                     "format")
+        if args.fix:
+            ap.error("--format is a scan output format; not valid with fix")
 
     if args.all:
         if args.source is not None:

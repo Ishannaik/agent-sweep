@@ -251,9 +251,28 @@ agentsweep scan --json
 agentsweep scan --json -o findings.json
 agentsweep scan --json --output /tmp/report.json
 
+# SARIF 2.1.0 for GitHub code scanning / VS Code SARIF viewer (scan only)
+agentsweep scan --format sarif -o agentsweep.sarif
+agentsweep scan --all --format sarif -o agentsweep.sarif
+
 # Skip .agentsweepignore files
 agentsweep scan --no-ignore
 ```
+
+#### SARIF in CI
+
+`--format sarif` emits [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html), so findings show up as code-scanning annotations instead of something you have to parse. Rotation guidance rides along in each rule's `help` text, and only the masked preview is included — the secret itself is never written to the report.
+
+```yaml
+- name: Scan agent history for secrets
+  run: |
+    pipx run agentsweep scan --all --format sarif -o agentsweep.sarif || true
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: agentsweep.sarif
+```
+
+`|| true` keeps the upload step reachable — `scan` exits 1 when it finds something, which is what you want the SARIF to report rather than a failed step.
 
 ### Fix-only flags
 
