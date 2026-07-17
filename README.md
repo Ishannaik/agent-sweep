@@ -109,6 +109,26 @@ pip install --upgrade agentsweep
 
 > Don't have `uv`? `pip install uv` or see [astral.sh/uv](https://docs.astral.sh/uv/). Requires Python 3.11+.
 
+### Docker
+
+Build the image from the repo root:
+```bash
+docker build -t agentsweep .
+```
+
+agentsweep scans files under a source's history root (e.g. `~/.claude`), so
+mount your real home directory (or just the relevant agent folder) into the
+container and point `--root` at it. `-u $(id -u):$(id -g)` keeps files
+written back to the mount (like `.bak` backups) owned by you, not root:
+```bash
+docker run --rm -it -u $(id -u):$(id -g) \
+  -v "$HOME/.claude:/home/sweeper/.claude:rw" \
+  agentsweep scan --source claude-code
+```
+
+For `agentsweep fix`, keep the same mount read-write so it can write
+redactions and `.bak` backups back to your real history directory.
+
 ### Shell completions
 
 `agentsweep` supports tab-completion for subcommands, flags, and dynamically lists source names for the `--source` option.
