@@ -104,7 +104,7 @@ class _VSCodeSqliteSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> bytes:
+    ) -> str | bytes:
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
 
     def sidecars(self, path: Path) -> list[Path]:
@@ -178,7 +178,7 @@ class CursorSource(_VSCodeSqliteSource):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str | bytes:  # type: ignore[override]
+    ) -> str | bytes:
         if path.suffix == ".jsonl":
             return _apply_jsonl_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
@@ -247,7 +247,7 @@ class WindsurfSource(_VSCodeSqliteSource):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str | bytes:  # type: ignore[override]
+    ) -> str | bytes:
         if path.suffix == ".md":
             return _apply_plaintext_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
