@@ -1,5 +1,6 @@
-﻿"""Contract tests for the pipeline UI: --json purity, exit codes, masking,
+"""Contract tests for the pipeline UI: --json purity, exit codes, masking,
 gate rendering, redact rows, and encoding degradation."""
+
 from __future__ import annotations
 
 import io
@@ -50,6 +51,7 @@ def _mkroot(tmp_path: Path, content: str = FIXTURE_LINE) -> Path:
 
 # ---------------------------------------------------------------- json mode
 
+
 def test_json_mode_is_machine_clean(tmp_path, capsys):
     root = _mkroot(tmp_path)
     code = main(["--root", str(root), "--json"])
@@ -95,6 +97,7 @@ def test_json_with_fix_is_scan_only(tmp_path, capsys):
 
 
 # ---------------------------------------------------------------- scan mode
+
 
 def test_scan_exit_codes(tmp_path, capsys):
     dirty = _mkroot(tmp_path)
@@ -146,8 +149,10 @@ def test_bracketed_path_segments_survive_rendering(tmp_path, capsys):
 
 # ----------------------------------------------------------------- gates
 
+
 def test_production_gate_blocks_and_still_shows_rotation(
-        tmp_path, _isolated_home, capsys):
+    tmp_path, _isolated_home, capsys
+):
     fake_root = _isolated_home / ".claude" / "projects"
     fake_root.mkdir(parents=True)
     (fake_root / "session.jsonl").write_text(FIXTURE_LINE, encoding="utf-8")
@@ -165,8 +170,9 @@ def test_production_gate_blocks_and_still_shows_rotation(
 
 def test_active_session_gate_blocks(tmp_path, monkeypatch, capsys):
     root = _mkroot(tmp_path)
-    monkeypatch.setattr(pipeline, "is_agent_running",
-                        lambda markers: (True, "claude.exe"))
+    monkeypatch.setattr(
+        pipeline, "is_agent_running", lambda markers: (True, "claude.exe")
+    )
 
     code = main(["--root", str(root), "--fix"])
     captured = capsys.readouterr()
@@ -180,8 +186,9 @@ def test_active_session_gate_blocks(tmp_path, monkeypatch, capsys):
 
 def test_force_overrides_active_session_gate(tmp_path, monkeypatch, capsys):
     root = _mkroot(tmp_path)
-    monkeypatch.setattr(pipeline, "is_agent_running",
-                        lambda markers: (True, "claude.exe"))
+    monkeypatch.setattr(
+        pipeline, "is_agent_running", lambda markers: (True, "claude.exe")
+    )
 
     code = main(["--root", str(root), "--fix", "--force"])
     captured = capsys.readouterr()
@@ -192,6 +199,7 @@ def test_force_overrides_active_session_gate(tmp_path, monkeypatch, capsys):
 
 
 # ----------------------------------------------------------------- redact
+
 
 def test_fix_redacts_end_to_end_with_force(tmp_path, _no_claude, capsys):
     root = _mkroot(tmp_path)
@@ -205,8 +213,7 @@ def test_fix_redacts_end_to_end_with_force(tmp_path, _no_claude, capsys):
     assert (root / "session.jsonl.bak").exists()
 
 
-def test_fix_write_error_shows_fail_row_and_exits_2(
-        tmp_path, _no_claude, capsys):
+def test_fix_write_error_shows_fail_row_and_exits_2(tmp_path, _no_claude, capsys):
     root = _mkroot(tmp_path)
     # Pre-existing .bak makes safe_write refuse — exercises the FAIL row.
     (root / "session.jsonl.bak").write_text("old", encoding="utf-8")
@@ -233,7 +240,8 @@ def test_fix_no_backup(tmp_path, _no_claude, capsys):
 
 
 def test_fix_writes_audit_log_in_isolated_home(
-        tmp_path, _isolated_home, _no_claude, capsys):
+    tmp_path, _isolated_home, _no_claude, capsys
+):
     root = _mkroot(tmp_path)
     code = main(["--root", str(root), "--fix", "--force"])
 
@@ -245,6 +253,7 @@ def test_fix_writes_audit_log_in_isolated_home(
 
 
 # --------------------------------------------------------- path forgiveness
+
 
 def test_root_not_found_exits_2_with_suggestion(tmp_path, capsys):
     (tmp_path / "history").mkdir()
@@ -267,15 +276,20 @@ def test_root_not_found_json_keeps_stdout_parseable(tmp_path, capsys):
 
 # --------------------------------------------------------------- no color
 
+
 def _force_color(monkeypatch):
     """Make the shared consoles emit color as if on a terminal.
 
     capsys stdout is not a tty, so rich stays plain by default — force a color
     system on so a no-color regression would actually show escapes to catch.
     """
-    monkeypatch.setattr(ui.console, "_color_system", ui.console._color_system
-                        or __import__("rich.color", fromlist=["ColorSystem"])
-                        .ColorSystem.TRUECOLOR, raising=False)
+    monkeypatch.setattr(
+        ui.console,
+        "_color_system",
+        ui.console._color_system
+        or __import__("rich.color", fromlist=["ColorSystem"]).ColorSystem.TRUECOLOR,
+        raising=False,
+    )
 
 
 def test_resolve_no_color_reads_env_and_flag(monkeypatch):
@@ -299,7 +313,7 @@ def test_no_color_env_suppresses_ansi(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
 
     assert code == 1
-    assert "AGENTSWEEP" in out          # human report still rendered
+    assert "AGENTSWEEP" in out  # human report still rendered
     assert not ANSI_ESCAPE.search(out)  # ...just without escapes
 
 
@@ -314,7 +328,75 @@ def test_no_color_flag_suppresses_ansi(tmp_path, monkeypatch, capsys):
     assert not ANSI_ESCAPE.search(out)
 
 
+def test_color_is_emitted_when_enabled(tmp_path, monkeypatch, capsys):
+    _force_color(monkeypatch)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    ui.apply_no_color(False)
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out
+    assert ANSI_ESCAPE.search(out)
+
+
+def test_update_notice_respects_no_color(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "__version__", "0.0.1")
+
+    import urllib.request
+    from unittest.mock import MagicMock
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = b'{"info": {"version": "9.9.9"}}'
+    mock_resp.__enter__.return_value = mock_resp
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: mock_resp)
+
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    _force_color(monkeypatch)
+    monkeypatch.setenv("NO_COLOR", "1")
+    ui.apply_no_color(True)
+
+    class DummyArgs:
+        json = False
+
+    cli._background_update_notice(DummyArgs())
+    out = capsys.readouterr().out
+
+    assert "agentsweep 9.9.9 available" in out
+    assert not ANSI_ESCAPE.search(out)
+
+
+def test_update_notice_emits_color_when_enabled(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "__version__", "0.0.1")
+
+    import urllib.request
+    from unittest.mock import MagicMock
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = b'{"info": {"version": "9.9.9"}}'
+    mock_resp.__enter__.return_value = mock_resp
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: mock_resp)
+
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    _force_color(monkeypatch)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    ui.apply_no_color(False)
+
+    class DummyArgs:
+        json = False
+
+    cli._background_update_notice(DummyArgs())
+    out = capsys.readouterr().out
+
+    assert "agentsweep 9.9.9 available" in out
+    assert ANSI_ESCAPE.search(out)
+
+
 # ----------------------------------------------------------------- menu
+
 
 def _feed_menu(monkeypatch, answers: list[str]):
     monkeypatch.setattr(cli, "_interactive", lambda: True)
@@ -345,8 +427,10 @@ def test_menu_scan_action_then_quit(monkeypatch, _isolated_home, capsys):
     # (e.g. APPDATA/Cursor, APPDATA/Windsurf) that are not isolated by tmp_path.
     import sys as _sys
     from agentsweep import menu as _menu
+
     def _fast_scan_all():
         print("No history files found for any source.", file=_sys.stderr)
+
     monkeypatch.setattr(_menu, "_scan_all_sources", _fast_scan_all)
     _feed_menu(monkeypatch, ["1", "", "q"])
     assert main([]) == 0
@@ -355,15 +439,15 @@ def test_menu_scan_action_then_quit(monkeypatch, _isolated_home, capsys):
 
 
 def test_menu_folder_typo_then_retry_shows_count(
-        tmp_path, monkeypatch, _isolated_home, capsys):
+    tmp_path, monkeypatch, _isolated_home, capsys
+):
     good = tmp_path / "history"
     good.mkdir()
     (good / "s.jsonl").write_text(FIXTURE_LINE, encoding="utf-8")
 
     # 2 → typo (suggestion shown) → corrected path (count shown, scan runs)
     # → Enter skips the post-scan redaction offer → Enter → q quit.
-    _feed_menu(monkeypatch, ["2", str(tmp_path / "histori"), str(good), "", "",
-                             "q"])
+    _feed_menu(monkeypatch, ["2", str(tmp_path / "histori"), str(good), "", "", "q"])
     assert main([]) == 0
     captured = capsys.readouterr()
 
@@ -374,12 +458,14 @@ def test_menu_folder_typo_then_retry_shows_count(
 
 
 def test_menu_empty_folder_offers_scan_anyway(
-        tmp_path, monkeypatch, _isolated_home, capsys):
+    tmp_path, monkeypatch, _isolated_home, capsys
+):
     empty = tmp_path / "empty"
     empty.mkdir()
     # decline the scan-anyway offer twice more → _ask_folder gives up → menu → quit
-    _feed_menu(monkeypatch, ["2", str(empty), "n", str(empty), "n", str(empty),
-                             "n", "", "q"])
+    _feed_menu(
+        monkeypatch, ["2", str(empty), "n", str(empty), "n", str(empty), "n", "", "q"]
+    )
     assert main([]) == 0
     out = capsys.readouterr().out
     assert "found 0 .jsonl file(s)" in out
@@ -393,7 +479,8 @@ def test_menu_invalid_choice_reprompts(monkeypatch, _isolated_home, capsys):
 
 
 def test_menu_redact_requires_typed_confirmation(
-        monkeypatch, _isolated_home, _no_claude, capsys):
+    monkeypatch, _isolated_home, _no_claude, capsys
+):
     fake_root = _isolated_home / ".claude" / "projects"
     fake_root.mkdir(parents=True)
     session = fake_root / "session.jsonl"
@@ -407,7 +494,8 @@ def test_menu_redact_requires_typed_confirmation(
 
 
 def test_menu_redact_confirmed_writes_and_undo_restores(
-        monkeypatch, _isolated_home, _no_claude, capsys):
+    monkeypatch, _isolated_home, _no_claude, capsys
+):
     fake_root = _isolated_home / ".claude" / "projects"
     fake_root.mkdir(parents=True)
     session = fake_root / "session.jsonl"
@@ -425,6 +513,7 @@ def test_menu_redact_confirmed_writes_and_undo_restores(
 
 
 # ----------------------------------------------------- post-scan redaction offer
+
 
 def test_post_scan_offer_declined_keeps_exit_1(tmp_path, monkeypatch, capsys):
     root = _mkroot(tmp_path)
@@ -444,8 +533,7 @@ def test_post_scan_offer_declined_keeps_exit_1(tmp_path, monkeypatch, capsys):
     assert AWS_KEY in (root / "session.jsonl").read_text(encoding="utf-8")
 
 
-def test_post_scan_offer_accepted_redacts(
-        tmp_path, monkeypatch, _no_claude, capsys):
+def test_post_scan_offer_accepted_redacts(tmp_path, monkeypatch, _no_claude, capsys):
     root = _mkroot(tmp_path)
     monkeypatch.setattr(cli, "_interactive", lambda: True)
     # Fresh file trips the mtime gate, so the guided --force retry kicks in.
@@ -472,6 +560,7 @@ def test_json_mode_never_prompts(tmp_path, monkeypatch, capsys):
 
 # ------------------------------------------------------- graceful shutdown
 
+
 def _raise_interrupt(*args, **kwargs):
     raise KeyboardInterrupt
 
@@ -488,7 +577,8 @@ def test_ctrl_c_mid_scan_exits_130_no_traceback(tmp_path, monkeypatch, capsys):
 
 
 def test_ctrl_c_during_fix_reassures_about_backups(
-        tmp_path, monkeypatch, _no_claude, capsys):
+    tmp_path, monkeypatch, _no_claude, capsys
+):
     root = _mkroot(tmp_path)
     monkeypatch.setattr(pipeline, "_redact_all", _raise_interrupt)
     code = main(["--root", str(root), "--fix", "--force"])
@@ -510,8 +600,7 @@ def test_ctrl_c_json_mode_keeps_stdout_clean(tmp_path, monkeypatch, capsys):
     assert "interrupted" in captured.err
 
 
-def test_ctrl_c_at_menu_prompt_exits_gracefully(
-        monkeypatch, _isolated_home, capsys):
+def test_ctrl_c_at_menu_prompt_exits_gracefully(monkeypatch, _isolated_home, capsys):
     monkeypatch.setattr(cli, "_interactive", lambda: True)
     monkeypatch.setattr("builtins.input", _raise_interrupt)
     assert main([]) == 0
@@ -520,8 +609,10 @@ def test_ctrl_c_at_menu_prompt_exits_gracefully(
 
 # ------------------------------------------------------- encoding fallback
 
+
 def _console_with_encoding(encoding: str):
     from rich.console import Console
+
     stream = io.TextIOWrapper(io.BytesIO(), encoding=encoding)
     # legacy_windows=False isolates the stream-encoding probe: on Windows,
     # rich marks any non-terminal stream legacy, which forces ASCII anyway.
@@ -532,6 +623,7 @@ def test_ascii_fallback_on_cp1252_stream():
     c = _console_with_encoding("cp1252")
     assert ui._icons(c) == ui._ICONS_ASCII
     from rich import box
+
     assert ui._box(c, box.DOUBLE) is box.ASCII
 
 
@@ -562,10 +654,13 @@ def test_custom_folder_scan_wires_progress(tmp_path, monkeypatch, capsys):
     class _TrackingProgress:
         def __enter__(self):
             return self
+
         def __exit__(self, *exc):
             return False
+
         def advance(self, current: str) -> None:
             advanced.append(current)
+
         def detection(self, *a) -> None:
             pass
 
