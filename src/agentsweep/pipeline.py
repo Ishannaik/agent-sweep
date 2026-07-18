@@ -338,9 +338,9 @@ def run_all(args) -> int:
     # original index so the final ordering matches `selected` regardless of
     # which worker finishes first.
     #
-    # Discovery workers are capped at the number of selected sources — we
-    # never need more workers than there are sources, and Python threads are
-    # cheap enough that one-per-source is fine for the typical count (<30).
+    # Discovery workers are capped at _SOURCE_WORKERS_CAP to ensure bounded
+    # concurrency across the entire pipeline.
+    _SOURCE_WORKERS_CAP = 4
 
     def _discover_one(key: str, source: Source) -> tuple[str, Source, list[Path]]:
         """Collect every file for a single source; safe to call from a thread."""
@@ -350,7 +350,7 @@ def run_all(args) -> int:
             files = []
         return key, source, files
 
-    discover_workers = min(len(selected), max(1, len(selected)))
+    discover_workers = min(_SOURCE_WORKERS_CAP, max(1, len(selected)))
     discovered_by_index: dict[int, tuple[str, Source, list[Path]]] = {}
 
     if as_json:
@@ -442,8 +442,6 @@ def run_all(args) -> int:
     # `discovered` and results are re-inserted by that index so the findings
     # table output is deterministic regardless of completion order.
 
-    _SCAN_SOURCE_WORKERS = 4
-
     per_source_by_index: dict[
         int,
         tuple[str, Source, list[Path], dict, int, int, list[Path]]
@@ -454,7 +452,7 @@ def run_all(args) -> int:
 
     t0 = time.perf_counter()
     if as_json:
-        scan_workers = min(_SCAN_SOURCE_WORKERS, len(discovered))
+        scan_workers = min(_SOURCE_WORKERS_CAP, len(discovered))
         with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
             def _scan_json_source(
                 key: str, source: Source, files: list[Path]
@@ -476,9 +474,9 @@ def run_all(args) -> int:
                 scan_pool.submit(_scan_json_source, key, source, files): idx
                 for idx, (key, source, files) in enumerate(discovered)
             }
-            for fut in as_completed(scan_futures):
-                idx = scan_futures[fut]
-                per_source_by_index[idx] = fut.result()
+            for scan_fut in as_completed(scan_futures):
+                idx = scan_futures[scan_fut]
+                per_source_by_index[idx] = scan_fut.result()
     else:
         progress_lock = threading.Lock()
 
@@ -523,15 +521,15 @@ def run_all(args) -> int:
                     strings_scanned, suppressed, truncated
                 )
 
-            scan_workers = min(_SCAN_SOURCE_WORKERS, len(discovered))
+            scan_workers = min(_SOURCE_WORKERS_CAP, len(discovered))
             with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
                 scan_futures = {
                     scan_pool.submit(_scan_tty_source, key, source, files): idx
                     for idx, (key, source, files) in enumerate(discovered)
                 }
-                for fut in as_completed(scan_futures):
-                    idx = scan_futures[fut]
-                    per_source_by_index[idx] = fut.result()
+                for scan_fut in as_completed(scan_futures):
+                    idx = scan_futures[scan_fut]
+                    per_source_by_index[idx] = scan_fut.result()
 
     # Rebuild in the original discovery order for deterministic output.
     per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]] = [
