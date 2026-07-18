@@ -75,6 +75,8 @@ FIXTURES: dict[str, str] = {
     'gitlab-runner-auth-routable': 'glrt-t1_a1b2c3a1b2c3a1b2' 'c3a1b2c3a1b2c3.a1b2c3a1b',
     'gitlab-scim': 'glsoat-a1b2c3' 'a1b2c3a1b2c3a1',
     'gitlab-session-cookie': '_gitlab_session=a1b2c3a1' 'b2c3a1b2c3a1b2c3a1b2c3a1',
+    'google-oauth-client-secret': 'GOCSPX-a1b2c3d4e5f6a1b2' 'c3d4e5f6a1b2',
+    'google-service-account-key': '{"type": "service_account", "private_key_id": "' 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"}',
     'grafana-api-key': 'eyJrIjoia1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1' 'b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'grafana-cloud-token': 'glc_a1b2c3a1b2c3a1b2' 'c3a1b2c3a1b2c3a1b2c3',
     'grafana-service-account': 'glsa_a1b2c3a1b2c3a1b2c3' 'a1b2c3a1b2c3a1_a1b2c3a1',
