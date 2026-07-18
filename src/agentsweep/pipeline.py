@@ -9,6 +9,7 @@ import difflib
 import json
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -331,32 +332,77 @@ def run_all(args) -> int:
                 f"— history path/format not yet verified against a real install"
             )
 
-    # Phase 1: discover files per source (stream status so large roots
-    # don't look hung — same contract as single-source run()).
-    discovered: list[tuple[str, Source, list[Path]]] = []
+    # Phase 1: discover files for all sources concurrently.  Each source
+    # walks its own independent root directory so there is no shared state
+    # between workers.  Results are collected into a list keyed by the
+    # original index so the final ordering matches `selected` regardless of
+    # which worker finishes first.
+    #
+    # Discovery workers are capped at the number of selected sources — we
+    # never need more workers than there are sources, and Python threads are
+    # cheap enough that one-per-source is fine for the typical count (<30).
+
+    def _discover_one(key: str, source: Source) -> tuple[str, Source, list[Path]]:
+        """Collect every file for a single source; safe to call from a thread."""
+        try:
+            files = list(source.iter_files())
+        except Exception:
+            files = []
+        return key, source, files
+
+    discover_workers = min(len(selected), max(1, len(selected)))
+    discovered_by_index: dict[int, tuple[str, Source, list[Path]]] = {}
+
     if as_json:
-        for key, source in selected:
-            try:
-                source_files = list(source.iter_files())
-            except Exception:
-                source_files = []
-            if source_files:
-                discovered.append((key, source, source_files))
+        with ThreadPoolExecutor(max_workers=discover_workers) as disc_pool:
+            disc_futures = {
+                disc_pool.submit(_discover_one, key, source): idx
+                for idx, (key, source) in enumerate(selected)
+            }
+            for fut in as_completed(disc_futures):
+                idx = disc_futures[fut]
+                key, source, files = fut.result()
+                if files:
+                    discovered_by_index[idx] = (key, source, files)
     else:
+        completed_count = 0
+        completed_lock = threading.Lock()
+
+        def _discover_with_status(
+            key: str, source: Source
+        ) -> tuple[str, Source, list[Path]]:
+            result = _discover_one(key, source)
+            nonlocal completed_count
+            with completed_lock:
+                completed_count += 1
+
+            return result
+
         with ui.console.status("") as status:
-            for key, source in selected:
-                try:
-                    discovered_files: list[Path] = []
-                    for f in source.iter_files():
-                        discovered_files.append(f)
-                        status.update(
-                            f"[dim]Discovering[/] [bold]{key}[/bold]"
-                            f" … [yellow]{len(discovered_files):,}[/] file(s)"
-                        )
-                except Exception:
-                    discovered_files = []
-                if discovered_files:
-                    discovered.append((key, source, discovered_files))
+            with ThreadPoolExecutor(max_workers=discover_workers) as disc_pool:
+                disc_futures = {
+                    disc_pool.submit(_discover_with_status, key, source): idx
+                    for idx, (key, source) in enumerate(selected)
+                }
+                for fut in as_completed(disc_futures):
+                    idx = disc_futures[fut]
+                    key, source, files = fut.result()
+                    if files:
+                        discovered_by_index[idx] = (key, source, files)
+                    with completed_lock:
+                        done = completed_count
+                    status.update(
+                        f"[dim]Discovering[/] [bold]{done}/{len(selected)}[/bold]"
+                        f" source(s) … "
+                        f"[yellow]{sum(len(f) for _, _, f in discovered_by_index.values()):,}[/]"
+                        f" file(s) so far"
+                    )
+
+    # Rebuild in the original selection order so output is deterministic.
+    discovered: list[tuple[str, Source, list[Path]]] = [
+        discovered_by_index[i]
+        for i in sorted(discovered_by_index)
+    ]
 
     total_files = sum(len(f) for _, _, f in discovered)
 
@@ -378,41 +424,124 @@ def run_all(args) -> int:
         ui.stage(1, "ok", "DISCOVER", f"{len(discovered)} source(s)",
                  f"{total_files} file(s)")
 
-    # Phase 2: scan sources sequentially; one shared progress bar over all
-    # files (inner _scan still parallelizes within a source).
-    per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]] = []
+    # Phase 2: scan all sources concurrently.  Each source is independent
+    # (separate root, separate files, separate ignore set) so there is no
+    # shared mutable state between source-level workers.
+    #
+    # Thread budget: source-level concurrency is capped at 4.  Each source
+    # internally spins up its own _scan_all thread pool (up to 8 file
+    # workers), giving at most 4*8 = 32 threads alive at one time — well
+    # within the practical limit for local I/O without hammering the GIL.
+    #
+    # Progress bar safety: Rich's Live.update() must only be called from one
+    # thread at a time.  A threading.Lock serialises every call to
+    # progress.advance() and progress.detection() so the Live display is
+    # never touched from two workers simultaneously.
+    #
+    # Result ordering: futures are mapped to their original index in
+    # `discovered` and results are re-inserted by that index so the findings
+    # table output is deterministic regardless of completion order.
+
+    _SCAN_SOURCE_WORKERS = 4
+
+    per_source_by_index: dict[
+        int,
+        tuple[str, Source, list[Path], dict, int, int, list[Path]]
+    ] = {}
     total_strings = 0
     total_suppressed = 0
     total_truncated: list[Path] = []
 
     t0 = time.perf_counter()
     if as_json:
-        for key, source, files in discovered:
-            ignores = (ignore_mod.IgnoreSet() if no_ignore
-                       else ignore_mod.load([source.root, Path.cwd()]))
-            found_by_file, strings_scanned, suppressed, truncated = _scan(
-                source, files, ignores)
-            per_source.append(
-                (key, source, files, found_by_file, strings_scanned,
-                 suppressed, truncated)
-            )
-            total_strings += strings_scanned
-            total_suppressed += suppressed
-            total_truncated.extend(truncated)
-    else:
-        with ui.scan_progress(total_files) as progress:
-            for key, source, files in discovered:
-                ignores = (ignore_mod.IgnoreSet() if no_ignore
-                           else ignore_mod.load([source.root, Path.cwd()]))
-                found_by_file, strings_scanned, suppressed, truncated = _scan(
-                    source, files, ignores, progress)
-                per_source.append(
-                    (key, source, files, found_by_file, strings_scanned,
-                     suppressed, truncated)
+        scan_workers = min(_SCAN_SOURCE_WORKERS, len(discovered))
+        with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
+            def _scan_json_source(
+                key: str, source: Source, files: list[Path]
+            ) -> tuple[str, Source, list[Path], dict, int, int, list[Path]]:
+                """Run a full source scan; safe to call from a thread."""
+                ignores = (
+                    ignore_mod.IgnoreSet() if no_ignore
+                    else ignore_mod.load([source.root, Path.cwd()])
                 )
-                total_strings += strings_scanned
-                total_suppressed += suppressed
-                total_truncated.extend(truncated)
+                found_by_file, strings_scanned, suppressed, truncated = _scan(
+                    source, files, ignores
+                )
+                return (
+                    key, source, files, found_by_file,
+                    strings_scanned, suppressed, truncated
+                )
+
+            scan_futures = {
+                scan_pool.submit(_scan_json_source, key, source, files): idx
+                for idx, (key, source, files) in enumerate(discovered)
+            }
+            for fut in as_completed(scan_futures):
+                idx = scan_futures[fut]
+                per_source_by_index[idx] = fut.result()
+    else:
+        progress_lock = threading.Lock()
+
+        with ui.scan_progress(total_files) as progress:
+            def _scan_tty_source(
+                key: str, source: Source, files: list[Path]
+            ) -> tuple[str, Source, list[Path], dict, int, int, list[Path]]:
+                """Run a full source scan with thread-safe progress updates.
+
+                All calls to progress.advance() and progress.detection() are
+                serialised through progress_lock so that Rich's Live display
+                is never updated from two threads at the same time.
+                """
+                ignores = (
+                    ignore_mod.IgnoreSet() if no_ignore
+                    else ignore_mod.load([source.root, Path.cwd()])
+                )
+
+                # Wrap the shared progress object with lock-protected callbacks
+                # rather than passing the raw object to _scan.  This keeps the
+                # locking concern contained here instead of spreading it into
+                # the inner _scan/_scan_all path.
+                class _LockedProgress:
+                    def advance(self_inner, current: str) -> None:
+                        with progress_lock:
+                            progress.advance(current)
+
+                    def detection(
+                        self_inner,
+                        rule_display: str,
+                        masked: str,
+                        location: str,
+                    ) -> None:
+                        with progress_lock:
+                            progress.detection(rule_display, masked, location)
+
+                found_by_file, strings_scanned, suppressed, truncated = _scan(
+                    source, files, ignores, _LockedProgress()
+                )
+                return (
+                    key, source, files, found_by_file,
+                    strings_scanned, suppressed, truncated
+                )
+
+            scan_workers = min(_SCAN_SOURCE_WORKERS, len(discovered))
+            with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
+                scan_futures = {
+                    scan_pool.submit(_scan_tty_source, key, source, files): idx
+                    for idx, (key, source, files) in enumerate(discovered)
+                }
+                for fut in as_completed(scan_futures):
+                    idx = scan_futures[fut]
+                    per_source_by_index[idx] = fut.result()
+
+    # Rebuild in the original discovery order for deterministic output.
+    per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]] = [
+        per_source_by_index[i] for i in sorted(per_source_by_index)
+    ]
+    for _k, _s, _f, _fbf, strings_scanned, suppressed, truncated in per_source:
+        total_strings += strings_scanned
+        total_suppressed += suppressed
+        total_truncated.extend(truncated)
+
     elapsed = time.perf_counter() - t0
 
     if as_json:

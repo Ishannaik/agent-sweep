@@ -6,20 +6,33 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 
 ## Landed
 
-- **Keyword pre-filter (≈7.5×).** Each rule carries a required literal
-  anchor (`akia`, `ghp_`, `twitter`, …) extracted from its pattern; the
+- **Keyword pre-filter (approx 7.5x).** Each rule carries a required literal
+  anchor (`akia`, `ghp_`, `twitter`, ...) extracted from its pattern; the
   regex is skipped when the anchor is absent. 180/189 rules are gated.
   Provably lossless (a match always contains its anchor); gated by the
   per-rule fixture tests. See `scanner.py:_prefilter_literals`.
 - **Mnemonic gate.** `detect_mnemonics` returns early when a string has
-  fewer than 11 word separators — it cannot hold a 12-word phrase — so big
+  fewer than 11 word separators -- it cannot hold a 12-word phrase -- so big
   tokenless blobs (base64, minified JS, long paths) skip tokenization.
 - **Single-pass Aho-Corasick anchors.** `pyahocorasick` collapses per-string
   prefilter checks into one O(n) pass (substring fallback if the wheel is
   absent). See `scanner.py:_triggered_indices`.
 - **Aider discovery prune.** Default Aider scans no longer `rglob` the
-  entire home tree. Junk dirs (`node_modules`, `.git`, `AppData`, …) are
+  entire home tree. Junk dirs (`node_modules`, `.git`, `AppData`, ...) are
   skipped and depth is capped. See `sources._core._iter_aider_histories`.
+- **Cross-source parallelism for scan --all.** Phase 1 (discovery) and
+  Phase 2 (scanning) in `run_all()` now run all selected sources
+  concurrently via `ThreadPoolExecutor` instead of sequentially. Each source
+  is fully independent (separate root, separate files, separate ignore set)
+  so there is no shared mutable state between workers. Source-level
+  concurrency is capped at 4 workers; combined with each source's own
+  inner file-level pool (up to 8 workers) the total thread count stays
+  bounded at ~32. Rich's Live progress display is protected by a
+  `threading.Lock` so it is never updated from two threads simultaneously.
+  Results are re-ordered by original index after all futures complete, so
+  findings output remains deterministic regardless of which source finishes
+  first. See `pipeline.py:run_all`.
+
 
 ## Evaluated and dropped
 
