@@ -779,7 +779,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'easypost-api-token': 'Rotate: https://www.easypost.com/account/api-keys',
     'easypost-test-api-token': 'Rotate: https://www.easypost.com/account/api-keys',
     'facebook-page-token': 'Revoke: https://developers.facebook.com/tools/debug/accesstoken/ (Invalidate), or reset the app secret in the Meta App Dashboard.',
-    'fireworks-api-key': 'Revoke: https://fireworks.ai/account/api-keys',
+    'fireworks-api-key': 'Revoke: https://app.fireworks.ai/settings/users/api-keys',
     'flutterwave-encryption-key': 'Rotate: https://app.flutterwave.com/dashboard/settings/apis',
     'flutterwave-public-key': 'Rotate: https://app.flutterwave.com/dashboard/settings/apis',
     'flutterwave-secret-key': 'Rotate: https://app.flutterwave.com/dashboard/settings/apis',
