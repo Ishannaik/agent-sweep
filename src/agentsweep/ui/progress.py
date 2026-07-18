@@ -5,13 +5,15 @@ import os
 import time
 from collections import deque
 from types import TracebackType
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from rich.live import Live
-from rich.progress import TaskID
 
 from .console import _encodes, _safe, console
 from ..tips import tip_for
+
+if TYPE_CHECKING:
+    from rich.progress import TaskID
 
 # Maximum recent detections shown in the live feed.
 _MAX_FEED = 6
