@@ -1,7 +1,7 @@
 """Rotating scan tips — shown during long scans to keep things lively."""
 from __future__ import annotations
 
-import random
+
 
 TIPS: list[str] = [
     "Scanning is read-only and safe; only --fix ever writes anything",
@@ -22,10 +22,6 @@ TIPS: list[str] = [
     "After scanning, agentsweep shows the rotation URL for each detected provider",
 ]
 
-
-def random_tip() -> str:
-    """Return a randomly selected tip string (no 'Tip:' prefix)."""
-    return random.choice(TIPS)
 
 
 def tip_for(n: int) -> str:
