@@ -35,9 +35,10 @@ RULES: list[tuple[str, str, re.Pattern]] = [
     ("stripe-test", "Stripe test secret key",
         re.compile(r"\b(?:sk|rk)_test_[A-Za-z0-9]{24,}\b")),
     ("openai", "OpenAI API key",
-        # (?!ant-) keeps this broad rule from shadowing Anthropic keys, which
-        # would otherwise tie on span and win the overlap dedupe by list order.
-        re.compile(r"\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{40,}\b")),
+        # (?!ant-) / (?!or-v1-) keep this broad rule from shadowing Anthropic
+        # and OpenRouter keys, which would otherwise tie on span and win the
+        # overlap dedupe by list order.
+        re.compile(r"\bsk-(?!ant-)(?!or-v1-)(?:proj-)?[A-Za-z0-9_-]{40,}\b")),
     ("anthropic", "Anthropic API key",
         re.compile(r"\bsk-ant-(?:api|sid)[0-9]*-[A-Za-z0-9_-]{32,}\b")),
     ("google-api", "Google API key",
@@ -120,6 +121,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile('(?i)\\bCLOJARS_[a-z0-9]{60}\\b')),
     ('cloudflare-origin-ca-key', 'Cloudflare Origin CA key',
         re.compile('\\bv1\\.0-[a-f0-9]{24}-[a-f0-9]{146}\\b')),
+    ('cohere-api-key', 'Cohere API key',
+        re.compile('(?i)[\\w.-]{0,50}?(?:cohere|CO_API_KEY)(?:[ \\t\\w.-]{0,20})[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}([a-zA-Z0-9]{40})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     # Gap between "curl" and the auth flag is bounded: gitleaks runs these on
     # RE2 (linear-time); Python's backtracking engine goes quadratic on
     # unbounded .* when a line mentions curl many times.
@@ -129,6 +132,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile('\\bcurl\\b(?:.{0,200}?|.{0,200}?(?:[\\r\\n]{1,2}.{0,200}?){1,5})[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})("(:[^"]{3,}|[^:"]{3,}:|[^:"]{3,}:[^"]{3,})"|\'([^:\']{3,}:[^\']{3,})\'|((?:"[^"]{3,}"|\'[^\']{3,}\'|[\\w$@.-]+):(?:"[^"]{3,}"|\'[^\']{3,}\'|[\\w${}@.-]+)))(?=\\s|\\Z)')),
     ('databricks-api-token', 'Databricks API token',
         re.compile('\\bdapi[a-f0-9]{32}(?:-\\d)?\\b')),
+    ('deepseek-api-key', 'DeepSeek API key',
+        re.compile('(?i)[\\w.-]{0,50}?(?:deepseek)(?:[ \\t\\w.-]{0,20})[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(sk-[a-z0-9]{32})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('defined-networking-api-token', 'Defined Networking API token',
         re.compile('(?i)\\bdnkey-[a-z0-9=_-]{26}-[a-z0-9=_-]{52}(?=[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('digitalocean-access-token', 'DigitalOcean OAuth access token',
@@ -152,6 +157,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
     # pipe-delimited log line with a microsecond timestamp.
     ('facebook-page-token', 'Facebook page access token',
         re.compile('\\bEAA[MC][A-Za-z0-9]{100,}\\b')),
+    ('fireworks-api-key', 'Fireworks AI API key',
+        re.compile('(?i)[\\w.-]{0,50}?(?:fireworks)(?:[ \\t\\w.-]{0,20})[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(fw_[A-Za-z0-9]{20,24})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('flutterwave-encryption-key', 'Flutterwave encryption key',
         re.compile('\\bFLWSECK_TEST-(?i:[a-h0-9]{12})\\b')),
     ('flutterwave-public-key', 'Flutterwave public key',
@@ -200,6 +207,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile('\\bglc_[A-Za-z0-9+/]{32,400}={0,3}')),
     ('grafana-service-account', 'Grafana service account token',
         re.compile('\\bglsa_[A-Za-z0-9]{32}_[0-9a-fA-F]{8}\\b')),
+    ('groq-api-key', 'Groq API key',
+        re.compile('\\bgsk_[A-Za-z0-9]{52}\\b')),
     ('harness', 'Harness access token (PAT/SAT)',
         re.compile('\\b(?:pat|sat)\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9]{24}\\.[A-Za-z0-9]{20}\\b')),
     ('terraform-api-token', 'HashiCorp Terraform Cloud API token',
@@ -228,6 +237,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile('\\b[A-Za-z0-9]{6}_[A-Za-z0-9]{29}_mmk\\b')),
     ('microsoft-teams-webhook', 'Microsoft Teams incoming webhook URL',
         re.compile('https://[a-z0-9]+\\.webhook\\.office\\.com/webhookb2/[a-z0-9]{8}-(?:[a-z0-9]{4}-){3}[a-z0-9]{12}@[a-z0-9]{8}-(?:[a-z0-9]{4}-){3}[a-z0-9]{12}/IncomingWebhook/[a-z0-9]{32}/[a-z0-9]{8}-(?:[a-z0-9]{4}-){3}[a-z0-9]{12}')),
+    ('mistral-api-key', 'Mistral AI API key',
+        re.compile('(?i)[\\w.-]{0,50}?(?:mistral)(?:[ \\t\\w.-]{0,20})[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}([A-Za-z0-9]{32})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('new-relic-browser-token', 'New Relic ingest browser API token',
         re.compile('\\bNRJS-[a-fA-F0-9]{19}\\b')),
     ('new-relic-insert-key', 'New Relic insights insert key',
@@ -241,6 +252,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
     # contain no digits.
     ('octopus-deploy-api-key', 'Octopus Deploy API key',
         re.compile('\\bAPI-(?=[A-Z0-9]*[0-9])[A-Z0-9]{26}\\b')),
+    ('openrouter-api-key', 'OpenRouter API key',
+        re.compile('\\bsk-or-v1-[0-9a-f]{64}\\b')),
     ('openshift-user-token', 'OpenShift user token',
         re.compile('\\bsha256~[\\w-]{43}(?![\\w-])')),
     ('perplexity-api-key', 'Perplexity API key',
@@ -310,6 +323,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
                    '[\\w-]{22,60}(?![\\w-])')),
     ('telegram-bot-token', 'Telegram bot token',
         re.compile('\\b\\d{5,16}:A[A-Za-z0-9_-]{34}(?![A-Za-z0-9_-])')),
+    ('together-api-key', 'Together AI API key',
+        re.compile('(?i)[\\w.-]{0,50}?(?:together)(?:[ \\t\\w.-]{0,20})[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}([a-f0-9]{64})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('typeform-token', 'Typeform API token',
         re.compile('\\btfp_[A-Za-z0-9_.=-]{59}(?![A-Za-z0-9_.=-])')),
     ('vault-batch-token', 'HashiCorp Vault batch token',
@@ -319,6 +334,8 @@ RULES: list[tuple[str, str, re.Pattern]] = [
     # method/attribute name. hvs. covers every token since Vault 1.10.
     ('vault-service-token', 'HashiCorp Vault service token',
         re.compile('\\bhvs\\.[\\w-]{90,120}(?![\\w-])')),
+    ('xai-api-key', 'xAI (Grok) API key',
+        re.compile('\\bxai-[0-9a-zA-Z_]{80}\\b')),
 
     # --- gitleaks port wave 2 ---
     ('adafruit-api-key', 'Adafruit API Key',
@@ -747,9 +764,11 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'clickhouse-cloud-api-secret': 'Rotate: https://console.clickhouse.cloud (organization Settings > API Keys)',
     'clojars-api-token': 'Revoke: https://clojars.org/tokens',
     'cloudflare-origin-ca-key': 'Rotate: https://dash.cloudflare.com/profile/api-tokens (Origin CA Key)',
+    'cohere-api-key': 'Revoke: https://dashboard.cohere.com/api-keys',
     'curl-auth-header': 'Rotate the exposed header credential at its issuing service; it was passed on the command line.',
     'curl-auth-user': 'Change the password at the target service; basic-auth credentials were passed on the command line.',
     'databricks-api-token': 'Revoke: Databricks workspace > Settings > Developer > Access tokens (or `databricks tokens delete --token-id <ID>`)',
+    'deepseek-api-key': 'Revoke: https://platform.deepseek.com/api_keys',
     'defined-networking-api-token': 'Revoke: https://admin.defined.net (Settings > API keys)',
     'digitalocean-access-token': "Revoke: https://cloud.digitalocean.com/account/api (revoke the OAuth application's authorization)",
     'digitalocean-pat': 'Revoke: https://cloud.digitalocean.com/account/api/tokens',
@@ -760,6 +779,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'easypost-api-token': 'Rotate: https://www.easypost.com/account/api-keys',
     'easypost-test-api-token': 'Rotate: https://www.easypost.com/account/api-keys',
     'facebook-page-token': 'Revoke: https://developers.facebook.com/tools/debug/accesstoken/ (Invalidate), or reset the app secret in the Meta App Dashboard.',
+    'fireworks-api-key': 'Revoke: https://fireworks.ai/account/api-keys',
     'flutterwave-encryption-key': 'Rotate: https://app.flutterwave.com/dashboard/settings/apis',
     'flutterwave-public-key': 'Rotate: https://app.flutterwave.com/dashboard/settings/apis',
     'flutterwave-secret-key': 'Rotate: https://app.flutterwave.com/dashboard/settings/apis',
@@ -784,6 +804,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'grafana-api-key': 'Revoke: <your-grafana-url>/org/apikeys (Administration > API keys; migrate to service accounts)',
     'grafana-cloud-token': 'Revoke: https://grafana.com/orgs/<org>/access-policies (Cloud Access Policies > delete the token)',
     'grafana-service-account': 'Revoke: <your-grafana-url>/org/serviceaccounts (Administration > Service accounts)',
+    'groq-api-key': 'Revoke: https://console.groq.com/keys',
     'harness': 'Rotate: https://app.harness.io (My Profile > My API Keys, or Service Account settings > rotate token)',
     'terraform-api-token': 'Revoke: https://app.terraform.io/app/settings/tokens',
     'heroku-api-key': 'Regenerate: https://dashboard.heroku.com/account (API Key > Regenerate), or heroku authorizations:rotate',
@@ -798,11 +819,13 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'mapbox-api-token': 'Rotate: https://console.mapbox.com/account/access-tokens/',
     'maxmind-license-key': 'Rotate: https://www.maxmind.com/en/accounts/current/license-key',
     'microsoft-teams-webhook': 'Remove/recreate the Incoming Webhook in the Teams channel (Manage channel -> Connectors / Workflows).',
+    'mistral-api-key': 'Revoke: https://console.mistral.ai/api-keys',
     'new-relic-browser-token': 'Rotate: https://one.newrelic.com/api-keys',
     'new-relic-insert-key': 'Rotate: https://one.newrelic.com/api-keys',
     'new-relic-user-key': 'Rotate: https://one.newrelic.com/api-keys',
     'notion-api-token': "Revoke: https://www.notion.so/my-integrations (refresh the integration's internal secret)",
     'octopus-deploy-api-key': 'Revoke: <your-octopus-server>/app#/users/me/apiKeys (Profile -> My API Keys)',
+    'openrouter-api-key': 'Revoke: https://openrouter.ai/settings/keys',
     'openshift-user-token': 'Revoke: oc delete useroauthaccesstoken <token-name> on the cluster',
     'perplexity-api-key': 'Revoke: https://www.perplexity.ai/settings/api',
     'plaid-access-token': 'Rotate: POST /item/access_token/invalidate (Plaid API); manage keys at https://dashboard.plaid.com/developers/keys',
@@ -836,9 +859,11 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'snyk': 'Revoke: https://app.snyk.io/account (regenerate your API token)',
     'square-access-token': "Rotate: https://developer.squareup.com/apps (open the application's Credentials page and replace the token)",
     'telegram-bot-token': 'Revoke: message @BotFather on Telegram and use /revoke (issues a replacement token)',
+    'together-api-key': 'Revoke: https://api.together.ai/settings/api-keys',
     'typeform-token': 'Revoke: https://admin.typeform.com/account#/section/tokens',
     'vault-batch-token': 'Batch tokens cannot be revoked directly; revoke the parent token (vault token revoke <parent>) and let the batch token expire at its TTL.',
     'vault-service-token': 'Revoke: vault token revoke <token> (or vault token revoke -self)',
+    'xai-api-key': 'Revoke: https://console.x.ai (API Keys)',
     # --- gitleaks port wave 2 ---
     'adafruit-api-key': 'Revoke: https://io.adafruit.com/user/settings/keys',
     'airtable-api-key': 'Revoke: https://airtable.com/account (API keys section)',
