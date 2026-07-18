@@ -38,6 +38,7 @@ dependencies = ["rich>=13.0", "pyahocorasick>=2.0", "argcomplete>=3.0.0"]
 # or `uv sync --extra dev`.
 dev = [
     "pytest>=7.0",
+    "pytest-benchmark>=4.0",  # perf-regression guard
     "ruff>=0.8",       # lint + format + import sort + unused-import/var (F401/F841) + complexity (C901)
     "vulture>=2.16",   # module-level dead code (unused funcs/classes Ruff's F-rules miss)
     "bandit>=1.7",     # Python SAST — fitting for a secrets-redaction tool
