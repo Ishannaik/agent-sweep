@@ -178,7 +178,7 @@ class CursorSource(_VSCodeSqliteSource):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str | bytes:
+    ) -> str | bytes:  # type: ignore[override]
         if path.suffix == ".jsonl":
             return _apply_jsonl_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
@@ -247,7 +247,7 @@ class WindsurfSource(_VSCodeSqliteSource):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> str | bytes:
+    ) -> str | bytes:  # type: ignore[override]
         if path.suffix == ".md":
             return _apply_plaintext_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
