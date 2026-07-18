@@ -314,6 +314,60 @@ def test_no_color_flag_suppresses_ansi(tmp_path, monkeypatch, capsys):
     assert not ANSI_ESCAPE.search(out)
 
 
+def test_color_enabled_emits_ansi(tmp_path, monkeypatch, capsys):
+    """Positive control: with color forced on and NO_COLOR unset, ANSI is present.
+
+    Without this, the suppression tests could pass vacuously if `_force_color`
+    silently stopped working.
+    """
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    _force_color(monkeypatch)
+    # Undo any leftover no_color mutation from a prior test on the shared console.
+    ui.console.no_color = False
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out
+    assert ANSI_ESCAPE.search(out)
+
+
+def test_update_notice_respects_no_color(monkeypatch, capsys):
+    """Update-available notice must not emit raw ANSI under NO_COLOR."""
+    import argparse
+
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.setenv("NO_COLOR", "1")
+    ui.apply_no_color(True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.delenv("AGENTSWEEP_NO_UPDATE", raising=False)
+
+    # Pretend PyPI already returned a newer version before the wait timeout.
+    def _fake_urlopen(url, timeout=0):  # noqa: ARG001
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b'{"info":{"version":"99.0.0"}}'
+
+        return _Resp()
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        _fake_urlopen,
+    )
+    cli._background_update_notice(argparse.Namespace(json=False))
+    out = capsys.readouterr().out
+    assert "agentsweep 99.0.0 available" in out
+    assert not ANSI_ESCAPE.search(out)
+
+
 # ----------------------------------------------------------------- menu
 
 def _feed_menu(monkeypatch, answers: list[str]):

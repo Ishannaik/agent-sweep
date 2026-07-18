@@ -104,10 +104,11 @@ def _background_update_notice(args: argparse.Namespace) -> None:
 
     latest = result[0]
     if latest is not None and _version_tuple(latest) > _version_tuple(__version__):
-        # Print a single dim-yellow notice before any other output.
-        print(
-            f"\033[2;33m  ★ agentsweep {latest} available"
-            f" — pip install --upgrade agentsweep\033[0m"
+        # Route through rich so NO_COLOR / --no-color strips styling.
+        ui.console.print(
+            f"  ★ agentsweep {latest} available"
+            f" — pip install --upgrade agentsweep",
+            style="dim yellow",
         )
 
 
