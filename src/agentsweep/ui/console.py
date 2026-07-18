@@ -19,12 +19,14 @@ def resolve_no_color(flag: bool = False) -> bool:
 
     True when ``--no-color`` was passed (``flag``) or the ``NO_COLOR``
     convention (https://no-color.org) is in effect: the env var present with
-    any value. ``FORCE_COLOR`` wins over ``NO_COLOR`` when both are set, per
-    the informal precedence most tools follow.
+    any value. ``FORCE_COLOR`` wins over ``NO_COLOR`` when both are set and
+    ``FORCE_COLOR`` is a non-empty, non-``0`` value — ``FORCE_COLOR=0`` (or
+    empty) does not force color and leaves ``NO_COLOR`` in effect.
     """
     if flag:
         return True
-    if os.environ.get("FORCE_COLOR"):
+    force = os.environ.get("FORCE_COLOR")
+    if force not in (None, "", "0"):
         return False
     return "NO_COLOR" in os.environ
 

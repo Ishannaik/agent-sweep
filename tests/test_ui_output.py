@@ -290,6 +290,12 @@ def test_resolve_no_color_reads_env_and_flag(monkeypatch):
     monkeypatch.setenv("FORCE_COLOR", "1")  # FORCE_COLOR wins over NO_COLOR
     assert ui.resolve_no_color() is False
 
+    monkeypatch.setenv("FORCE_COLOR", "0")  # FORCE_COLOR=0 does not force color
+    assert ui.resolve_no_color() is True
+
+    monkeypatch.setenv("FORCE_COLOR", "")  # empty also does not force color
+    assert ui.resolve_no_color() is True
+
 
 def test_no_color_env_suppresses_ansi(tmp_path, monkeypatch, capsys):
     _force_color(monkeypatch)
