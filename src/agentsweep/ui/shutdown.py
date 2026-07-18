@@ -16,7 +16,7 @@ from .console import _icons, _safe, err_console
 def _animate_shutdown(message: str) -> None:
     """~0.4s farewell: the message locks in left-to-right out of red noise."""
     pool = _noise_pool()
-    rng = random.Random()
+    rng = random.Random()  # nosec B311 # visual noise timing for a farewell animation, not security-sensitive
     ic = _icons(err_console)
     with Live(console=err_console, auto_refresh=False, transient=True) as live:
         steps = 14

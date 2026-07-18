@@ -18,6 +18,7 @@ from ._helpers import (
     _apply_plaintext_redactions,
     _iter_jsonl_strings,
     _iter_plaintext_lines,
+    _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
@@ -62,7 +63,7 @@ class _VSCodeSqliteSource(Source):
             for table, col in self._sqlite_text_columns(con):
                 try:
                     cur = con.execute(
-                        f"SELECT rowid, {col} FROM {table}"  # noqa: S608
+                        f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}"  # nosec B608 # table/col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                     )
                 except sqlite3.OperationalError:
                     continue
@@ -104,7 +105,7 @@ class _VSCodeSqliteSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> bytes:
+    ) -> str | bytes:
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
 
     def sidecars(self, path: Path) -> list[Path]:

@@ -9,6 +9,7 @@ import difflib
 import json
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -17,7 +18,7 @@ from . import __version__, ui
 from . import ignore as ignore_mod
 from .preflight import is_agent_running, is_production_root
 from .redactor import SafetyError, safe_write, safety_check
-from .scanner import ROTATION_GUIDANCE, Finding, scan_text
+from .scanner import ROTATION_GUIDANCE, RULES, Finding, scan_text
 from .sources import SOURCES, Source
 
 
@@ -51,15 +52,28 @@ def run(args, *, _findings_out: list | None = None,
     source: Source = source_cls(root=args.root) if args.root else source_cls()
     output: Path | None = _opt(args, "output")
 
+    as_sarif = _opt(args, "format") == "sarif"
+    # Both machine formats share every no-banner/no-styling branch below; they
+    # differ only in what an empty result set looks like on stdout.
+    machine = bool(args.json) or as_sarif
+
+    def _print_empty_machine_output() -> None:
+        # stdout must stay parseable in every machine-format run, including
+        # user errors — for SARIF that means a valid document, not "[]".
+        if as_sarif:
+            print(json.dumps(_sarif_document([]), indent=2))
+        elif args.json:
+            print("[]")
+
     if args.root is not None and not source.root.exists():
         print(f"Path not found: {source.root}", file=sys.stderr)
         for hint in _suggest_paths(source.root):
             print(f"  did you mean: {source.root.parent / hint}", file=sys.stderr)
-        if args.json:
-            print("[]")  # stdout stays parseable JSON even on user error
+        if machine:
+            _print_empty_machine_output()
         return 2
 
-    if not args.json:
+    if not machine:
         ui.banner(__version__)
         if getattr(source, "experimental", False):
             ui.warn_line(
@@ -67,7 +81,7 @@ def run(args, *, _findings_out: list | None = None,
                 f"path/format is inferred from research and not yet verified "
                 f"against a real install, so it may find nothing")
 
-    if not args.json:
+    if not machine:
         files: list[Path] = []
         with ui.console.status("") as status:
             for f in source.iter_files():
@@ -80,8 +94,8 @@ def run(args, *, _findings_out: list | None = None,
         files = list(source.iter_files())
     if not files:
         print(f"No history files found under {source.root}", file=sys.stderr)
-        if args.json:
-            print("[]")  # stdout must stay parseable JSON in every --json run
+        if machine:
+            _print_empty_machine_output()
         else:
             ui.stage(1, "warn", "DISCOVER", source.name,
                      f"no history files under {source.root}", err=True)
@@ -90,11 +104,15 @@ def run(args, *, _findings_out: list | None = None,
     ignores = (ignore_mod.IgnoreSet() if _opt(args, "no_ignore")
                else ignore_mod.load([source.root, Path.cwd()]))
 
-    if args.json:
+    if machine:
         found_by_file, _, suppressed, truncated = _scan(source, files, ignores)
         if truncated:
             print(f"warning: {len(truncated)} file(s) exceeded the scan budget "
                   f"and were truncated", file=sys.stderr)
+        _warn_leftover_backups(source, as_json=True)
+        if as_sarif:
+            return _emit_sarif(_json_payload(found_by_file, source),
+                               output, suppressed)
         return _output_json(found_by_file, source, output, suppressed)
 
     ui.stage(1, "ok", "DISCOVER", source.name, f"{len(files)} file(s)", source.root)
@@ -119,6 +137,7 @@ def run(args, *, _findings_out: list | None = None,
         ui.stage(3, "ok", "FINDINGS", "no secrets found")
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
+        _warn_leftover_backups(source, as_json=False)
         ui.contribute_line()
         return 0
 
@@ -131,6 +150,7 @@ def run(args, *, _findings_out: list | None = None,
                  "skipped — run with --fix to redact in place (.bak backups)")
         ui.stage(5, "warn", "ROTATE", "these keys are still live")
         ui.rotation_panel(_rotation_items(found_by_file))
+        _warn_leftover_backups(source, as_json=False)
         ui.contribute_line()
         if _findings_out is not None:
             _findings_out.append((source, found_by_file))
@@ -265,23 +285,18 @@ def list_sources(args) -> int:
 def run_all(args) -> int:
     """Scan every registered (or detected) source and aggregate findings.
 
-    Scan-only — redaction stays per-source via ``fix --source <name>``.
+    With ``--fix``, each source with findings is then redacted through the
+    single-source path — see _fix_all_sources.
 
-    Exit codes: 0 clean / nothing scanned · 1 findings · 2 misuse (e.g. fix).
+    Exit codes: 0 clean / nothing scanned / everything redacted · 1 findings
+    (scan-only) · 2 a source was gate-blocked or errored during --fix.
     Missing roots are skipped (not errors), matching single-source "no files
     under root → 0". ``--detected`` restricts to sources that report history
     on this machine (same signal as ``list-sources --detected``).
     """
-    if _opt(args, "fix", False):
-        print(
-            "fix --all is not supported; "
-            "run: agentsweep fix --source <name>",
-            file=sys.stderr,
-        )
-        return 2
-
     output: Path | None = _opt(args, "output")
-    as_json = bool(_opt(args, "json", False))
+    as_sarif = _opt(args, "format") == "sarif"
+    as_json = bool(_opt(args, "json", False)) or as_sarif
     detected_only = bool(_opt(args, "detected", False))
     no_ignore = bool(_opt(args, "no_ignore", False))
 
@@ -290,7 +305,7 @@ def run_all(args) -> int:
     for key, cls in SOURCES.items():
         try:
             src = cls()
-        except Exception:
+        except Exception:  # nosec B112 # skip a source whose constructor fails (e.g. unresolvable home dir) rather than aborting scan --all for every other source
             continue
         if detected_only and not src.is_detected():
             continue
@@ -317,32 +332,77 @@ def run_all(args) -> int:
                 f"— history path/format not yet verified against a real install"
             )
 
-    # Phase 1: discover files per source (stream status so large roots
-    # don't look hung — same contract as single-source run()).
-    discovered: list[tuple[str, Source, list[Path]]] = []
+    # Phase 1: discover files for all sources concurrently.  Each source
+    # walks its own independent root directory so there is no shared state
+    # between workers.  Results are collected into a list keyed by the
+    # original index so the final ordering matches `selected` regardless of
+    # which worker finishes first.
+    #
+    # Discovery workers are capped at _SOURCE_WORKERS_CAP to ensure bounded
+    # concurrency across the entire pipeline.
+    _SOURCE_WORKERS_CAP = 4
+
+    def _discover_one(key: str, source: Source) -> tuple[str, Source, list[Path]]:
+        """Collect every file for a single source; safe to call from a thread."""
+        try:
+            files = list(source.iter_files())
+        except Exception:
+            files = []
+        return key, source, files
+
+    discover_workers = min(_SOURCE_WORKERS_CAP, max(1, len(selected)))
+    discovered_by_index: dict[int, tuple[str, Source, list[Path]]] = {}
+
     if as_json:
-        for key, source in selected:
-            try:
-                files = list(source.iter_files())
-            except Exception:
-                files = []
-            if files:
-                discovered.append((key, source, files))
-    else:
-        with ui.console.status("") as status:
-            for key, source in selected:
-                try:
-                    files: list[Path] = []
-                    for f in source.iter_files():
-                        files.append(f)
-                        status.update(
-                            f"[dim]Discovering[/] [bold]{key}[/bold]"
-                            f" … [yellow]{len(files):,}[/] file(s)"
-                        )
-                except Exception:
-                    files = []
+        with ThreadPoolExecutor(max_workers=discover_workers) as disc_pool:
+            disc_futures = {
+                disc_pool.submit(_discover_one, key, source): idx
+                for idx, (key, source) in enumerate(selected)
+            }
+            for fut in as_completed(disc_futures):
+                idx = disc_futures[fut]
+                key, source, files = fut.result()
                 if files:
-                    discovered.append((key, source, files))
+                    discovered_by_index[idx] = (key, source, files)
+    else:
+        completed_count = 0
+        completed_lock = threading.Lock()
+
+        def _discover_with_status(
+            key: str, source: Source
+        ) -> tuple[str, Source, list[Path]]:
+            result = _discover_one(key, source)
+            nonlocal completed_count
+            with completed_lock:
+                completed_count += 1
+
+            return result
+
+        with ui.console.status("") as status:
+            with ThreadPoolExecutor(max_workers=discover_workers) as disc_pool:
+                disc_futures = {
+                    disc_pool.submit(_discover_with_status, key, source): idx
+                    for idx, (key, source) in enumerate(selected)
+                }
+                for fut in as_completed(disc_futures):
+                    idx = disc_futures[fut]
+                    key, source, files = fut.result()
+                    if files:
+                        discovered_by_index[idx] = (key, source, files)
+                    with completed_lock:
+                        done = completed_count
+                    status.update(
+                        f"[dim]Discovering[/] [bold]{done}/{len(selected)}[/bold]"
+                        f" source(s) … "
+                        f"[yellow]{sum(len(f) for _, _, f in discovered_by_index.values()):,}[/]"
+                        f" file(s) so far"
+                    )
+
+    # Rebuild in the original selection order so output is deterministic.
+    discovered: list[tuple[str, Source, list[Path]]] = [
+        discovered_by_index[i]
+        for i in sorted(discovered_by_index)
+    ]
 
     total_files = sum(len(f) for _, _, f in discovered)
 
@@ -364,41 +424,122 @@ def run_all(args) -> int:
         ui.stage(1, "ok", "DISCOVER", f"{len(discovered)} source(s)",
                  f"{total_files} file(s)")
 
-    # Phase 2: scan sources sequentially; one shared progress bar over all
-    # files (inner _scan still parallelizes within a source).
-    per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]] = []
+    # Phase 2: scan all sources concurrently.  Each source is independent
+    # (separate root, separate files, separate ignore set) so there is no
+    # shared mutable state between source-level workers.
+    #
+    # Thread budget: source-level concurrency is capped at 4.  Each source
+    # internally spins up its own _scan_all thread pool (up to 8 file
+    # workers), giving at most 4*8 = 32 threads alive at one time — well
+    # within the practical limit for local I/O without hammering the GIL.
+    #
+    # Progress bar safety: Rich's Live.update() must only be called from one
+    # thread at a time.  A threading.Lock serialises every call to
+    # progress.advance() and progress.detection() so the Live display is
+    # never touched from two workers simultaneously.
+    #
+    # Result ordering: futures are mapped to their original index in
+    # `discovered` and results are re-inserted by that index so the findings
+    # table output is deterministic regardless of completion order.
+
+    per_source_by_index: dict[
+        int,
+        tuple[str, Source, list[Path], dict, int, int, list[Path]]
+    ] = {}
     total_strings = 0
     total_suppressed = 0
     total_truncated: list[Path] = []
 
     t0 = time.perf_counter()
     if as_json:
-        for key, source, files in discovered:
-            ignores = (ignore_mod.IgnoreSet() if no_ignore
-                       else ignore_mod.load([source.root, Path.cwd()]))
-            found_by_file, strings_scanned, suppressed, truncated = _scan(
-                source, files, ignores)
-            per_source.append(
-                (key, source, files, found_by_file, strings_scanned,
-                 suppressed, truncated)
-            )
-            total_strings += strings_scanned
-            total_suppressed += suppressed
-            total_truncated.extend(truncated)
-    else:
-        with ui.scan_progress(total_files) as progress:
-            for key, source, files in discovered:
-                ignores = (ignore_mod.IgnoreSet() if no_ignore
-                           else ignore_mod.load([source.root, Path.cwd()]))
-                found_by_file, strings_scanned, suppressed, truncated = _scan(
-                    source, files, ignores, progress)
-                per_source.append(
-                    (key, source, files, found_by_file, strings_scanned,
-                     suppressed, truncated)
+        scan_workers = min(_SOURCE_WORKERS_CAP, len(discovered))
+        with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
+            def _scan_json_source(
+                key: str, source: Source, files: list[Path]
+            ) -> tuple[str, Source, list[Path], dict, int, int, list[Path]]:
+                """Run a full source scan; safe to call from a thread."""
+                ignores = (
+                    ignore_mod.IgnoreSet() if no_ignore
+                    else ignore_mod.load([source.root, Path.cwd()])
                 )
-                total_strings += strings_scanned
-                total_suppressed += suppressed
-                total_truncated.extend(truncated)
+                found_by_file, strings_scanned, suppressed, truncated = _scan(
+                    source, files, ignores
+                )
+                return (
+                    key, source, files, found_by_file,
+                    strings_scanned, suppressed, truncated
+                )
+
+            scan_futures = {
+                scan_pool.submit(_scan_json_source, key, source, files): idx
+                for idx, (key, source, files) in enumerate(discovered)
+            }
+            for scan_fut in as_completed(scan_futures):
+                idx = scan_futures[scan_fut]
+                per_source_by_index[idx] = scan_fut.result()
+    else:
+        progress_lock = threading.Lock()
+
+        with ui.scan_progress(total_files) as progress:
+            def _scan_tty_source(
+                key: str, source: Source, files: list[Path]
+            ) -> tuple[str, Source, list[Path], dict, int, int, list[Path]]:
+                """Run a full source scan with thread-safe progress updates.
+
+                All calls to progress.advance() and progress.detection() are
+                serialised through progress_lock so that Rich's Live display
+                is never updated from two threads at the same time.
+                """
+                ignores = (
+                    ignore_mod.IgnoreSet() if no_ignore
+                    else ignore_mod.load([source.root, Path.cwd()])
+                )
+
+                # Wrap the shared progress object with lock-protected callbacks
+                # rather than passing the raw object to _scan.  This keeps the
+                # locking concern contained here instead of spreading it into
+                # the inner _scan/_scan_all path.
+                class _LockedProgress:
+                    def advance(self_inner, current: str) -> None:
+                        with progress_lock:
+                            progress.advance(current)
+
+                    def detection(
+                        self_inner,
+                        rule_display: str,
+                        masked: str,
+                        location: str,
+                    ) -> None:
+                        with progress_lock:
+                            progress.detection(rule_display, masked, location)
+
+                found_by_file, strings_scanned, suppressed, truncated = _scan(
+                    source, files, ignores, _LockedProgress()
+                )
+                return (
+                    key, source, files, found_by_file,
+                    strings_scanned, suppressed, truncated
+                )
+
+            scan_workers = min(_SOURCE_WORKERS_CAP, len(discovered))
+            with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
+                scan_futures = {
+                    scan_pool.submit(_scan_tty_source, key, source, files): idx
+                    for idx, (key, source, files) in enumerate(discovered)
+                }
+                for scan_fut in as_completed(scan_futures):
+                    idx = scan_futures[scan_fut]
+                    per_source_by_index[idx] = scan_fut.result()
+
+    # Rebuild in the original discovery order for deterministic output.
+    per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]] = [
+        per_source_by_index[i] for i in sorted(per_source_by_index)
+    ]
+    for _k, _s, _f, _fbf, strings_scanned, suppressed, truncated in per_source:
+        total_strings += strings_scanned
+        total_suppressed += suppressed
+        total_truncated.extend(truncated)
+
     elapsed = time.perf_counter() - t0
 
     if as_json:
@@ -412,6 +553,10 @@ def run_all(args) -> int:
                 f"and were truncated",
                 file=sys.stderr,
             )
+        _warn_leftover_backups_multi([s for _k, s, *_ in per_source],
+                                     as_json=True)
+        if as_sarif:
+            return _emit_sarif(payload, output, total_suppressed)
         return _emit_json_payload(payload, output, total_suppressed)
 
     ui.stage(2, "ok", "SCAN", f"{total_files} file(s)",
@@ -431,6 +576,8 @@ def run_all(args) -> int:
         ui.stage(3, "ok", "FINDINGS", "no secrets found")
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
+        _warn_leftover_backups_multi([s for _k, s, *_ in per_source],
+                                     as_json=False)
         ui.contribute_line()
         return 0
 
@@ -481,15 +628,99 @@ def run_all(args) -> int:
             f"full multi-source findings ({grand}) written to {report}"
         )
 
+    if _opt(args, "fix", False):
+        return _fix_all_sources(args, dirty)
+
     dirty_names = ", ".join(k for k, _s, _f in dirty)
     ui.stage(4, "skip", "REDACT",
-             f"skipped — run: agentsweep fix --source <name>  "
+             f"skipped — run with --fix to redact in place (.bak backups)  "
              f"(dirty: {dirty_names})")
     ui.stage(5, "warn", "ROTATE", "these keys are still live")
     # Flatten across sources — do not merge by Path (collisions across roots).
     ui.rotation_panel(_rotation_items_multi(dirty))
+    _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=False)
     ui.contribute_line()
     return 1
+
+
+def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:
+    """Redact every source with findings, one at a time.
+
+    Each source runs the same path a single-source fix does — its own
+    _preflight_gates, its own _redact_all, and therefore its own safe_write
+    with backup, validation and audit. Nothing is batched across sources and
+    no write happens outside safe_write().
+
+    A source that is gate-blocked, declined, or errors does not abort the
+    others: finishing the sweep is the point of --all, and stopping early
+    would leave the user worse off than the per-source loop they're replacing.
+    On a terminal each source needs its own typed REDACT, so the blast radius
+    is never hidden behind one blanket confirm.
+
+    Returns 0 only if every source redacted cleanly, else 2.
+    """
+    interactive = (sys.stdin.isatty() and ui.console.is_terminal
+                   if hasattr(sys.stdin, "isatty") else False)
+
+    total = len(dirty)
+    redacted: list[str] = []
+    unresolved: list[str] = []
+
+    for key, source, found_by_file in dirty:
+        source_cls = SOURCES[key]
+        src_total = sum(len(v) for v in found_by_file.values())
+
+        if interactive:
+            print()
+            ui.warn_line(
+                f"{key}: {src_total} secret(s) in {len(found_by_file)} file(s) "
+                f"under {source.root} — redact now? "
+                f"(.bak backups kept; `agentsweep undo --source {key}` reverts)"
+            )
+            try:
+                typed = input(
+                    f"  type REDACT to confirm {key} (anything else skips it): "
+                ).strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                unresolved.append(key)
+                break
+            if typed != "REDACT":
+                ui.redact_row("skip", key, "cancelled — nothing written")
+                unresolved.append(key)
+                continue
+
+        gate_err, _recoverable = _preflight_gates(source, source_cls, args)
+        if gate_err is not None:
+            unresolved.append(key)
+            continue
+
+        rows, errors, _recoverable = _redact_all(
+            source=source,
+            found_by_file=found_by_file,
+            backup=not args.no_backup,
+            force=args.force,
+        )
+        for status, path_display, note in rows:
+            ui.redact_row(status, f"{key}: {path_display}", note)
+        if errors:
+            unresolved.append(key)
+        else:
+            redacted.append(key)
+
+    if unresolved:
+        ui.stage(4, "warn", "REDACT",
+                 f"{len(redacted)}/{total} source(s) redacted",
+                 f"unresolved: {', '.join(unresolved)}")
+    else:
+        ui.stage(4, "ok", "REDACT", f"{len(redacted)}/{total} source(s) redacted")
+
+    # Every scanned key is still live until rotated — including those under a
+    # source we could not redact, who need the guidance most.
+    ui.stage(5, "warn", "ROTATE", "redacted locally", "keys live until rotated")
+    ui.rotation_panel(_rotation_items_multi(dirty))
+    ui.contribute_line()
+    return 2 if unresolved else 0
 
 
 def _suggest_paths(missing: Path) -> list[str]:
@@ -516,7 +747,7 @@ def _scan(source, files, ignores, progress=None):
     det = getattr(progress, "detection", None) if progress is not None else None
 
     def _on_finding(fd: Finding) -> None:
-        if det is not None:
+        if det is not None and fd.file is not None and fd.line is not None:
             det(fd.display, fd.masked, f"{ui.rel(fd.file, source.root)}:{fd.line}")
 
     return _scan_all(source, files, ignores=ignores,
@@ -681,6 +912,98 @@ def _json_payload(found_by_file: dict, source: Source) -> list[dict]:
     return payload
 
 
+SARIF_SCHEMA = (
+    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/"
+    "sarif-schema-2.1.0.json"
+)
+SARIF_VERSION = "2.1.0"
+_PROJECT_URL = "https://github.com/Ishannaik/agent-sweep"
+
+
+def _sarif_document(payload: list[dict]) -> dict:
+    """Build a SARIF 2.1.0 document from the JSON findings payload.
+
+    Only rules that actually matched become tool.driver.rules, so a run
+    carries guidance for what was found rather than all of RULES. Message
+    text reuses each finding's `masked` preview; the plaintext secret is
+    never read here, so it cannot reach the report.
+    """
+    displays = {rule: display for rule, display, _pattern in RULES}
+
+    rule_ids: list[str] = []
+    for f in payload:
+        if f["rule"] not in rule_ids:
+            rule_ids.append(f["rule"])
+
+    rules: list[dict] = []
+    for rule_id in rule_ids:
+        descriptor: dict = {
+            "id": rule_id,
+            "name": displays.get(rule_id, rule_id),
+            "shortDescription": {"text": displays.get(rule_id, rule_id)},
+        }
+        guidance = ROTATION_GUIDANCE.get(rule_id)
+        if guidance:
+            descriptor["help"] = {"text": guidance}
+        rules.append(descriptor)
+
+    index_of = {rule_id: i for i, rule_id in enumerate(rule_ids)}
+    results: list[dict] = []
+    for f in payload:
+        results.append({
+            "ruleId": f["rule"],
+            "ruleIndex": index_of[f["rule"]],
+            "level": "error",
+            "message": {
+                "text": (f"{f['display']} found in {f['source']} history: "
+                         f"{f['masked']}"),
+            },
+            "locations": [{
+                "physicalLocation": {
+                    "artifactLocation": {
+                        "uri": Path(f["file"]).resolve().as_uri(),
+                    },
+                    "region": {"startLine": max(1, int(f["line"]))},
+                },
+            }],
+        })
+
+    return {
+        "$schema": SARIF_SCHEMA,
+        "version": SARIF_VERSION,
+        "runs": [{
+            "tool": {"driver": {
+                "name": "agentsweep",
+                "version": __version__,
+                "informationUri": _PROJECT_URL,
+                "rules": rules,
+            }},
+            "results": results,
+        }],
+    }
+
+
+def _emit_sarif(payload: list[dict], output: Path | None,
+                suppressed: int) -> int:
+    """Emit a SARIF report to `output` or stdout.
+
+    Machine-clean like the JSON path — no banner, no styling — and the exit
+    code matches it: 1 with findings, 0 clean.
+    """
+    code = 0 if not payload else 1
+    text = json.dumps(_sarif_document(payload), indent=2) + "\n"
+
+    if output is not None:
+        _write_text(output, text)
+        print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
+        return code
+
+    print(text, end="")
+    if suppressed:
+        print(f"({suppressed} suppressed by .agentsweepignore)", file=sys.stderr)
+    return code
+
+
 def _emit_json_payload(payload: list[dict], output: Path | None,
                        suppressed: int) -> int:
     """Shared JSON emission for single- and multi-source scans."""
@@ -781,6 +1104,52 @@ _BACKUP_GLOBS = ("*.jsonl.bak", "*.json.bak", "*.md.bak",
                  "*.db-wal.bak", "*.db-shm.bak",
                  "*.vscdb-wal.bak", "*.vscdb-shm.bak",
                  "*.sqlite.bak", "*.sqlite-wal.bak", "*.sqlite-shm.bak")
+
+
+def _leftover_backups(source: Source) -> list[Path]:
+    """Existing .bak sidecars under the source's roots.
+
+    Each still holds the pre-redaction plaintext secret — safe_write writes
+    it before replacing the file, and only `purge` deletes it. Same discovery
+    undo/purge use, so scan flags exactly what they would act on.
+    """
+    return sorted({p for root in source.roots() if root.exists()
+                   for pat in _BACKUP_GLOBS
+                   for p in root.rglob(pat)})
+
+
+def _warn_leftover_backups(source: Source, as_json: bool) -> None:
+    """After a scan, note any .bak sidecars still holding plaintext secrets.
+
+    A user who ran `fix` but not `purge` is not actually clean — the secret
+    lives on in the backup. A scan that finds nothing in the redacted files
+    would otherwise report an all-clear over those live secrets. Existence and
+    count only; the .bak contents are not scanned or shown.
+    """
+    _emit_backup_warning(len(_leftover_backups(source)), as_json)
+
+
+def _warn_leftover_backups_multi(sources: list[Source], as_json: bool) -> None:
+    """Aggregate leftover-.bak warning across the sources a --all scan visited.
+
+    scan --all is the CI-facing entry point (and what the pre-commit hook
+    runs), so it must flag leftover backups too. Counts distinct .bak paths so
+    sources sharing a root can't double-count.
+    """
+    baks = {p for s in sources for p in _leftover_backups(s)}
+    _emit_backup_warning(len(baks), as_json)
+
+
+def _emit_backup_warning(count: int, as_json: bool) -> None:
+    if not count:
+        return
+    msg = (f"{count} leftover .bak backup(s) still contain plaintext secrets "
+           f"— run `agentsweep purge` after rotating, or `agentsweep undo` to "
+           f"restore them")
+    if as_json:
+        print(f"warning: {msg}", file=sys.stderr)
+    else:
+        ui.warn_line(msg)
 
 
 def undo(args) -> int:

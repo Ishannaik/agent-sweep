@@ -42,6 +42,13 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile(r"\bsk-ant-(?:api|sid)[0-9]*-[A-Za-z0-9_-]{32,}\b")),
     ("google-api", "Google API key",
         re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("google-oauth-client-secret", "Google OAuth client secret",
+        re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{28}\b")),
+    ("google-service-account-key", "Google service-account key",
+        # Anchored on the JSON "type": "service_account" marker and confirmed
+        # by a nearby private_key_id, so a bare PEM block (already caught by
+        # private-key-pem) doesn't also trip this rule.
+        re.compile(r'"type":\s*"service_account"[\s\S]{0,200}?"private_key_id":\s*"[a-f0-9]{40}"')),
     ("slack-bot", "Slack bot token",
         re.compile(r"\bxoxb-[A-Za-z0-9-]{10,}\b")),
     ("slack-user", "Slack user token",
@@ -707,6 +714,8 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "openai": "Revoke: https://platform.openai.com/api-keys",
     "anthropic": "Revoke: https://console.anthropic.com/settings/keys",
     "google-api": "Rotate: https://console.cloud.google.com/apis/credentials",
+    "google-oauth-client-secret": "Rotate: https://console.cloud.google.com/apis/credentials (OAuth 2.0 Client IDs > reset secret)",
+    "google-service-account-key": "Revoke: https://console.cloud.google.com/iam-admin/serviceaccounts (delete the compromised key, generate a new one)",
     "slack-bot": "Rotate: https://api.slack.com/apps (OAuth & Permissions)",
     "slack-user": "Rotate: https://api.slack.com/apps (OAuth & Permissions)",
     "slack-webhook": "Regenerate the webhook in the Slack app that owns it.",

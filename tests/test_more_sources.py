@@ -208,7 +208,13 @@ def test_all_new_sources_registered_with_distinct_roots() -> None:
     # default_root resolves for every registered source without raising,
     # and no two sources share the same root.
     roots = {slug: str(cls().default_root()) for slug, cls in SOURCES.items()}
-    assert len(set(roots.values())) == len(roots), "sources share a default_root"
+    # Per-project sources (aider, crush) have no central store — they walk from
+    # $HOME for a per-repo artifact, so sharing that root is correct, not a
+    # copy-paste slip. The check guards fixed history paths, where a duplicate
+    # would mean one source silently scanning another's store.
+    home = str(Path.home())
+    fixed = {slug: r for slug, r in roots.items() if r != home}
+    assert len(set(fixed.values())) == len(fixed), "sources share a default_root"
 
 
 def test_new_sources_flagged_experimental() -> None:

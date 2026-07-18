@@ -22,6 +22,10 @@ class Source(ABC):
     # picker, the scan banner, and the README so users know what's verified.
     experimental: bool = False
 
+    def __init__(self, root: Path | None = None) -> None:
+        if root is not None:
+            self.root = root
+
     @abstractmethod
     def files(self) -> list[Path]:
         """Return every history file to scan under this source's root."""
@@ -152,7 +156,7 @@ class JsonlSource(Source):
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
     ) -> str:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")
         lines = text.splitlines(keepends=True)
 
         by_line: dict[int, list[tuple[KeyPath, str]]] = {}

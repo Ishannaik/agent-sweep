@@ -9,6 +9,8 @@ Usage shapes, all supported:
     agentsweep scan --all --detected
                                scan only agents whose history root exists
     agentsweep fix  [opts]     redact (guided + confirmed on a terminal)
+    agentsweep fix --all       redact every agent with findings, one at a time
+                               (each source gated + confirmed separately)
     agentsweep undo [opts]     restore .bak backups
     agentsweep purge [opts]    delete .bak backups (after rotating the keys)
     agentsweep list-sources    list supported agents + which are on this machine
@@ -41,7 +43,7 @@ def check_for_update(timeout: int = 2) -> tuple[str | None, str | None]:
     (None, error_string) so the caller can decide whether to surface it.
     """
     try:
-        with urllib.request.urlopen(_PYPI_URL, timeout=timeout) as resp:
+        with urllib.request.urlopen(_PYPI_URL, timeout=timeout) as resp:  # nosec B310 # _PYPI_URL is a hardcoded https:// constant, never user input
             data = json.loads(resp.read())
         return data["info"]["version"], None
     except Exception as exc:  # network error, JSON error, key error, …
@@ -86,10 +88,10 @@ def _background_update_notice(args: argparse.Namespace) -> None:
 
     def _fetch() -> None:
         try:
-            with urllib.request.urlopen(_PYPI_URL, timeout=1.5) as resp:
+            with urllib.request.urlopen(_PYPI_URL, timeout=1.5) as resp:  # nosec B310 # _PYPI_URL is a hardcoded https:// constant, never user input
                 data = json.loads(resp.read())
             result[0] = data["info"]["version"]
-        except Exception:
+        except Exception:  # nosec B110 # best-effort background version check; any network/parse error must not crash the main flow
             pass
         finally:
             done.set()
@@ -102,10 +104,12 @@ def _background_update_notice(args: argparse.Namespace) -> None:
 
     latest = result[0]
     if latest is not None and _version_tuple(latest) > _version_tuple(__version__):
-        # Print a single dim-yellow notice before any other output.
-        print(
-            f"\033[2;33m  ★ agentsweep {latest} available"
-            f" — pip install --upgrade agentsweep\033[0m"
+        # Route through the shared console so NO_COLOR / --no-color are honored
+        # (a raw ANSI print would bypass apply_no_color entirely).
+        ui.console.print(
+            f"  ★ agentsweep {latest} available"
+            f" — pip install --upgrade agentsweep",
+            style="dim yellow",
         )
 
 
@@ -115,7 +119,7 @@ def _run_update_check() -> int:
     if err is not None:
         print(f"  warning: could not reach PyPI — {err}", file=sys.stderr)
         return 0
-    if _version_tuple(latest) > _version_tuple(__version__):
+    if latest is not None and _version_tuple(latest) > _version_tuple(__version__):
         print(
             f"  agentsweep {latest} is available — run: "
             f"pip install --upgrade agentsweep"
@@ -137,11 +141,16 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
+    # Honor NO_COLOR / --no-color before any styled output (menu, banner,
+    # update notice). The flag is parsed per-verb below; catch it here too so
+    # it applies to the interactive menu and the early --version/--update paths.
+    ui.apply_no_color(ui.resolve_no_color("--no-color" in argv))
+
     try:
         import argcomplete
         completion_parser = _get_completion_parser()
         argcomplete.autocomplete(completion_parser)
-    except Exception:
+    except ImportError:
         pass
 
     if argv and argv[0] in ("-V", "--version"):
@@ -236,8 +245,9 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     ap.add_argument("--root", type=Path,
                     help="Override the source's default root directory.")
     ap.add_argument("--all", action="store_true",
-                    help="Scan every registered agent source and aggregate "
-                         "findings (scan only; not valid with fix).")
+                    help="Every registered agent source: scan aggregates "
+                         "findings; fix redacts each source in turn, gated "
+                         "and confirmed separately.")
     ap.add_argument("--detected", action="store_true",
                     help="With --all, only scan sources whose history root "
                          "exists on this machine (same signal as "
@@ -247,6 +257,13 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
                          "flooding the terminal.")
     ap.add_argument("--json", action="store_true",
                     help="Emit findings as JSON to stdout (no banner/styling).")
+    ap.add_argument("--no-color", action="store_true",
+                    help="Disable ANSI colors/styling in human output "
+                         "(also honored via the NO_COLOR env var).")
+    ap.add_argument("--format", choices=["sarif"],
+                    help="Emit findings in an interchange format instead of "
+                         "the default report: sarif = SARIF 2.1.0 for GitHub "
+                         "code scanning and SARIF viewers (scan only).")
     ap.add_argument("--no-ignore", action="store_true",
                     help="Ignore any .agentsweepignore files.")
     # Redaction flags (used by `fix` / legacy --fix; harmless on `scan`).
@@ -259,16 +276,18 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     args = ap.parse_args(rest)
     args.fix = (verb == "fix")
 
+    if args.format is not None:
+        if args.json:
+            ap.error("cannot use --json with --format sarif; pick one output "
+                     "format")
+        if args.fix:
+            ap.error("--format is a scan output format; not valid with fix")
+
     if args.all:
         if args.source is not None:
             ap.error("cannot use --source with --all")
         if args.root is not None:
             ap.error("cannot use --root with --all")
-        if args.fix:
-            ap.error(
-                "fix --all is not supported; "
-                "run: agentsweep fix --source <name>"
-            )
         # Placeholder so any code that still reads args.source is safe.
         args.source = "claude-code"
     else:
@@ -322,6 +341,11 @@ def source_completer(prefix: str, **kwargs) -> list[str]:
     return [s for s in SOURCES if s.startswith(prefix)]
 
 
+def _with_source_completer(action: argparse.Action) -> argparse.Action:
+    setattr(action, "completer", source_completer)
+    return action
+
+
 def _get_completion_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="agentsweep",
@@ -336,12 +360,13 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     scan_p = subparsers.add_parser("scan", description="Scan history files.")
     scan_source = scan_p.add_argument("--source", choices=list(SOURCES), default=None,
                                       help="Which agent's history (default: claude-code).")
-    scan_source.completer = source_completer
+    _with_source_completer(scan_source)
     scan_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
     scan_p.add_argument("--all", action="store_true", help="Scan every registered agent source.")
     scan_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
     scan_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
     scan_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
+    scan_p.add_argument("--no-color", action="store_true", help="Disable ANSI colors/styling in human output.")
     scan_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
     scan_p.add_argument("--no-backup", action="store_true", help="Skip .bak file creation.")
     scan_p.add_argument("--force", action="store_true", help="Bypass safety checks.")
@@ -351,12 +376,13 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     fix_p = subparsers.add_parser("fix", description="Redact secrets in history.")
     fix_source = fix_p.add_argument("--source", choices=list(SOURCES), default=None,
                                      help="Which agent's history (default: claude-code).")
-    fix_source.completer = source_completer
+    _with_source_completer(fix_source)
     fix_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
-    fix_p.add_argument("--all", action="store_true", help="Scan every registered agent source.")
-    fix_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
+    fix_p.add_argument("--all", action="store_true", help="Redact every agent source with findings, one at a time.")
+    fix_p.add_argument("--detected", action="store_true", help="With --all, only sources whose history root exists.")
     fix_p.add_argument("-o", "--output", type=Path, help="Write findings as JSON to this file.")
     fix_p.add_argument("--json", action="store_true", help="Emit findings as JSON to stdout.")
+    fix_p.add_argument("--no-color", action="store_true", help="Disable ANSI colors/styling in human output.")
     fix_p.add_argument("--no-ignore", action="store_true", help="Ignore any .agentsweepignore files.")
     fix_p.add_argument("--no-backup", action="store_true", help="Skip .bak file creation.")
     fix_p.add_argument("--force", action="store_true", help="Bypass safety checks.")
@@ -366,14 +392,14 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     undo_p = subparsers.add_parser("undo", description="Restore backups.")
     undo_source = undo_p.add_argument("--source", choices=list(SOURCES), default="claude-code",
                                        help="Which agent's history.")
-    undo_source.completer = source_completer
+    _with_source_completer(undo_source)
     undo_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
 
     # purge
     purge_p = subparsers.add_parser("purge", description="Delete backups.")
     purge_source = purge_p.add_argument("--source", choices=list(SOURCES), default="claude-code",
-                                         help="Which agent's history.")
-    purge_source.completer = source_completer
+                                          help="Which agent's history.")
+    _with_source_completer(purge_source)
     purge_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
     purge_p.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
 
@@ -384,7 +410,8 @@ def _get_completion_parser() -> argparse.ArgumentParser:
 
     # completion
     comp_p = subparsers.add_parser("completion", description="Generate shell completion scripts.")
-    comp_p.add_argument("shell", choices=["bash", "zsh", "fish"], help="The shell to generate completions for.")
+    comp_p.add_argument("shell", choices=["bash", "zsh", "fish", "powershell"],
+                        help="The shell to generate completions for.")
 
     return ap
 
@@ -394,7 +421,7 @@ def _parse_completion(rest: list[str]) -> argparse.Namespace:
         prog="agentsweep completion",
         description="Generate shell completion scripts for agentsweep.",
     )
-    ap.add_argument("shell", choices=["bash", "zsh", "fish"],
+    ap.add_argument("shell", choices=["bash", "zsh", "fish", "powershell"],
                     help="The shell to generate completions for.")
     return ap.parse_args(rest)
 
@@ -406,9 +433,9 @@ def _run_completion(rest: list[str]) -> int:
     except ImportError:
         print("  error: argcomplete is not installed.", file=sys.stderr)
         print("  Install it using: pip install argcomplete", file=sys.stderr)
-        return 1
+        return 2
 
-    print(shellcode(["agentsweep", "asweep"], shell=args.shell))
+    print(shellcode(["agentsweep", "asweep"], shell=args.shell))  # nosec B604 # argcomplete.shellcode's own "target shell" kwarg (choices=bash/zsh/fish/powershell), not subprocess shell=True
     return 0
 
 

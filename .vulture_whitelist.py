@@ -28,3 +28,13 @@ is_claude_code_running  # src/agentsweep/preflight.py
 # tests/test_ported_rules.py respectively — vulture only sees src/ here.
 PREFILTER_BACKEND  # src/agentsweep/scanner.py
 DETECTOR_IDS  # src/agentsweep/scanner.py
+
+# _LockedProgress in run_all() names its method receiver self_inner (to avoid
+# confusion in the nested class); the param is required by the method signature
+# but the body forwards to the enclosing progress + lock, so it is never read.
+self_inner  # src/agentsweep/pipeline.py
+
+# apply_no_color() sets these on the shared rich Console; rich reads them at
+# render time, so vulture can't see the use from src/ alone.
+no_color  # src/agentsweep/ui/console.py
+_color_system  # src/agentsweep/ui/console.py

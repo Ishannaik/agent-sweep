@@ -1,0 +1,178 @@
+.TH AGENTSWEEP 1 "2026-07-18" "agentsweep 0.1.9" "User Commands"
+.SH NAME
+agentsweep \- find and redact secrets in AI coding agent histories
+.SH SYNOPSIS
+.B agentsweep
+[\fB\-V\fR | \fB\-\-version\fR] [\fB\-\-update\fR]
+.br
+.B agentsweep
+[\fIVERB\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B agentsweep
+scans local history files written by AI coding agents (Claude Code, Codex, Cursor, and others) for accidentally
+pasted secrets \(em API keys, tokens, database URLs, seed phrases \(em and can redact them in place. All
+scanning and redaction happens fully offline; no history content ever leaves the machine.
+.PP
+Running
+.B agentsweep
+with no verb and no arguments on an interactive terminal starts a guided menu. Any explicit verb or flag, or a
+piped/redirected stream, skips the menu and runs non\-interactively.
+.SH VERBS
+.TP
+.B scan
+Scan only \(em read\-only, no files are modified. This is the default when no verb is given.
+.TP
+.B fix
+Scan, then redact findings in place. On a terminal this prompts for a typed
+.B REDACT
+confirmation before writing anything; in a script or piped context the redaction flags below must be passed
+explicitly.
+.TP
+.B undo
+Restore all
+.I *.bak
+backups, reverting any previous redaction.
+.TP
+.B purge
+Permanently delete all
+.I *.bak
+backups once the leaked keys have been rotated. This is irreversible \(em
+.B agentsweep undo
+stops working for purged sources.
+.TP
+.B list\-sources
+List every supported agent source, its history location, and whether that history exists on this machine. Read\-only.
+.TP
+.B completion
+Print a shell completion script for
+.IR bash ", " zsh ", " fish ", or " powershell .
+.SH OPTIONS
+.SS Common to scan, fix, undo, and purge
+.TP
+.BI \-\-source " SOURCE"
+Which agent's history to target (default:
+.IR claude\-code ).
+Run
+.B agentsweep list\-sources
+for the full list of supported values.
+.TP
+.BI \-\-root " PATH"
+Override the source's default history root directory.
+.SS scan and fix only
+.TP
+.B \-\-all
+Target every registered agent source instead of a single
+.BR \-\-source .
+.B scan
+aggregates findings across sources;
+.B fix
+redacts each source in turn, gated and confirmed separately.
+.TP
+.B \-\-detected
+With
+.BR \-\-all ,
+only scan sources whose history root exists on this machine.
+.TP
+.BI \-o " FILE" ", " \-\-output " FILE"
+Write findings as JSON to
+.I FILE
+instead of the terminal.
+.TP
+.B \-\-json
+Emit findings as JSON to stdout, with no banner or styling.
+.TP
+.B \-\-no\-color
+Disable ANSI colors and styling in human\-readable output. Also honored via the
+.B NO_COLOR
+environment variable.
+.TP
+.BI \-\-format " sarif"
+Emit findings as SARIF 2.1.0 instead of the default report, for GitHub code scanning or a SARIF viewer.
+.B scan
+only; not valid together with
+.B \-\-json
+or with
+.BR fix .
+.TP
+.B \-\-no\-ignore
+Ignore any
+.I .agentsweepignore
+files.
+.SS Redaction flags (fix, and legacy \-\-fix)
+.TP
+.B \-\-no\-backup
+Skip creating a
+.I .bak
+backup before redacting. Not recommended.
+.TP
+.B \-\-force
+Bypass the soft safety checks: the 60\-second mtime gate and the running\-process check.
+.TP
+.B \-\-allow\-production
+Required, during the current alpha stage, to run
+.B fix
+against a source's default production root.
+.SS purge only
+.TP
+.B \-\-yes
+Skip the confirmation prompt. Required when
+.B purge
+is not run on an interactive terminal.
+.SS list\-sources only
+.TP
+.B \-\-json
+Emit the source list as JSON to stdout.
+.TP
+.B \-\-detected
+Show only sources whose history root exists on this machine.
+.SH EXIT STATUS
+.TP
+.B 0
+Clean \(em the command completed with no findings (or, for non\-scanning verbs, succeeded).
+.TP
+.B 1
+Findings \(em secrets were detected.
+.TP
+.B 2
+Misuse \(em invalid arguments or a usage error.
+.SH EXAMPLES
+.TP
+Scan the default source (Claude Code):
+.RS
+.B agentsweep scan
+.RE
+.TP
+Scan every detected agent and write JSON:
+.RS
+.B agentsweep scan \-\-all \-\-detected \-\-json
+.RE
+.TP
+Redact Claude Code history non\-interactively:
+.RS
+.B agentsweep fix \-\-allow\-production \-\-json
+.RE
+.TP
+Undo the last redaction:
+.RS
+.B agentsweep undo
+.RE
+.TP
+List supported sources found on this machine:
+.RS
+.B agentsweep list\-sources \-\-detected
+.RE
+.SH FILES
+.TP
+.I ~/.claude/projects/
+Default Claude Code history root (or
+.B $CLAUDE_CONFIG_DIR
+if set).
+.TP
+.I ~/.agentsweep/audit.jsonl
+Append\-only audit log of every write agentsweep performs.
+.SH SEE ALSO
+Full documentation, the 193 detection rules, and the safety\-invariant list:
+.UR https://github.com/Ishannaik/agent\-sweep
+.UE
+.SH AUTHOR
+agentsweep contributors.

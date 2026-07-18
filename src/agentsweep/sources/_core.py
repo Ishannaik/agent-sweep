@@ -20,21 +20,70 @@ from ._helpers import (
     _apply_plaintext_redactions,
     _iter_json_file_strings,
     _iter_plaintext_lines,
+    _iter_project_histories,
+    _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
 
 
 class ClaudeCodeSource(JsonlSource):
-    """Claude Code CLI — per-session JSONL under ~/.claude/projects/."""
+    """Claude Code CLI — per-session JSONL under <profile>/projects/.
+
+    The profile dir is ~/.claude by default, overridable via CLAUDE_CONFIG_DIR
+    (which Claude Code itself honours). A comma-separated CLAUDE_CONFIG_DIR is
+    treated as several profiles and all are scanned, so a side-project profile
+    like ~/.claude-personal is not left with unscanned secrets. An explicit
+    --root still targets exactly that one directory.
+    """
 
     name = "claude-code"
     display_name = "Claude Code"
     process_markers = CLAUDE_CODE_MARKERS
 
+    def __init__(self, root: Path | None = None):
+        # Explicit --root wins and stays single, matching every other source;
+        # only default discovery fans out across profiles.
+        self._project_roots = ([root] if root is not None
+                               else self._profile_roots())
+        self.root = self._project_roots[0]
+
+    @classmethod
+    def _profile_roots(cls) -> list[Path]:
+        env = os.environ.get("CLAUDE_CONFIG_DIR")
+        if env:
+            dirs = [Path(p.strip()).expanduser() for p in env.split(",")
+                    if p.strip()]
+        else:
+            dirs = []
+        if not dirs:
+            dirs = [Path.home() / ".claude"]
+        return [d / "projects" for d in dirs]
+
     @classmethod
     def default_root(cls) -> Path:
-        return Path.home() / ".claude" / "projects"
+        return cls._profile_roots()[0]
+
+    def roots(self) -> list[Path]:
+        return list(self._project_roots)
+
+    def files(self) -> list[Path]:
+        out: list[Path] = []
+        for r in self._project_roots:
+            if r.exists():
+                out.extend(p for p in r.rglob("*.jsonl") if p.is_file())
+        return sorted(out)
+
+    def iter_files(self) -> Iterator[Path]:
+        for r in self._project_roots:
+            if not r.exists():
+                continue
+            for p in r.rglob("*.jsonl"):
+                if p.is_file():
+                    yield p
+
+    def is_detected(self) -> bool:
+        return any(r.exists() for r in self._project_roots)
 
 
 class CodexSource(JsonlSource):
@@ -162,7 +211,7 @@ class OpenCodeSource(Source):
                 # silently eating it is exactly what hid the schema drift of
                 # issue #14 (scan reported CLEAN while missing part.data).
                 cur = con.execute(
-                    f"SELECT rowid, {col} FROM {table}"  # noqa: S608
+                    f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}"  # nosec B608 # table/col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                 )
                 for rowid, value in cur:
                     if not isinstance(value, str) or not value:
@@ -218,46 +267,6 @@ class OpenCodeSource(Source):
                 )
             pairs.extend((table, c) for c in present)
         return pairs
-
-# Vendor / VCS / build-cache dirs — never an Aider repo root, so they are
-# pruned at ANY depth. A directory with one of these names holds tooling, not
-# a project the user ran Aider in, so dropping it can't hide a real history.
-_AIDER_SKIP_DIRS: frozenset[str] = frozenset({
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".tox",
-    ".nox",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".cache",
-    ".npm",
-    ".yarn",
-    ".pnpm-store",
-    ".cargo",
-    ".rustup",
-})
-
-# OS-profile trees (caches, not project roots) — pruned ONLY when they sit
-# directly under $HOME. Unlike the vendor set, these are ordinary words a real
-# project directory can legitimately be named ("Library", "AppData", "Trash"),
-# so pruning them at any depth silently dropped real histories — a secret
-# scanner reporting a false all-clear. `.config` is deliberately NOT here:
-# people keep git-tracked dotfiles (e.g. ~/.config/nvim) there and run Aider in
-# them, so it must be walked; the depth cap + vendor set above bound the cost.
-# ponytail: home-top-only prune, not per-name cache-child pruning. If ~/.config
-# on some box (large browser profiles) makes a scan slow, add the specific
-# cache-child dir names — don't re-blanket-prune .config and lose real repos.
-_AIDER_SKIP_DIRS_HOME_TOP: frozenset[str] = frozenset({
-    "AppData",
-    "Library",
-    ".Trash",
-    "Trash",
-    ".local",
-})
 
 _AIDER_HISTORY_NAME = ".aider.chat.history.md"
 # Soft cap from the discovery root. Aider histories live at repo roots, not
@@ -319,63 +328,26 @@ class AiderSource(Source):
         return "text"
 
 
+def _find_aider_history(
+    dirpath: Path, _dirnames: list[str], filenames: list[str],
+) -> Iterator[Path]:
+    if _AIDER_HISTORY_NAME in filenames:
+        p = dirpath / _AIDER_HISTORY_NAME
+        if p.is_file():
+            yield p
+
+
 def _iter_aider_histories(root: Path, *, warn: bool = False) -> Iterator[Path]:
     """Yield Aider chat histories under root with junk dirs pruned.
 
-    Vendor/cache dirs are pruned at any depth; OS-profile dirs only when they
-    sit directly under $HOME (so a project named "Library" or a dotfiles repo
-    under ~/.config is still scanned). Descent stops at _AIDER_MAX_DEPTH; when
-    that happens and ``warn`` is True (the scan path, not detection), a one-line
-    stderr warning is emitted so the cap is never silent — a scanner that
-    quietly skips files hides live secrets.
+    Discovery (pruning, depth cap, cap warning) is shared with the other
+    per-project sources — see _iter_project_histories in _helpers.py.
     """
-    if not root.exists():
-        return
-    root = root.resolve()
-    home = Path.home().resolve()
-    capped = 0
-
-    def _onerror(_err: OSError) -> None:
-        # Permission / reparse-point noise under $HOME is expected. Skip and
-        # keep walking the rest of the tree.
-        return
-
-    # os.walk so we can mutate dirs in place and skip huge subtrees.
-    for dirpath, dirnames, filenames in os.walk(
-        root, topdown=True, onerror=_onerror,
-    ):
-        # Depth relative to root (root itself is depth 0). ``resolved`` is
-        # reused for the home-top check, so there's no extra resolve() per dir.
-        try:
-            resolved = Path(dirpath).resolve()
-            rel = resolved.relative_to(root)
-            depth = 0 if str(rel) == "." else len(rel.parts)
-        except ValueError:
-            # Walked outside root (symlink / mount edge case). Stop descending.
-            dirnames.clear()
-            continue
-        if depth >= _AIDER_MAX_DEPTH:
-            if dirnames:
-                capped += 1
-            dirnames.clear()
-        else:
-            at_home_top = resolved == home
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in _AIDER_SKIP_DIRS
-                and not (at_home_top and d in _AIDER_SKIP_DIRS_HOME_TOP)
-            ]
-        if _AIDER_HISTORY_NAME in filenames:
-            p = Path(dirpath) / _AIDER_HISTORY_NAME
-            if p.is_file():
-                yield p
-
-    if warn and capped:
-        print(
-            f"warning: aider discovery reached the depth cap "
-            f"({_AIDER_MAX_DEPTH}) in {capped} "
-            f"director{'y' if capped == 1 else 'ies'}; any "
-            f"{_AIDER_HISTORY_NAME} nested deeper was not scanned — "
-            f"pass --root <path> to reach it",
-            file=sys.stderr,
-        )
+    yield from _iter_project_histories(
+        root,
+        find=_find_aider_history,
+        max_depth=_AIDER_MAX_DEPTH,
+        source_label="aider",
+        artifact_desc=_AIDER_HISTORY_NAME,
+        warn=warn,
+    )

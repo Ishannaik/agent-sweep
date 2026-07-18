@@ -2,6 +2,7 @@
 gate rendering, redact rows, and encoding degradation."""
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import re
@@ -263,6 +264,115 @@ def test_root_not_found_json_keeps_stdout_parseable(tmp_path, capsys):
     assert code == 2
     assert json.loads(captured.out) == []
     assert "Path not found" in captured.err
+
+
+# --------------------------------------------------------------- no color
+
+def _force_color(monkeypatch):
+    """Make the shared consoles emit color as if on a terminal.
+
+    capsys stdout is not a tty, so rich stays plain by default — force a color
+    system on so a no-color regression would actually show escapes to catch.
+    """
+    monkeypatch.setattr(ui.console, "_color_system", ui.console._color_system
+                        or __import__("rich.color", fromlist=["ColorSystem"])
+                        .ColorSystem.TRUECOLOR, raising=False)
+
+
+def test_resolve_no_color_reads_env_and_flag(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    assert ui.resolve_no_color() is False
+    assert ui.resolve_no_color(flag=True) is True
+
+    monkeypatch.setenv("NO_COLOR", "")  # present with any value, per the spec
+    assert ui.resolve_no_color() is True
+
+    monkeypatch.setenv("FORCE_COLOR", "1")  # FORCE_COLOR wins over NO_COLOR
+    assert ui.resolve_no_color() is False
+
+    monkeypatch.setenv("FORCE_COLOR", "0")  # FORCE_COLOR=0 does not force color
+    assert ui.resolve_no_color() is True
+
+    monkeypatch.setenv("FORCE_COLOR", "")  # empty also does not force color
+    assert ui.resolve_no_color() is True
+
+
+def test_no_color_env_suppresses_ansi(tmp_path, monkeypatch, capsys):
+    _force_color(monkeypatch)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.setenv("NO_COLOR", "1")
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out          # human report still rendered
+    assert not ANSI_ESCAPE.search(out)  # ...just without escapes
+
+
+def test_no_color_flag_suppresses_ansi(tmp_path, monkeypatch, capsys):
+    _force_color(monkeypatch)
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root), "--no-color"])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out
+    assert not ANSI_ESCAPE.search(out)
+
+
+def test_color_enabled_emits_ansi(tmp_path, monkeypatch, capsys):
+    """Positive control: color still works when NO_COLOR is unset.
+
+    Without this, the suppression tests could pass vacuously if `_force_color`
+    silently stopped working (both would see no ANSI either way).
+    """
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    # Prior NO_COLOR tests mutate the shared consoles in place — restore color.
+    ui.console.no_color = False
+    ui.err_console.no_color = False
+    _force_color(monkeypatch)
+
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out
+    assert ANSI_ESCAPE.search(out)
+
+
+def test_update_notice_respects_no_color(monkeypatch, capsys):
+    """Update-available line must not emit raw ANSI under NO_COLOR."""
+    import urllib.request
+
+    class _FakeResp:
+        def read(self):
+            return json.dumps({"info": {"version": "99.0.0"}}).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.delenv("AGENTSWEEP_NO_UPDATE", raising=False)
+    ui.apply_no_color(True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda *a, **k: _FakeResp()
+    )
+
+    args = argparse.Namespace(json=False)
+    cli._background_update_notice(args)
+    out = capsys.readouterr().out
+
+    assert "agentsweep 99.0.0 available" in out
+    assert not ANSI_ESCAPE.search(out)
 
 
 # ----------------------------------------------------------------- menu

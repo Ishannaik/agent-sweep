@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Tuned for high signal. CodeRabbit is noisy on defaults, so this keeps it to
+# real correctness and security findings and a PR summary that helps triage
+# first-time contributions, without style nitpicks (ruff already covers those).
+language: en-US
+
+reviews:
+  # "chill" comments only on issues that matter; "assertive" nitpicks everything.
+  profile: chill
+  # A short summary + walkthrough is genuinely useful for triaging new PRs.
+  high_level_summary: true
+  # Do not open review threads that request changes automatically; findings are
+  # advisory and a human still merges after the backdoor/security review.
+  request_changes_workflow: false
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+  # Skip generated, vendored, and binary/asset files.
+  path_filters:
+    - "!**/*.lock"
+    - "!uv.lock"
+    - "!**/*.mp4"
+    - "!**/*.png"
+    - "!**/*.jpg"
+  # This is a secrets scanner: tests deliberately embed fake credentials as
+  # fixtures. Tell CodeRabbit so it does not flag them as leaks.
+  path_instructions:
+    - path: "tests/**"
+      instructions: >-
+        Test fixtures intentionally contain fake and documented-example
+        secrets (e.g. AKIAIOSFODNN7EXAMPLE). Do not report these as leaked
+        credentials; they are inputs the detection rules are tested against.
+
+chat:
+  auto_reply: true
