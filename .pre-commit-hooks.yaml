@@ -1,0 +1,10 @@
+- id: agentsweep
+  name: agentsweep (scan agent history for secrets)
+  description: >-
+    Scan detected AI agent history roots (Claude Code, Codex, Cursor, ...) for
+    live secrets and block the commit if any are found. Scans history, not the
+    staged files, so it runs once per commit regardless of what changed.
+  entry: agentsweep scan --all --detected
+  language: python
+  pass_filenames: false
+  always_run: true

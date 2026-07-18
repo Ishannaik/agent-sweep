@@ -1,0 +1,19 @@
+# GitGuardian configuration — https://docs.gitguardian.com
+#
+# agentsweep is a secret scanner, so its test suite deliberately embeds fake and
+# documented-example credentials as fixtures (e.g. AWS's own AKIAIOSFODNN7EXAMPLE
+# appears 30+ times) — they are the inputs the detection rules are tested against,
+# not real leaks. Scoping GitGuardian's PR check to skip them removes the false
+# positives without weakening coverage: all product source under src/ is still
+# fully scanned, and every PR is additionally reviewed by hand for backdoors and
+# for any real secret accidentally added under tests/.
+version: 2
+
+secret:
+  ignored-paths:
+    - "tests/**"
+  ignored-matches:
+    - name: "AWS documented example access key (fixture, appears across tests)"
+      match: "AKIAIOSFODNN7EXAMPLE"
+    - name: "Fake GitHub PAT fixture"
+      match: "ghp_1234567890abcdefghijklmnopqrstuvwxyz"

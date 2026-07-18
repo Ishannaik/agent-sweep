@@ -27,15 +27,62 @@ from ._helpers import (
 
 
 class ClaudeCodeSource(JsonlSource):
-    """Claude Code CLI — per-session JSONL under ~/.claude/projects/."""
+    """Claude Code CLI — per-session JSONL under <profile>/projects/.
+
+    The profile dir is ~/.claude by default, overridable via CLAUDE_CONFIG_DIR
+    (which Claude Code itself honours). A comma-separated CLAUDE_CONFIG_DIR is
+    treated as several profiles and all are scanned, so a side-project profile
+    like ~/.claude-personal is not left with unscanned secrets. An explicit
+    --root still targets exactly that one directory.
+    """
 
     name = "claude-code"
     display_name = "Claude Code"
     process_markers = CLAUDE_CODE_MARKERS
 
+    def __init__(self, root: Path | None = None):
+        # Explicit --root wins and stays single, matching every other source;
+        # only default discovery fans out across profiles.
+        self._project_roots = ([root] if root is not None
+                               else self._profile_roots())
+        self.root = self._project_roots[0]
+
+    @classmethod
+    def _profile_roots(cls) -> list[Path]:
+        env = os.environ.get("CLAUDE_CONFIG_DIR")
+        if env:
+            dirs = [Path(p.strip()).expanduser() for p in env.split(",")
+                    if p.strip()]
+        else:
+            dirs = []
+        if not dirs:
+            dirs = [Path.home() / ".claude"]
+        return [d / "projects" for d in dirs]
+
     @classmethod
     def default_root(cls) -> Path:
-        return Path.home() / ".claude" / "projects"
+        return cls._profile_roots()[0]
+
+    def roots(self) -> list[Path]:
+        return list(self._project_roots)
+
+    def files(self) -> list[Path]:
+        out: list[Path] = []
+        for r in self._project_roots:
+            if r.exists():
+                out.extend(p for p in r.rglob("*.jsonl") if p.is_file())
+        return sorted(out)
+
+    def iter_files(self) -> Iterator[Path]:
+        for r in self._project_roots:
+            if not r.exists():
+                continue
+            for p in r.rglob("*.jsonl"):
+                if p.is_file():
+                    yield p
+
+    def is_detected(self) -> bool:
+        return any(r.exists() for r in self._project_roots)
 
 
 class CodexSource(JsonlSource):

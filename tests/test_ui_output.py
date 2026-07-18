@@ -2,6 +2,7 @@
 gate rendering, redact rows, and encoding degradation."""
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import re
@@ -293,6 +294,7 @@ def test_resolve_no_color_reads_env_and_flag(monkeypatch):
 
 def test_no_color_env_suppresses_ansi(tmp_path, monkeypatch, capsys):
     _force_color(monkeypatch)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
     root = _mkroot(tmp_path)
     code = main(["--root", str(root)])
@@ -311,6 +313,59 @@ def test_no_color_flag_suppresses_ansi(tmp_path, monkeypatch, capsys):
 
     assert code == 1
     assert "AGENTSWEEP" in out
+    assert not ANSI_ESCAPE.search(out)
+
+
+def test_color_enabled_emits_ansi(tmp_path, monkeypatch, capsys):
+    """Positive control: color still works when NO_COLOR is unset.
+
+    Without this, the suppression tests could pass vacuously if `_force_color`
+    silently stopped working (both would see no ANSI either way).
+    """
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    # Prior NO_COLOR tests mutate the shared consoles in place — restore color.
+    ui.console.no_color = False
+    ui.err_console.no_color = False
+    _force_color(monkeypatch)
+
+    root = _mkroot(tmp_path)
+    code = main(["--root", str(root)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "AGENTSWEEP" in out
+    assert ANSI_ESCAPE.search(out)
+
+
+def test_update_notice_respects_no_color(monkeypatch, capsys):
+    """Update-available line must not emit raw ANSI under NO_COLOR."""
+    import urllib.request
+
+    class _FakeResp:
+        def read(self):
+            return json.dumps({"info": {"version": "99.0.0"}}).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.delenv("AGENTSWEEP_NO_UPDATE", raising=False)
+    ui.apply_no_color(True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda *a, **k: _FakeResp()
+    )
+
+    args = argparse.Namespace(json=False)
+    cli._background_update_notice(args)
+    out = capsys.readouterr().out
+
+    assert "agentsweep 99.0.0 available" in out
     assert not ANSI_ESCAPE.search(out)
 
 

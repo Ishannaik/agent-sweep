@@ -15,6 +15,10 @@
 [![GitHub Stars](https://img.shields.io/github/stars/Ishannaik/agent-sweep)](https://github.com/Ishannaik/agent-sweep/stargazers)
 [![Visitors](https://visitor-badge.laobi.icu/badge?page_id=Ishannaik.agent-sweep)](https://github.com/Ishannaik/agent-sweep)
 
+<video src="https://github.com/Ishannaik/agent-sweep/raw/main/docs/agentsweep-demo.mp4" poster="docs/agentsweep-demo-poster.png" controls muted width="480"></video>
+
+[Watch the 25-second demo](https://github.com/Ishannaik/agent-sweep/raw/main/docs/agentsweep-demo.mp4)
+
 > **Prevention:** Don't paste API keys into cloud-backed AI agents at all — the key transits the provider's servers before it ever hits your disk.
 >
 > **If you already did:** agentsweep removes the remaining local attack vector — supply-chain malware and compromised packages that scan your disk for credentials. Your files never leave your machine.
@@ -218,7 +222,7 @@ The legacy flag form `agentsweep --fix` is still accepted and behaves identicall
 Pick which agent's history to target with `--source`. The default is `claude-code`.
 
 ```bash
-agentsweep scan --source claude-code          # ~/.claude/projects/ (default)
+agentsweep scan --source claude-code          # ~/.claude/projects/ (or $CLAUDE_CONFIG_DIR)
 agentsweep scan --source codex                # ~/.codex/sessions/
 agentsweep scan --source opencode             # OpenCode SQLite store
 agentsweep scan --source cursor               # Cursor history
@@ -233,6 +237,12 @@ agentsweep scan --source openclaw             # OpenClaw ~/.openclaw/
 agentsweep scan --source hermes               # Hermes Agent ~/.hermes/state.db
 agentsweep scan --source goose                # Goose ~/.local/share/goose/
 agentsweep scan --source llm                   # Datasette llm CLI logs.db (io.datasette.llm/)
+```
+
+Running Claude Code under a custom profile? Set `CLAUDE_CONFIG_DIR` (the same variable Claude Code honors) and agentsweep scans that profile's `projects/` instead of `~/.claude`. Several profiles at once — e.g. a personal side-project profile alongside your work one — go in a comma-separated list, and all are scanned:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude,~/.claude-personal agentsweep scan --source claude-code
 ```
 
 Not sure which agents you have installed? `list-sources` prints every supported
@@ -298,6 +308,20 @@ NO_COLOR=1 agentsweep scan
 ```
 
 `|| true` keeps the upload step reachable — `scan` exits 1 when it finds something, which is what you want the SARIF to report rather than a failed step.
+
+### Use with pre-commit
+
+Stop yourself from committing while your agent history holds a live key. Add this to your repo's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/Ishannaik/agent-sweep
+    rev: v0.1.9  # pin to a released tag
+    hooks:
+      - id: agentsweep
+```
+
+Then `pre-commit install`. The hook runs `agentsweep scan --all --detected` on every commit and blocks it (exit 1) if any detected agent history contains a secret. It scans your **history roots** (`~/.claude`, `~/.codex`, ...), not the repo's staged files, so it runs once per commit regardless of what changed — a checkpoint, not a diff scanner. With no agent history on the machine it exits 0 and stays out of the way.
 
 ### Fix-only flags
 
@@ -416,6 +440,18 @@ OpenCode support was added in v0.1.1. Run `pip install --upgrade agentsweep` or 
 
 **Does agentsweep send my data anywhere?**
 No. It is fully offline — zero network calls during scanning or redacting. The only optional network call is the background update check, which only fetches the latest version number from PyPI.
+
+## Contribution security
+
+agentsweep runs against your most sensitive data, so a malicious contribution would be worth more to an attacker than one to an ordinary tool. Every pull request is reviewed line-by-line for backdoors and supply-chain risk before it merges — not just for correctness. Concretely, a PR is rejected if it:
+
+- **Adds a network call.** agentsweep is offline by design; the only permitted outbound request is the optional PyPI version check. Any new socket / `urllib` / `requests` / webhook call is a hard no.
+- **Introduces obfuscated or dynamic code** — `eval`/`exec`/`compile` on runtime data, `base64`/hex-decoded payloads, dynamic `__import__`, `pickle`/`marshal` of untrusted input.
+- **Weakens a safety invariant** — anything that writes outside `safe_write()`, drops a post-write validation, skips the `.bak` backup, or logs/prints a raw secret value. See [Safety-first review](CONTRIBUTING.md#safety-first-review).
+- **Pulls in an unvetted dependency** or repins an existing one to an unexpected source/version.
+- **Edits CI/workflows to exfiltrate secrets or tokens** (e.g. printing `GITHUB_TOKEN`, adding a step that phones home, or touching the PyPI Trusted-Publisher release path).
+
+Every PR also runs GitGuardian in CI, and workflows from first-time contributors require maintainer approval before they execute. Maintainers merge only after this review — a green checkmark alone is never sufficient.
 
 ## Contributors
 

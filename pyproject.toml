@@ -39,6 +39,8 @@ dependencies = ["rich>=13.0", "pyahocorasick>=2.0", "argcomplete>=3.0.0"]
 dev = [
     "pytest>=7.0",
     "pytest-benchmark>=4.0",  # perf-regression guard
+    "mypy>=1.10",
+    "pytest-cov>=5.0",
     "ruff>=0.8",       # lint + format + import sort + unused-import/var (F401/F841) + complexity (C901)
     "vulture>=2.16",   # module-level dead code (unused funcs/classes Ruff's F-rules miss)
     "bandit>=1.7",     # Python SAST — fitting for a secrets-redaction tool
@@ -65,3 +67,31 @@ include = [
     "/pyproject.toml",
 ]
 
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+ignore_missing_imports = true
+warn_unused_configs = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = ["agentsweep.ui.picker"]
+disable_error_code = ["valid-type"]
+
+[[tool.mypy.overrides]]
+module = ["agentsweep.ui.keys"]
+disable_error_code = ["attr-defined"]
+
+[tool.coverage.run]
+branch = true
+source = ["agentsweep"]
+
+[tool.coverage.report]
+# Ratchet: keep this just below the current measured baseline and raise it as coverage improves.
+fail_under = 74
+
+[tool.pytest.ini_options]
+# Benchmarks live under tests/ but must not run in the normal suite (they would
+# add minutes to every CI leg). --benchmark-disable makes each benched function
+# run once; scripts/benchmark_compare.sh passes --benchmark-only to actually time.
+addopts = "--benchmark-disable"
