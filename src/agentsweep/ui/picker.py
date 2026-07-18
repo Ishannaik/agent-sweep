@@ -8,6 +8,8 @@ They return plain data (strings / lists) and never call the pipeline.
 """
 from __future__ import annotations
 
+from typing import Literal, overload
+
 from rich import box
 from rich.live import Live
 from rich.padding import Padding
@@ -25,6 +27,28 @@ def _check(selected: bool, target: "console") -> str:  # type: ignore[valid-type
     if _encodes(target, "✓"):
         return "✓" if selected else " "
     return "x" if selected else " "
+
+
+@overload
+def _run_menu(
+    title: str,
+    rows: list[tuple[str, str]],
+    *,
+    multi: Literal[False] = False,
+    button_idx: int | None = None,
+    footer: str = "↑↓ move  Enter select  q quit",
+) -> int | None: ...
+
+
+@overload
+def _run_menu(
+    title: str,
+    rows: list[tuple[str, str]],
+    *,
+    multi: Literal[True],
+    button_idx: int | None = None,
+    footer: str = "↑↓ move  Enter select  q quit",
+) -> tuple[set[int], bool] | None: ...
 
 
 def _run_menu(

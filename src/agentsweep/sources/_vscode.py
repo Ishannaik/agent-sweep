@@ -104,7 +104,7 @@ class _VSCodeSqliteSource(Source):
         self,
         path: Path,
         redactions: list[tuple[int, KeyPath, str]],
-    ) -> bytes:
+    ) -> str | bytes:
         return _redact_sqlite_copy(path, redactions, self._sqlite_text_columns)
 
     def sidecars(self, path: Path) -> list[Path]:

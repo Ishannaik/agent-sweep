@@ -4,6 +4,11 @@ from __future__ import annotations
 import os
 import time
 from collections import deque
+from types import TracebackType
+from typing import Literal
+
+from rich.live import Live
+from rich.progress import TaskID
 
 from .console import _encodes, _safe, console
 from ..tips import tip_for
@@ -60,7 +65,12 @@ class _NullScanProgress:
     def __enter__(self) -> "_NullScanProgress":
         return self
 
-    def __exit__(self, *exc) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:
         return False
 
     def advance(self, current: str) -> None:
@@ -102,10 +112,10 @@ class _RichScanProgress:
             auto_refresh=False,
         )
         self._total = total
-        self._task: int | None = None
+        self._task: TaskID | None = None
         self._hits: int = 0
         self._feed: deque[tuple[str, str, str]] = deque(maxlen=_MAX_FEED)
-        self._live: object | None = None  # rich.live.Live
+        self._live: Live | None = None
         self._start_time: float = 0.0
         self._flash_time: float = 0.0  # monotonic ts of the last detection
 
@@ -180,26 +190,36 @@ class _RichScanProgress:
     # ------------------------------------------------------------------ ctx mgr
 
     def __enter__(self) -> "_RichScanProgress":
-        from rich.live import Live
         self._start_time = time.monotonic()
         self._task = self._progress.add_task(
             "scan", total=self._total, current="")
-        self._live = Live(
+        live = Live(
             self._build_renderable(),
             console=console,
             transient=True,
             refresh_per_second=14,
             auto_refresh=True,
         )
-        self._live.__enter__()
+        self._live = live
+        live.__enter__()
         return self
 
-    def __exit__(self, *exc) -> bool:
-        return bool(self._live.__exit__(*exc))
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:
+        if self._live is None:
+            return False
+        self._live.__exit__(exc_type, exc, tb)
+        return False
 
     # ------------------------------------------------------------------ API
 
     def advance(self, current: str) -> None:
+        if self._task is None:
+            return
         self._progress.update(
             self._task, advance=1, current=_safe(console, current))
         if self._live is not None:

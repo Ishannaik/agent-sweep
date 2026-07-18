@@ -22,6 +22,10 @@ class Source(ABC):
     # picker, the scan banner, and the README so users know what's verified.
     experimental: bool = False
 
+    def __init__(self, root: Path | None = None) -> None:
+        if root is not None:
+            self.root = root
+
     @abstractmethod
     def files(self) -> list[Path]:
         """Return every history file to scan under this source's root."""

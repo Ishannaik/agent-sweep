@@ -41,7 +41,7 @@ def _check_updates_interactive() -> None:
     latest, err = check_for_update(timeout=5)
     if err is not None:
         ui.warn_line(f"could not reach PyPI — {err}")
-    elif _version_tuple(latest) > _version_tuple(__version__):
+    elif latest is not None and _version_tuple(latest) > _version_tuple(__version__):
         print(
             f"  agentsweep {latest} is available — run: "
             f"uv tool upgrade agentsweep  (or: pip install --upgrade agentsweep)"

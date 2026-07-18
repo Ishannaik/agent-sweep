@@ -334,26 +334,26 @@ def run_all(args) -> int:
     if as_json:
         for key, source in selected:
             try:
-                files = list(source.iter_files())
+                source_files = list(source.iter_files())
             except Exception:
-                files = []
-            if files:
-                discovered.append((key, source, files))
+                source_files = []
+            if source_files:
+                discovered.append((key, source, source_files))
     else:
         with ui.console.status("") as status:
             for key, source in selected:
                 try:
-                    files: list[Path] = []
+                    discovered_files: list[Path] = []
                     for f in source.iter_files():
-                        files.append(f)
+                        discovered_files.append(f)
                         status.update(
                             f"[dim]Discovering[/] [bold]{key}[/bold]"
-                            f" … [yellow]{len(files):,}[/] file(s)"
+                            f" … [yellow]{len(discovered_files):,}[/] file(s)"
                         )
                 except Exception:
-                    files = []
-                if files:
-                    discovered.append((key, source, files))
+                    discovered_files = []
+                if discovered_files:
+                    discovered.append((key, source, discovered_files))
 
     total_files = sum(len(f) for _, _, f in discovered)
 
@@ -612,7 +612,7 @@ def _scan(source, files, ignores, progress=None):
     det = getattr(progress, "detection", None) if progress is not None else None
 
     def _on_finding(fd: Finding) -> None:
-        if det is not None:
+        if det is not None and fd.file is not None and fd.line is not None:
             det(fd.display, fd.masked, f"{ui.rel(fd.file, source.root)}:{fd.line}")
 
     return _scan_all(source, files, ignores=ignores,

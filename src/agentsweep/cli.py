@@ -117,7 +117,7 @@ def _run_update_check() -> int:
     if err is not None:
         print(f"  warning: could not reach PyPI — {err}", file=sys.stderr)
         return 0
-    if _version_tuple(latest) > _version_tuple(__version__):
+    if latest is not None and _version_tuple(latest) > _version_tuple(__version__):
         print(
             f"  agentsweep {latest} is available — run: "
             f"pip install --upgrade agentsweep"
@@ -339,6 +339,11 @@ def source_completer(prefix: str, **kwargs) -> list[str]:
     return [s for s in SOURCES if s.startswith(prefix)]
 
 
+def _with_source_completer(action: argparse.Action) -> argparse.Action:
+    setattr(action, "completer", source_completer)
+    return action
+
+
 def _get_completion_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="agentsweep",
@@ -353,7 +358,7 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     scan_p = subparsers.add_parser("scan", description="Scan history files.")
     scan_source = scan_p.add_argument("--source", choices=list(SOURCES), default=None,
                                       help="Which agent's history (default: claude-code).")
-    scan_source.completer = source_completer
+    _with_source_completer(scan_source)
     scan_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
     scan_p.add_argument("--all", action="store_true", help="Scan every registered agent source.")
     scan_p.add_argument("--detected", action="store_true", help="Only scan sources whose history root exists.")
@@ -369,7 +374,7 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     fix_p = subparsers.add_parser("fix", description="Redact secrets in history.")
     fix_source = fix_p.add_argument("--source", choices=list(SOURCES), default=None,
                                      help="Which agent's history (default: claude-code).")
-    fix_source.completer = source_completer
+    _with_source_completer(fix_source)
     fix_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
     fix_p.add_argument("--all", action="store_true", help="Redact every agent source with findings, one at a time.")
     fix_p.add_argument("--detected", action="store_true", help="With --all, only sources whose history root exists.")
@@ -385,14 +390,14 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     undo_p = subparsers.add_parser("undo", description="Restore backups.")
     undo_source = undo_p.add_argument("--source", choices=list(SOURCES), default="claude-code",
                                        help="Which agent's history.")
-    undo_source.completer = source_completer
+    _with_source_completer(undo_source)
     undo_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
 
     # purge
     purge_p = subparsers.add_parser("purge", description="Delete backups.")
     purge_source = purge_p.add_argument("--source", choices=list(SOURCES), default="claude-code",
-                                         help="Which agent's history.")
-    purge_source.completer = source_completer
+                                          help="Which agent's history.")
+    _with_source_completer(purge_source)
     purge_p.add_argument("--root", type=Path, help="Override the source's default root directory.")
     purge_p.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
 
