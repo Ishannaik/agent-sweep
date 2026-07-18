@@ -18,6 +18,20 @@ from ._base import KeyPath, _line_ending, _set_by_path, _walk_json
 # SQLite helpers
 # ---------------------------------------------------------------------------
 
+def _quote_ident(name: str) -> str:
+    """Quote a SQLite identifier (table/column name) per the SQL standard.
+
+    Table/column names here are never user-supplied query input -- they come
+    either from a fixed Python-literal whitelist or from introspecting the
+    very same file being redacted (sqlite_master / PRAGMA table_info). But an
+    identifier can itself legally contain a double quote (SQLite lets you
+    CREATE TABLE "foo""bar"), so bare f-string interpolation isn't safe
+    against a maliciously-crafted db file. Doubling embedded quotes and
+    wrapping in "..." is SQLite's own escaping rule for identifiers.
+    """
+    return '"' + name.replace('"', '""') + '"'
+
+
 def sqlite_sidecars(db: Path) -> list[Path]:
     """The `-wal` / `-shm` files SQLite keeps beside `db`, if they exist.
 
@@ -108,7 +122,8 @@ def _fts5_optimize(con: sqlite3.Connection) -> None:
         "AND lower(sql) NOT LIKE '%using fts5vocab%'"
     ).fetchall()
     for (name,) in rows:
-        con.execute(f'INSERT INTO "{name}"("{name}") VALUES (\'optimize\')')
+        q = _quote_ident(name)
+        con.execute(f"INSERT INTO {q}({q}) VALUES ('optimize')")  # nosec B608 # q is SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
 
 
 def _apply_sqlite_updates(
@@ -124,15 +139,16 @@ def _apply_sqlite_updates(
         table, rowid, col = kp[0], kp[1], kp[2]
         if (table, col) not in allowed:
             continue
+        q_table, q_col = _quote_ident(table), _quote_ident(col)
         sub_kp = kp[3:]
         if not sub_kp:
             con.execute(
-                f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608
+                f"UPDATE {q_table} SET {q_col} = ? WHERE rowid = ?",  # nosec B608 # q_table/q_col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                 (new_val, rowid),
             )
         else:
             cur = con.execute(
-                f"SELECT {col} FROM {table} WHERE rowid = ?",  # noqa: S608
+                f"SELECT {q_col} FROM {q_table} WHERE rowid = ?",  # nosec B608 # q_table/q_col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                 (rowid,),
             )
             row = cur.fetchone()
@@ -144,7 +160,7 @@ def _apply_sqlite_updates(
                 continue
             _set_by_path(obj, sub_kp, new_val)
             con.execute(
-                f"UPDATE {table} SET {col} = ? WHERE rowid = ?",  # noqa: S608
+                f"UPDATE {q_table} SET {q_col} = ? WHERE rowid = ?",  # nosec B608 # q_table/q_col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                 (json.dumps(obj, ensure_ascii=False), rowid),
             )
 

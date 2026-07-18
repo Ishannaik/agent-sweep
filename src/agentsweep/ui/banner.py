@@ -204,7 +204,7 @@ def _animate_banner(lines: list[str], styles: list[str], tagline: str) -> None:
     width = max(len(line) for line in lines)
     bar = "█" if _encodes(console, "█") else "#"
     pool = _noise_pool()
-    rng = random.Random()
+    rng = random.Random()  # nosec B311 # visual noise timing for a cinematic banner, not security-sensitive
     with Live(console=console, auto_refresh=False, transient=False) as live:
         def frame(renderable: Group, hold: float) -> None:
             live.update(renderable, refresh=True)

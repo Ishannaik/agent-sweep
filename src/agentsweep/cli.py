@@ -43,7 +43,7 @@ def check_for_update(timeout: int = 2) -> tuple[str | None, str | None]:
     (None, error_string) so the caller can decide whether to surface it.
     """
     try:
-        with urllib.request.urlopen(_PYPI_URL, timeout=timeout) as resp:
+        with urllib.request.urlopen(_PYPI_URL, timeout=timeout) as resp:  # nosec B310 # _PYPI_URL is a hardcoded https:// constant, never user input
             data = json.loads(resp.read())
         return data["info"]["version"], None
     except Exception as exc:  # network error, JSON error, key error, …
@@ -88,10 +88,10 @@ def _background_update_notice(args: argparse.Namespace) -> None:
 
     def _fetch() -> None:
         try:
-            with urllib.request.urlopen(_PYPI_URL, timeout=1.5) as resp:
+            with urllib.request.urlopen(_PYPI_URL, timeout=1.5) as resp:  # nosec B310 # _PYPI_URL is a hardcoded https:// constant, never user input
                 data = json.loads(resp.read())
             result[0] = data["info"]["version"]
-        except Exception:
+        except Exception:  # nosec B110 # best-effort background version check; any network/parse error must not crash the main flow
             pass
         finally:
             done.set()
@@ -435,7 +435,7 @@ def _run_completion(rest: list[str]) -> int:
         print("  Install it using: pip install argcomplete", file=sys.stderr)
         return 2
 
-    print(shellcode(["agentsweep", "asweep"], shell=args.shell))
+    print(shellcode(["agentsweep", "asweep"], shell=args.shell))  # nosec B604 # argcomplete.shellcode's own "target shell" kwarg (choices=bash/zsh/fish/powershell), not subprocess shell=True
     return 0
 
 

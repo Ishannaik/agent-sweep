@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404 # used only to list running processes for is_agent_running(); no shell, no untrusted input
 import sys
 
 
@@ -268,14 +268,14 @@ def is_claude_code_running() -> tuple[bool, str]:
 def _list_process_cmdlines() -> list[str] | None:
     try:
         if sys.platform == "win32":
-            out = subprocess.check_output(
+            out = subprocess.check_output(  # nosec B603 B607 # fixed argv, no shell, timeout-bounded; tasklist resolved via PATH same as any local dev tool
                 ["tasklist", "/FO", "CSV", "/NH"],
                 text=True,
                 timeout=5,
                 stderr=subprocess.DEVNULL,
             )
         else:
-            out = subprocess.check_output(
+            out = subprocess.check_output(  # nosec B603 B607 # fixed argv, no shell, timeout-bounded; ps resolved via PATH same as any local dev tool
                 ["ps", "-eo", "args="],
                 text=True,
                 timeout=5,

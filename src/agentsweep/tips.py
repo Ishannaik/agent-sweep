@@ -25,7 +25,7 @@ TIPS: list[str] = [
 
 def random_tip() -> str:
     """Return a randomly selected tip string (no 'Tip:' prefix)."""
-    return random.choice(TIPS)
+    return random.choice(TIPS)  # nosec B311 # cosmetic tip selection, not security-sensitive
 
 
 def tip_for(n: int) -> str:

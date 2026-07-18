@@ -21,6 +21,7 @@ from ._helpers import (
     _iter_json_file_strings,
     _iter_plaintext_lines,
     _iter_project_histories,
+    _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
@@ -210,7 +211,7 @@ class OpenCodeSource(Source):
                 # silently eating it is exactly what hid the schema drift of
                 # issue #14 (scan reported CLEAN while missing part.data).
                 cur = con.execute(
-                    f"SELECT rowid, {col} FROM {table}"  # noqa: S608
+                    f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}"  # nosec B608 # table/col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                 )
                 for rowid, value in cur:
                     if not isinstance(value, str) or not value:

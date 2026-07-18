@@ -95,3 +95,9 @@ fail_under = 74
 # add minutes to every CI leg). --benchmark-disable makes each benched function
 # run once; scripts/benchmark_compare.sh passes --benchmark-only to actually time.
 addopts = "--benchmark-disable"
+
+[tool.bandit]
+# CI already scopes the scan to src/ (bandit -r src/); this excludes tests/
+# too for ad-hoc local runs (bandit -r .), since test fixtures are
+# intentionally secret-shaped synthetic data, not a security surface.
+exclude_dirs = ["tests"]

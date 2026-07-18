@@ -72,6 +72,16 @@ pytest -v
 
 The test suite is fully hermetic — it never touches `~/.claude/` or any real history directory. Every test uses `tmp_path`. If you add a test that reaches outside `tmp_path`, the PR will be rejected.
 
+## Security linting
+
+CI runs [bandit](https://bandit.readthedocs.io/) (`bandit -r src/`) on every PR as a SAST gate — fitting for a tool that redacts secrets and rewrites users' files. Run it locally before pushing:
+
+```
+bandit -r src/ -q
+```
+
+If a finding is a false positive or an accepted risk, annotate it inline with `# nosec BXXX # one-line reason` rather than disabling the check globally — see the existing annotations in `preflight.py`, `cli.py`, and `sources/_helpers.py` for examples. Because bandit's own comment parser treats everything after `nosec` up to the next `#` as a list of test IDs, always put the reason after a second `#` (`# nosec B608 # reason`, not `# nosec B608 — reason`) or it will misparse your prose as test-id tokens.
+
 ## Safety-first review
 
 Any PR that touches `redactor.py` or the write path must:

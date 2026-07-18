@@ -17,6 +17,7 @@ from ._base import JsonlSource, KeyPath, Source
 from ._helpers import (
     _apply_jsonl_redactions,
     _iter_jsonl_strings,
+    _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
@@ -321,7 +322,7 @@ class LlmSource(Source):
                 # PRAGMA table_info, so a bad-column OperationalError here would
                 # be a real bug, not an expected miss — let it surface.
                 for rowid, value in con.execute(
-                    f"SELECT rowid, {col} FROM {table}"  # noqa: S608
+                    f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}"  # nosec B608 # table/col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
                 ):
                     if isinstance(value, str) and value:
                         yield (max(rowid, 1), [table, rowid, col], value)
@@ -344,7 +345,7 @@ class LlmSource(Source):
         for table, cols in self._KNOWN_COLUMNS.items():
             if table not in tables:
                 continue
-            actual = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+            actual = {row[1] for row in con.execute(f"PRAGMA table_info({_quote_ident(table)})")}
             present = [c for c in cols if c in actual]
             if not present:
                 raise RuntimeError(

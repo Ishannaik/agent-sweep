@@ -55,3 +55,22 @@ jobs:
 
       - name: Run mypy
         run: python -m mypy src/
+
+  security:
+    name: Bandit SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run bandit
+        run: python -m bandit -r src/ -q

@@ -166,7 +166,7 @@ def _open_repo() -> None:
     try:
         if webbrowser.open(__repo__):
             ui.console.print("  [dim]opened the repo in your browser...[/]")
-    except Exception:
+    except Exception:  # nosec B110 # best-effort browser launch on a hardcoded repo URL; headless/no-display environments must not crash
         pass
 
 

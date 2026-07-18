@@ -465,7 +465,7 @@ agentsweep runs against your most sensitive data, so a malicious contribution wo
 - **Pulls in an unvetted dependency** or repins an existing one to an unexpected source/version.
 - **Edits CI/workflows to exfiltrate secrets or tokens** (e.g. printing `GITHUB_TOKEN`, adding a step that phones home, or touching the PyPI Trusted-Publisher release path).
 
-Every PR also runs GitGuardian in CI, and workflows from first-time contributors require maintainer approval before they execute. Maintainers merge only after this review — a green checkmark alone is never sufficient.
+Every PR also runs GitGuardian and a [bandit](https://bandit.readthedocs.io/) SAST scan in CI (see [Security linting](CONTRIBUTING.md#security-linting)), and workflows from first-time contributors require maintainer approval before they execute. Maintainers merge only after this review — a green checkmark alone is never sufficient.
 
 ## Contributors
 

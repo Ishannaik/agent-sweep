@@ -305,7 +305,7 @@ def run_all(args) -> int:
     for key, cls in SOURCES.items():
         try:
             src = cls()
-        except Exception:
+        except Exception:  # nosec B112 # skip a source whose constructor fails (e.g. unresolvable home dir) rather than aborting scan --all for every other source
             continue
         if detected_only and not src.is_detected():
             continue

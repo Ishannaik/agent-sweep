@@ -45,6 +45,7 @@ from ._helpers import (
     _iter_jsonl_strings,
     _iter_plaintext_lines,
     _iter_project_histories,
+    _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
@@ -80,7 +81,7 @@ def _all_table_columns(con: sqlite3.Connection) -> list[tuple[str, str]]:
         return pairs
     for table in tables:
         try:
-            cols = con.execute(f'PRAGMA table_info("{table}")').fetchall()
+            cols = con.execute(f"PRAGMA table_info({_quote_ident(table)})").fetchall()
         except sqlite3.Error:
             continue
         for col in cols:
@@ -96,7 +97,8 @@ def _iter_sqlite_all_columns(path: Path, columns_fn) -> Iterator[tuple[int, KeyP
     try:
         for table, col in columns_fn(con):
             try:
-                cur = con.execute(f'SELECT rowid, "{col}" FROM "{table}"')
+                cur = con.execute(
+                    f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}")  # nosec B608 # table/col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
             except sqlite3.Error:
                 continue  # WITHOUT ROWID tables, virtual tables, etc.
             for rowid, value in cur:
