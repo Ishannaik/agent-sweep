@@ -433,6 +433,37 @@ They solve different problems, and they compose — agentsweep is not a replacem
 
 **Rule of thumb:** scan your codebase and CI with gitleaks or trufflehog; scan the agent-history surface they don't touch with agentsweep. Run both — they overlap by design and cover each other's blind spots.
 
+## Troubleshooting — “no history found” / permissions / paths
+
+If `list-sources` shows a source as *not detected* or a scan finds nothing,
+work through this before assuming there are no secrets:
+
+1. **Confirm the source is actually installed and detected.**
+   ```bash
+   agentsweep list-sources
+   ```
+   A missing tool is fine; a tool you use daily should not be missing.
+
+2. **Check a non-default profile.** Claude Code (and some other agents) can
+   store history outside the default config dir. Point at the profile you
+   actually use:
+   ```bash
+   CLAUDE_CONFIG_DIR=~/.claude-work agentsweep list-sources --detected
+   agentsweep --root ~/.claude-work scan
+   ```
+   (Other sources have their own env overrides — see the source table.)
+
+3. **Point `--root` at a specific directory** to isolate whether default root
+   resolution is the problem:
+   ```bash
+   agentsweep --root /path/to/history scan
+   ```
+
+4. **Tell permission errors apart from genuinely empty history.**
+   A permission-denied read is logged as an unreadable file/source in the scan
+   output (and skipped); an empty history just reports zero findings. Run with
+   `--verbose` to see which files were opened and which failed.
+
 ## FAQ
 
 **How do I remove secrets (API keys) from my Claude Code history?**
