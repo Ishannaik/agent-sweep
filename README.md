@@ -449,20 +449,15 @@ work through this before assuming there are no secrets:
    actually use:
    ```bash
    CLAUDE_CONFIG_DIR=~/.claude-work agentsweep list-sources --detected
-   agentsweep --root ~/.claude-work scan
+   agentsweep scan --root ~/.claude-work/projects
    ```
    (Other sources have their own env overrides — see the source table.)
 
 3. **Point `--root` at a specific directory** to isolate whether default root
    resolution is the problem:
    ```bash
-   agentsweep --root /path/to/history scan
+   agentsweep scan --root /path/to/history
    ```
-
-4. **Tell permission errors apart from genuinely empty history.**
-   A permission-denied read is logged as an unreadable file/source in the scan
-   output (and skipped); an empty history just reports zero findings. Run with
-   `--verbose` to see which files were opened and which failed.
 
 ## FAQ
 
