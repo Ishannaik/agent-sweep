@@ -113,7 +113,13 @@ def run(args, *, _findings_out: list | None = None,
         if as_sarif:
             return _emit_sarif(_json_payload(found_by_file, source),
                                output, suppressed)
-        return _output_json(found_by_file, source, output, suppressed)
+        return _output_json(
+            found_by_file,
+            source,
+            output,
+            suppressed,
+            report=getattr(args, "report", False),
+        )
 
     ui.stage(1, "ok", "DISCOVER", source.name, f"{len(files)} file(s)", source.root)
 
@@ -297,6 +303,7 @@ def run_all(args) -> int:
     output: Path | None = _opt(args, "output")
     as_sarif = _opt(args, "format") == "sarif"
     as_json = bool(_opt(args, "json", False)) or as_sarif
+    report = getattr(args, "report", False)
     detected_only = bool(_opt(args, "detected", False))
     no_ignore = bool(_opt(args, "no_ignore", False))
 
@@ -544,8 +551,11 @@ def run_all(args) -> int:
 
     if as_json:
         payload: list[dict] = []
+        blast_radius: list[dict] = []
         for _key, source, _files, found_by_file, _sc, _sup, _tr in per_source:
             payload.extend(_json_payload(found_by_file, source))
+            if report:
+                blast_radius.extend(_blast_radius_payload(found_by_file))
         # Match single-source run(): scan-budget cap is reported, never silent.
         if total_truncated:
             print(
@@ -557,7 +567,18 @@ def run_all(args) -> int:
                                      as_json=True)
         if as_sarif:
             return _emit_sarif(payload, output, total_suppressed)
+        if report:
+            return _emit_json_payload(
+                {
+                    "findings": payload,
+                    "blast_radius": blast_radius,
+                },
+                output,
+                total_suppressed,
+            )
         return _emit_json_payload(payload, output, total_suppressed)
+    
+   
 
     ui.stage(2, "ok", "SCAN", f"{total_files} file(s)",
              f"{total_strings} string(s)", f"{elapsed:.1f}s")
@@ -893,6 +914,29 @@ def _rotation_items_multi(
         for rule in rules
     ]
 
+def _group_findings(found_by_file: dict) -> dict:
+    """Group findings by masked secret for blast-radius reporting."""
+
+    groups = {}
+
+    for path, items in found_by_file.items():
+        for line_num, _kp, _val, finding in items:
+            key = finding.masked
+
+            if key not in groups:
+                groups[key] = {
+                    "rule": finding.rule,
+                    "display": finding.display,
+                    "masked": finding.masked,
+                    "locations": [],
+                }
+
+            groups[key]["locations"].append({
+                "file": str(path),
+                "line": line_num,
+            })
+
+    return groups
 
 def _json_payload(found_by_file: dict, source: Source) -> list[dict]:
     payload = []
@@ -918,6 +962,22 @@ SARIF_SCHEMA = (
 )
 SARIF_VERSION = "2.1.0"
 _PROJECT_URL = "https://github.com/Ishannaik/agent-sweep"
+
+def _blast_radius_payload(found_by_file: dict) -> list[dict]:
+    groups = _group_findings(found_by_file)
+    report = []
+
+    for group in groups.values():
+        report.append({
+            "provider": group["display"],
+            "rule": group["rule"],
+            "masked": group["masked"],
+            "occurrences": len(group["locations"]),
+            "locations": group["locations"],
+            "rotation": ROTATION_GUIDANCE.get(group["rule"]),
+        })
+
+    return report
 
 
 def _sarif_document(payload: list[dict]) -> dict:
@@ -1004,38 +1064,63 @@ def _emit_sarif(payload: list[dict], output: Path | None,
     return code
 
 
-def _emit_json_payload(payload: list[dict], output: Path | None,
+def _emit_json_payload(payload, output: Path | None,
                        suppressed: int) -> int:
     """Shared JSON emission for single- and multi-source scans."""
-    code = 0 if not payload else 1
+
+    findings = payload["findings"] if isinstance(payload, dict) else payload
+    count = len(findings)
+    code = 0 if count == 0 else 1
 
     if output is not None:
         _write_text(output, json.dumps(payload, indent=2) + "\n")
-        print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
+        print(f"{count} finding(s) written to {output}", file=sys.stderr)
         return code
 
-    flood = (len(payload) > JSON_FLOOD_LIMIT
-             and getattr(sys.stdout, "isatty", lambda: False)())
+    flood = (
+        count > JSON_FLOOD_LIMIT
+        and getattr(sys.stdout, "isatty", lambda: False)()
+    )
+
     if flood:
         target = Path.cwd() / DEFAULT_JSON_NAME
         _write_text(target, json.dumps(payload, indent=2) + "\n")
-        print(f"{len(payload)} findings — too many to print; written to "
-              f"{target}\n  view with:  cat {DEFAULT_JSON_NAME} | "
-              f"python -m json.tool   (or open it)", file=sys.stderr)
+        print(
+            f"{count} findings — too many to print; written to {target}\n"
+            f"  view with: cat {DEFAULT_JSON_NAME} | python -m json.tool",
+            file=sys.stderr,
+        )
         return code
 
     print(json.dumps(payload, indent=2))
+
     if suppressed:
         print(f"({suppressed} suppressed by .agentsweepignore)", file=sys.stderr)
+
     return code
 
+def _output_json(
+    found_by_file: dict,
+    source: Source,
+    output: Path | None,
+    suppressed: int,
+    report: bool = False,
+) -> int:
+    """Emit JSON output, optionally including a blast-radius report."""
 
-def _output_json(found_by_file: dict, source: Source, output: Path | None,
-                 suppressed: int) -> int:
-    """Emit JSON. With -o (or a flood-risk tty) write to a file and keep
-    stdout/scrollback clean; otherwise print to stdout for piping."""
-    return _emit_json_payload(_json_payload(found_by_file, source),
-                              output, suppressed)
+    findings = _json_payload(found_by_file, source)
+
+    if report:
+        return _emit_json_payload(
+            {
+                "findings": findings,
+                "blast_radius": _blast_radius_payload(found_by_file),
+            },
+            output,
+            suppressed,
+        )
+
+    return _emit_json_payload(findings, output, suppressed)
 
 
 def _show_findings(found_by_file: dict, source: Source,

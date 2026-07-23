@@ -294,6 +294,11 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         help="Emit findings as JSON to stdout (no banner/styling).",
     )
     ap.add_argument(
+        "--report",
+        action="store_true",
+        help="Include blast-radius report in JSON output (implies --json).",
+    )
+    ap.add_argument(
         "--no-color",
         action="store_true",
         help="Disable ANSI colors/styling in human output "
@@ -333,6 +338,14 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
             ap.error("cannot use --json with --format sarif; pick one output format")
         if args.fix:
             ap.error("--format is a scan output format; not valid with fix")
+
+    if getattr(args, "report", False):
+        if args.fix:
+            ap.error("--report is a scan output option; not valid with fix")
+        if args.format is not None:
+            ap.error("cannot use --report with --format sarif; blast-radius is JSON-only")
+        # Contract: --report always emits machine JSON (with blast_radius).
+        args.json = True
 
     if args.all:
         if args.source is not None:
@@ -439,6 +452,11 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     )
     scan_p.add_argument(
         "--json", action="store_true", help="Emit findings as JSON to stdout."
+    )
+    scan_p.add_argument(
+        "--report",
+        action="store_true",
+        help="Include blast-radius report in JSON output (implies --json).",
     )
     scan_p.add_argument(
         "--no-color",

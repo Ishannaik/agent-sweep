@@ -324,6 +324,69 @@ def test_json_output_file_fingerprint_format(tmp_path, capsys):
 
 
 # ------------------------------------------------------------------ edge cases
+def test_group_findings_groups_same_masked_secret():
+    found_by_file = {
+      "a.json": [
+    (10, None, None, type("F", (), {
+        "rule": "openai",
+        "display": "OpenAI",
+        "masked": "sk-****1234",
+    })()),
+    (15, None, None, type("F", (), {
+        "rule": "openai",
+        "display": "OpenAI",
+        "masked": "sk-****1234",
+    })()),
+],
+        "b.json": [
+            (20, None, None, type("F", (), {
+                "rule": "openai",
+                "display": "OpenAI",
+                "masked": "sk-****1234",
+            })())
+        ],
+    }
+
+    groups = pipeline._group_findings(found_by_file)
+
+    assert len(groups) == 1
+
+    group = groups["sk-****1234"]
+
+    assert group["rule"] == "openai"
+    assert len(group["locations"]) == 3
+
+def test_blast_radius_payload_never_contains_plaintext_secret():
+    raw_secret = "sk-live-super-secret-value"
+
+    finding = type(
+        "F",
+        (),
+        {
+            "rule": "openai",
+            "display": "OpenAI",
+            "masked": "sk-****1234",
+        },
+    )()
+
+    found_by_file = {
+        "a.json": [
+            (10, None, raw_secret, finding),
+            (15, None, raw_secret, finding),
+        ],
+        "b.json": [
+            (20, None, raw_secret, finding),
+        ],
+    }
+
+    report = pipeline._blast_radius_payload(found_by_file)
+    blob = json.dumps(report)
+
+    assert raw_secret not in blob
+    assert "sk-****1234" in blob
+    assert report[0]["occurrences"] == 3
+
+
 
 def test_output_file_parent_does_not_exist_does_not_crash(tmp_path, capsys):
     """If -o points to a non-existent parent dir, _write_text logs to stderr
@@ -374,3 +437,67 @@ def test_scan_verb_json_output_exit_code(tmp_path, capsys):
     clean.mkdir()
     (clean / "s.jsonl").write_text('{"msg":"nothing"}\n', encoding="utf-8")
     assert main(["scan", "--root", str(clean), "--json"]) == 0
+
+
+def test_report_implies_json_and_includes_blast_radius(tmp_path, capsys):
+    """scan --report (no --json) still emits JSON with blast_radius."""
+    root = tmp_path / "hist"
+    root.mkdir()
+    # Use a clean tree so exit code is 0; shape still includes blast_radius.
+    (root / "s.jsonl").write_text('{"msg":"nothing secret here"}\n', encoding="utf-8")
+    code = main(["scan", "--root", str(root), "--report"])
+    assert code == 0
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert isinstance(data, dict)
+    assert "findings" in data
+    assert "blast_radius" in data
+    assert data["blast_radius"] == []
+
+
+def test_report_with_findings_groups_masked(tmp_path, capsys):
+    """blast_radius groups by masked value when --report is set."""
+    # Two files, same AWS key → one blast-radius group with occurrences >= 2.
+    root = tmp_path / "hist"
+    root.mkdir()
+    line = (
+        '{"type":"user","message":{"content":[{"type":"text",'
+        f'"text":"key={AWS_KEY}"}}]}}}}\n'
+    )
+    (root / "a.jsonl").write_text(line, encoding="utf-8")
+    (root / "b.jsonl").write_text(line, encoding="utf-8")
+    code = main(["scan", "--root", str(root), "--report"])
+    assert code == 1
+    data = json.loads(capsys.readouterr().out)
+    assert "blast_radius" in data
+    blob = json.dumps(data)
+    assert AWS_KEY not in blob
+    assert data["blast_radius"], "expected at least one blast-radius group"
+    assert data["blast_radius"][0]["occurrences"] >= 2
+
+
+def test_report_rejects_sarif(tmp_path):
+    root = tmp_path / "hist"
+    root.mkdir()
+    (root / "s.jsonl").write_text('{"msg":"x"}\n', encoding="utf-8")
+    try:
+        main(["scan", "--root", str(root), "--report", "--format", "sarif"])
+        raised = False
+    except SystemExit as e:
+        raised = True
+        assert e.code == 2
+    assert raised, "expected argparse error exit 2"
+
+
+def test_report_rejects_fix(tmp_path):
+    root = tmp_path / "hist"
+    root.mkdir()
+    (root / "s.jsonl").write_text('{"msg":"x"}\n', encoding="utf-8")
+    try:
+        main(["fix", "--root", str(root), "--report", "--force", "--allow-production", "--no-backup"])
+        raised = False
+    except SystemExit as e:
+        raised = True
+        assert e.code == 2
+    assert raised
+
