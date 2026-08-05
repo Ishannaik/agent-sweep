@@ -150,3 +150,18 @@ other application data is read by these experiments.
   [`e26_realistic_512m_final.json`](artifacts/benchmarks/e26_realistic_512m_final.json).
 - Decision: both required performance gates are met. Full tables and
   reproduction commands are in [RE2 benchmark results](docs/RE2_BENCHMARK_RESULTS.md).
+
+## E27 — forced-stdlib main-branch regression control
+
+- Hypothesis: adapter dispatch must not materially slow a user who forces the
+  stdlib engine (or cannot install the optional extra).
+- Method: a temporary clean snapshot of baseline `9ce11ef` and the current
+  branch both ran `CodexSource.files → pipeline._scan_all` against the same
+  16 MiB CPU-heavy synthetic corpus with eight workers. After two warmups per
+  version, nine child-process samples per version were interleaved in a fixed
+  order.
+- Result: baseline median 1.9114 s; current forced-stdlib median 1.9138 s;
+  current relative change −0.13%. Both runs scanned 40 strings, returned zero
+  findings, and matched finding hash `4f53cda…02b945`.
+- Raw data: [`e27_stdlib_main_baseline_16m.json`](artifacts/benchmarks/e27_stdlib_main_baseline_16m.json).
+- Decision: retained; the control is within the required 3% stdlib bound.

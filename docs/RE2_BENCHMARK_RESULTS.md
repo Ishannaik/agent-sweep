@@ -93,6 +93,13 @@ Every measured sample has a single stable finding hash. The raw files are
 [`e20_anchor_heavy_16m_final.json`](../artifacts/benchmarks/e20_anchor_heavy_16m_final.json),
 and [`e21_adversarial_16m_final.json`](../artifacts/benchmarks/e21_adversarial_16m_final.json).
 
+The forced-stdlib control was also compared directly with the pre-Issue-90
+`main` commit on the same 16 MiB CPU corpus: 2 warmups and 9 interleaved trials
+per version gave 1.9114 s for `main` and 1.9138 s for current forced stdlib,
+or **−0.13%** (well inside the 3% regression bound). Both produced zero
+findings and the same hash. Raw samples are in
+[`e27_stdlib_main_baseline_16m.json`](../artifacts/benchmarks/e27_stdlib_main_baseline_16m.json).
+
 ## Soak check
 
 `auto`, 8 workers, and the 16 MiB realistic corpus completed 90 consecutive

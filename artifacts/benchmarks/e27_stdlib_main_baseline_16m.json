@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "purpose": "Forced-stdlib regression control against the pre-Issue-90 main branch",
+  "baseline_commit": "9ce11ef8331f6a7021dfb06bf8f046fa426fbbf6",
+  "method": {
+    "path": "CodexSource.files -> pipeline._scan_all",
+    "workers": 8,
+    "warmups_per_code_version": 2,
+    "trials_per_code_version": 9,
+    "interleaved_order": [
+      "current-stdlib",
+      "main",
+      "main",
+      "current-stdlib",
+      "main",
+      "current-stdlib",
+      "current-stdlib",
+      "main",
+      "main",
+      "current-stdlib",
+      "current-stdlib",
+      "main",
+      "current-stdlib",
+      "main",
+      "main",
+      "current-stdlib",
+      "current-stdlib",
+      "main"
+    ]
+  },
+  "corpus": {
+    "name": "few_large_strings",
+    "generator_version": 1,
+    "seed": 42,
+    "actual_bytes": 17001885,
+    "files": 20,
+    "strings": 40,
+    "expected_findings": 0,
+    "expected_finding_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "corpus_sha256": "9a82168ccaf6206e83a2590629eee067896d55378b7afccfea69fff86dfa005a"
+  },
+  "samples_seconds": {
+    "main": [
+      1.9082782919867896,
+      1.9113113330095075,
+      1.9113534999778494,
+      1.913664250052534,
+      1.9116530829924159,
+      1.9144426669809036,
+      1.9116487499559298,
+      1.9110211249790154,
+      1.9106992919696495
+    ],
+    "current_forced_stdlib": [
+      1.915430458029732,
+      1.9102456660475582,
+      1.9156354590086266,
+      1.9102044579922222,
+      1.9153751250123605,
+      1.9133479589945637,
+      1.9172677079914138,
+      1.9137910829740576,
+      1.9116722919861786
+    ]
+  },
+  "main_median_seconds": 1.9113534999778494,
+  "current_forced_stdlib_median_seconds": 1.9137910829740576,
+  "current_vs_main_percent": -0.12736933607299106,
+  "finding_hashes_equal": true,
+  "exit_status": 0
+}
