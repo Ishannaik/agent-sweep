@@ -20,6 +20,12 @@ snapshots, corpus hashes, and finding hashes are committed under
 - Formal matrices use isolated child processes, two warmups and nine measured
   trials per configuration. Configurations are randomly interleaved with a
   fixed seed; no best-result selection is used.
+- Median child-process startup was 50.6 ms (`stdlib`) versus 65.1 ms (`auto`)
+  on CPU-heavy input, and 47.3 ms versus 61.7 ms on realistic input: a
+  14–15 ms RE2 import/registry cost, within the 100 ms target. The default
+  no-RE2 path was separately tested as a full fallback.
+- The committed raw result files total 1.4 MiB; generated corpora are not
+  committed.
 
 These measurements describe this machine and dependency set, not all CPUs or
 operating systems.
@@ -66,6 +72,9 @@ At eight workers, auto is +177.07% over stdlib (95% CI
 [+175.66%, +179.15%]) and reaches 165.8% median process CPU utilization,
 versus stdlib's 100.4%. See
 [`e15_cpu_heavy_16m_final.json`](../artifacts/benchmarks/e15_cpu_heavy_16m_final.json).
+That is 19.5% parallel efficiency for auto at eight workers, versus 12.5% for
+stdlib. The remaining work is Python-side JSON traversal, BIP-39, finding
+construction/deduplication, and the intentionally retained fallback rules.
 
 ## Regression checks (16 MiB, 8 workers)
 
