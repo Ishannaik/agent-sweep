@@ -30,7 +30,7 @@
 
 > **Experimental sources** (Warp, Crush, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe: a wrong path finds nothing. They may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
 
-**201 detection rules:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
+**202 regex rules + BIP-39 detector:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, JWT, PEM keys, DB URLs, seed phrases, and [many more](#whats-detected)
 
 **Alpha:** every destructive step is gated, backed up, and reversible with one command
 
@@ -73,7 +73,7 @@ agentsweep runs a fixed 5-stage pipeline. `scan` stops after stage 3; `fix` cont
 
 ```mermaid
 flowchart LR
-    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n201 regex rules + BIP-39")
+    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n202 regex rules + BIP-39")
     B --> C{"secrets\nfound?"}
     C -- "none" --> D("✅ CLEAN\nexit 0")
     C -- "found" --> E("📋 FINDINGS\nshow report\nexit 1")
@@ -103,6 +103,24 @@ uv tool install agentsweep      # install
 uv tool upgrade agentsweep      # update
 uvx agentsweep@latest           # or run once without installing
 ```
+
+### Optional native acceleration
+
+The default install is portable and uses Python's built-in `re` engine. On
+platforms with a `google-re2` wheel, install the optional `fast` extra to use
+the mixed engine:
+
+```bash
+uv tool install 'agentsweep[fast]'
+# or, in a virtual environment:
+pip install 'agentsweep[fast]'
+```
+
+This is an acceleration only: unsupported patterns, non-ASCII semantic edge
+cases, short strings, and extremely dense matches retain the exact Python
+`re` path. If the optional wheel is unavailable, AgentSweep remains fully
+functional. See [performance notes](docs/PERF.md) and the
+[compatibility audit](docs/RE2_COMPATIBILITY.md).
 
 **pipx:**
 ```bash
