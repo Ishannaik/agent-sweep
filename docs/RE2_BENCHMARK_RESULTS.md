@@ -132,3 +132,7 @@ AGENTSWEEP_REGEX_ENGINE=auto uv run python scripts/run_re2_soak.py \
 
 Use a writable, empty output directory; the scripts refuse to overwrite a
 corpus or result file. Generated corpora are intentionally not committed.
+
+A fresh archive of this commit was also installed with `uv sync --extra dev
+--extra fast` on CPython 3.12: the 37 mixed-engine contract tests passed, and
+both deptry and vulture were clean.
