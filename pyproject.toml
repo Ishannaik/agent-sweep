@@ -116,3 +116,7 @@ exclude_dirs = ["tests"]
 # deptry), not imported by src/. Telling deptry these belong to a dev group
 # avoids false DEP002 "unused dependency" hits on every one of them.
 optional_dependencies_dev_groups = ["dev"]
+# Benchmark helpers import this project and one sibling script at runtime; the
+# audit also reads the parity fixture catalogue. They are local modules, not
+# third-party package dependencies.
+per_rule_ignores = { DEP001 = ["benchmark_regex_engines", "test_regex_engine_parity"], DEP003 = ["agentsweep"] }
