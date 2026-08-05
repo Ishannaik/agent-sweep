@@ -1029,7 +1029,12 @@ def _scan_all(
                 out.setdefault(f, []).append(entry)
                 if on_finding is not None:
                     on_finding(entry[3])
-    return out, strings_scanned, suppressed, truncated
+    # Futures finish in scheduling order, not source-file order.  Rebuild the
+    # result mapping at the aggregation boundary so JSON/SARIF/report output
+    # is stable even though progress callbacks remain responsive.
+    ordered = {f: out[f] for f in files if f in out}
+    ordered_truncated = [f for f in files if f in truncated]
+    return ordered, strings_scanned, suppressed, ordered_truncated
 
 
 def _table_rows(found_by_file: dict) -> list[tuple[str, str, Path, int]]:

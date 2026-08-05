@@ -3,6 +3,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
+
+from .regex_engine import (
+    RE2_MIN_INPUT_CHARS,
+    RulePattern,
+    build_rule_registry,
+    inventory as _engine_inventory,
+    requested_engine_mode,
+    summary as _engine_summary,
+)
 
 
 @dataclass
@@ -17,7 +27,7 @@ class Finding:
     keypath: list = field(default_factory=list)
 
 
-RULES: list[tuple[str, str, re.Pattern]] = [
+_RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ("aws-access-key", "AWS access key",
         re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("aws-session-token", "AWS session token",
@@ -458,6 +468,19 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile('(?i)[\\w.\\-]{0,50}?yandex[\\w.\\- \\t]{0,20}[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(t1\\.[A-Za-z0-9_\\-]{1,100}={0,2}\\.[A-Za-z0-9_\\-]{86}={0,2})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
 ]
 
+# Keep the public registry as real ``re.Pattern`` objects. The CLI, tests, and
+# callers inspect it directly; the scanner alone uses the same-index internal
+# registry whose patterns may be backed by RE2.
+RULES: list[tuple[str, str, re.Pattern[str]]] = _RAW_RULES
+REQUESTED_ENGINE = requested_engine_mode()
+ENGINE_RULES: list[tuple[str, str, RulePattern]] = build_rule_registry(
+    _RAW_RULES, REQUESTED_ENGINE
+)
+ENGINE_INVENTORY = _engine_inventory(ENGINE_RULES)
+ENGINE_SUMMARY = _engine_summary(ENGINE_RULES, REQUESTED_ENGINE)
+EFFECTIVE_ENGINE_MODE = ENGINE_SUMMARY["effective_engine_mode"]
+RE2_RULE_COUNT = cast(int, ENGINE_SUMMARY["re2_rule_count"])
+
 
 def mask(secret: str) -> str:
     if len(secret) <= 12:
@@ -683,12 +706,25 @@ def scan_text(text: str) -> list[Finding]:
     if len(text) > _MAX_SCAN_CHARS:
         text = text[:_MAX_SCAN_CHARS]
     lowered = text.lower()
+    # google-re2 encodes a str once per pattern invocation. For common ASCII
+    # agent histories, share one byte buffer across every selected RE2 rule;
+    # byte and character offsets are identical. Non-ASCII stays on the str
+    # path so Python's original Unicode spans remain exact.
+    encoded = (
+        text.encode()
+        if RE2_RULE_COUNT and len(text) >= RE2_MIN_INPUT_CHARS and text.isascii()
+        else None
+    )
     findings: list[Finding] = []
     # sorted() keeps RULES order so overlap dedupe tie-breaks are unchanged.
     for i in sorted(_triggered_indices(lowered)):
-        rule_id, display, pattern = RULES[i]
-        for m in pattern.finditer(text):
+        rule_id, display, pattern = ENGINE_RULES[i]
+        for m in pattern.finditer(text, encoded):
             val = m.group(0)
+            if isinstance(val, bytes):
+                # ``encoded`` is only used for ASCII text, so byte offsets
+                # equal Python character offsets and ASCII decoding is exact.
+                val = val.decode("ascii")
             findings.append(Finding(
                 rule=rule_id,
                 display=display,
@@ -696,7 +732,7 @@ def scan_text(text: str) -> list[Finding]:
                 masked=mask(val),
                 span=(m.start(), m.end()),
             ))
-    findings.extend(detect_mnemonics(text))
+    findings.extend(detect_mnemonics(text, lowered if text.isascii() else None))
     findings.sort(key=lambda f: f.span[0])
     return _dedupe_overlapping(findings)
 

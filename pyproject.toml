@@ -33,6 +33,13 @@ classifiers = [
 dependencies = ["rich>=13.0", "pyahocorasick>=2.0", "argcomplete>=3.0.0"]
 
 [project.optional-dependencies]
+# Native RE2 is optional: the default install retains the stdlib scanner on
+# platforms without a compatible wheel. Install with `.[fast]` to enable the
+# per-rule mixed engine selected by scanner.py.
+fast = [
+    "google-re2>=1.1.20251105",
+]
+
 # Dev/test + code-quality tooling. These are NEVER shipped in the published
 # wheel (only `dependencies` above are) — install with `pip install -e .[dev]`
 # or `uv sync --extra dev`.
