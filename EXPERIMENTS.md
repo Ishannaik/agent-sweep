@@ -126,9 +126,9 @@ other application data is read by these experiments.
 - Method: 16 MiB realistic corpus, 8 workers, production file path, per-round
   finding hash and current/peak RSS.
 - Result: 30-round auto and stdlib controls had identical findings; both
-  showed allocator warm-up. The 90-round auto run flattened from a 43.1 MiB
-  rise through round 60 to about 3 MiB in its final 30 rounds; wall-time first
-  and final deciles were stable. Raw:
+  showed allocator warm-up. The clean-checkout 90-round auto run rose 45.4 MiB
+  through round 60, then only 0.8 MiB net in its final 30 rounds; wall-time
+  first and final deciles were stable. Raw:
   [`e22_auto_realistic_30.json`](artifacts/soak/e22_auto_realistic_30.json),
   [`e23_stdlib_realistic_30.json`](artifacts/soak/e23_stdlib_realistic_30.json),
   [`e24_auto_realistic_90.json`](artifacts/soak/e24_auto_realistic_90.json).
@@ -137,16 +137,18 @@ other application data is read by these experiments.
 
 ## E25–E26 — standard 512 MiB confirmation
 
-- Method: maximum effective worker count (8), 2 warmups + 9 interleaved
-  measured child processes, unchanged swap usage, and full raw execution order.
+- Method: clean commit `821607645479573281281e4336e02ba9ebae4c40`, maximum
+  effective worker count (8), 2 warmups + 9 interleaved measured child
+  processes, unchanged swap usage, and full raw execution order with seeds
+  20260825 and 20260826.
 - CPU-heavy: 512 MiB, 632 files, zero findings, SHA-256
   `e58f0333fc5d069eee0d3b7eecae1083b9cc80079294f16998a778ecda3ebb2d`.
-  Auto +184.86%, CI [+184.25%, +185.25%]. Raw:
+  Auto +185.33%, CI [+184.97%, +185.99%]. Raw:
   [`e25_cpu_heavy_512m_final.json`](artifacts/benchmarks/e25_cpu_heavy_512m_final.json).
 - Realistic: 512 MiB, 128 files, 9,909 findings (6,606 compatible / 3,303
   fallback), SHA-256
   `9c4719e5ebf9c3ede0f16650356c71853a814a6fba5dba35216023ab3e8e7663`.
-  Auto +20.21%, CI [+20.00%, +20.42%]. Raw:
+  Auto +21.75%, CI [+16.90%, +23.72%]. Raw:
   [`e26_realistic_512m_final.json`](artifacts/benchmarks/e26_realistic_512m_final.json).
 - Decision: both required performance gates are met. Full tables and
   reproduction commands are in [RE2 benchmark results](docs/RE2_BENCHMARK_RESULTS.md).

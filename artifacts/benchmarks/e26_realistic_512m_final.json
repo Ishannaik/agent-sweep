@@ -2,7 +2,7 @@
   "schema_version": 1,
   "environment": {
     "before": {
-      "started_at_utc": "2026-08-05T20:22:56.825321+00:00",
+      "started_at_utc": "2026-08-06T03:26:48.021772+00:00",
       "hardware": [
         "Model Name: MacBook Air",
         "Model Identifier: Mac15,12",
@@ -27,11 +27,11 @@
         "pyahocorasick": "2.3.1",
         "pytest-benchmark": "5.2.3"
       },
-      "git_commit": "9ce11ef8331f6a7021dfb06bf8f046fa426fbbf6",
-      "git_branch": "main",
-      "git_dirty": true,
+      "git_commit": "821607645479573281281e4336e02ba9ebae4c40",
+      "git_branch": "",
+      "git_dirty": false,
       "disk_total_bytes": 494384795648,
-      "disk_free_bytes": 220691128320,
+      "disk_free_bytes": 219070541824,
       "power": "AC",
       "low_power_mode": [
         "lowpowermode         0"
@@ -39,13 +39,13 @@
       "memory_snapshot": {
         "corpus_filesystem": "/",
         "corpus_disk_total_bytes": 494384795648,
-        "corpus_disk_free_bytes": 220691124224,
-        "swap_usage": "total = 1024.00M  used = 266.50M  free = 757.50M  (encrypted)",
-        "memory_pressure": "The system has 17179869184 (1048576 pages with a page size of 16384).\n\nStats: \nPages free: 6255 \nPages purgeable: 17185 \nPages purged: 20628201 \n\nSwap I/O:\nSwapins: 216104 \nSwapouts: 400129 \n\nPage Q counts:\nPages active: 411440 \nPages inactive: 383443 \nPages speculative: 32297 \nPages throttled: 0 \nPages wired down: 113336 \n\nCompressor Stats:\nPages used by compressor: 64768 \nPages decompressed: 93923249 \nPages compressed: 123784550 \n\nFile I/O:\nPageins: 38245186 \nPageouts: 435523 \n\nSystem-wide memory free percentage: 82%"
+        "corpus_disk_free_bytes": 219070533632,
+        "swap_usage": "total = 1024.00M  used = 258.50M  free = 765.50M  (encrypted)",
+        "memory_pressure": "The system has 17179869184 (1048576 pages with a page size of 16384).\n\nStats: \nPages free: 21202 \nPages purgeable: 14614 \nPages purged: 20915944 \n\nSwap I/O:\nSwapins: 216578 \nSwapouts: 400129 \n\nPage Q counts:\nPages active: 284545 \nPages inactive: 338670 \nPages speculative: 162825 \nPages throttled: 0 \nPages wired down: 144978 \n\nCompressor Stats:\nPages used by compressor: 58950 \nPages decompressed: 94023308 \nPages compressed: 123987223 \n\nFile I/O:\nPageins: 38958324 \nPageouts: 439223 \n\nSystem-wide memory free percentage: 79%"
       }
     },
     "after": {
-      "started_at_utc": "2026-08-05T20:58:11.162771+00:00",
+      "started_at_utc": "2026-08-06T04:03:00.818872+00:00",
       "hardware": [
         "Model Name: MacBook Air",
         "Model Identifier: Mac15,12",
@@ -70,11 +70,11 @@
         "pyahocorasick": "2.3.1",
         "pytest-benchmark": "5.2.3"
       },
-      "git_commit": "9ce11ef8331f6a7021dfb06bf8f046fa426fbbf6",
-      "git_branch": "main",
-      "git_dirty": true,
+      "git_commit": "821607645479573281281e4336e02ba9ebae4c40",
+      "git_branch": "",
+      "git_dirty": false,
       "disk_total_bytes": 494384795648,
-      "disk_free_bytes": 220717412352,
+      "disk_free_bytes": 219895738368,
       "power": "AC",
       "low_power_mode": [
         "lowpowermode         0"
@@ -82,9 +82,9 @@
       "memory_snapshot": {
         "corpus_filesystem": "/",
         "corpus_disk_total_bytes": 494384795648,
-        "corpus_disk_free_bytes": 220717404160,
-        "swap_usage": "total = 1024.00M  used = 266.50M  free = 757.50M  (encrypted)",
-        "memory_pressure": "The system has 17179869184 (1048576 pages with a page size of 16384).\n\nStats: \nPages free: 183333 \nPages purgeable: 17939 \nPages purged: 20635148 \n\nSwap I/O:\nSwapins: 216104 \nSwapouts: 400129 \n\nPage Q counts:\nPages active: 326446 \nPages inactive: 317353 \nPages speculative: 9325 \nPages throttled: 0 \nPages wired down: 110295 \n\nCompressor Stats:\nPages used by compressor: 64306 \nPages decompressed: 93924772 \nPages compressed: 123784550 \n\nFile I/O:\nPageins: 38302795 \nPageouts: 435568 \n\nSystem-wide memory free percentage: 82%"
+        "corpus_disk_free_bytes": 219895730176,
+        "swap_usage": "total = 1024.00M  used = 258.50M  free = 765.50M  (encrypted)",
+        "memory_pressure": "The system has 17179869184 (1048576 pages with a page size of 16384).\n\nStats: \nPages free: 32243 \nPages purgeable: 22518 \nPages purged: 20924222 \n\nSwap I/O:\nSwapins: 216578 \nSwapouts: 400129 \n\nPage Q counts:\nPages active: 386168 \nPages inactive: 385415 \nPages speculative: 2179 \nPages throttled: 0 \nPages wired down: 143425 \n\nCompressor Stats:\nPages used by compressor: 61899 \nPages decompressed: 94042741 \nPages compressed: 124018616 \n\nFile I/O:\nPageins: 39121280 \nPageouts: 439700 \n\nSystem-wide memory free percentage: 79%"
       }
     }
   },
@@ -114,176 +114,177 @@
   ],
   "warmups_per_config": 2,
   "trials_per_config": 9,
+  "execution_seed": 20260826,
   "execution_order": [
     {
       "phase": "warmup",
       "round": 0,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.90575499995612
+      "wall_seconds": 105.75150504196063
     },
     {
       "phase": "warmup",
       "round": 0,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.13790016598068
+      "wall_seconds": 87.92297041602433
     },
     {
       "phase": "warmup",
       "round": 1,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.12367433396867
+      "wall_seconds": 87.61779541603755
     },
     {
       "phase": "warmup",
       "round": 1,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.95065212500049
+      "wall_seconds": 106.23941970802844
     },
     {
       "phase": "measure",
       "round": 0,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.17298783396836
+      "wall_seconds": 88.13887074997183
     },
     {
       "phase": "measure",
       "round": 0,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.82710520800902
+      "wall_seconds": 106.34605495806318
     },
     {
       "phase": "measure",
       "round": 1,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.94732333300635
+      "wall_seconds": 106.09193412493914
     },
     {
       "phase": "measure",
       "round": 1,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.18754883302609
+      "wall_seconds": 88.52676729205996
     },
     {
       "phase": "measure",
       "round": 2,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 86.99979729100596
+      "wall_seconds": 88.1218147079926
     },
     {
       "phase": "measure",
       "round": 2,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.58516470802715
+      "wall_seconds": 108.08977520791814
     },
     {
       "phase": "measure",
       "round": 3,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.30482600000687
+      "wall_seconds": 92.24108545808122
     },
     {
       "phase": "measure",
       "round": 3,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.80793895898387
+      "wall_seconds": 109.61921054101549
     },
     {
       "phase": "measure",
       "round": 4,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.06653795798775
+      "wall_seconds": 91.98833429196384
     },
     {
       "phase": "measure",
       "round": 4,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.6053543749731
+      "wall_seconds": 108.08465949993115
     },
     {
       "phase": "measure",
       "round": 5,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.00861174997408
+      "wall_seconds": 90.07276608294342
     },
     {
       "phase": "measure",
       "round": 5,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.71190816699527
+      "wall_seconds": 107.82549533410929
     },
     {
       "phase": "measure",
       "round": 6,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.70669758296572
+      "wall_seconds": 107.87067883391865
     },
     {
       "phase": "measure",
       "round": 6,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 86.93306974996813
+      "wall_seconds": 88.60035991703626
     },
     {
       "phase": "measure",
       "round": 7,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.10691549995681
+      "wall_seconds": 92.71540241700131
     },
     {
       "phase": "measure",
       "round": 7,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.77220804197714
+      "wall_seconds": 111.72965983394533
     },
     {
       "phase": "measure",
       "round": 8,
       "engine": "auto",
       "workers": 8,
-      "wall_seconds": 87.22964845900424
+      "wall_seconds": 88.58419766603038
     },
     {
       "phase": "measure",
       "round": 8,
       "engine": "stdlib",
       "workers": 8,
-      "wall_seconds": 104.62499799998477
+      "wall_seconds": 106.8752188750077
     }
   ],
   "samples": {
     "stdlib-w8": [
       {
-        "startup_seconds": 0.06356529198819771,
-        "wall_seconds": 104.82710520800902,
-        "user_cpu_seconds": 104.740489,
-        "system_cpu_seconds": 0.6981359999999999,
-        "cpu_utilization_percent": 100.58336037304238,
-        "peak_rss_bytes": 236666880,
-        "rss_delta_bytes": 199639040,
+        "startup_seconds": 0.04819599993061274,
+        "wall_seconds": 106.34605495806318,
+        "user_cpu_seconds": 105.67086,
+        "system_cpu_seconds": 1.2628,
+        "cpu_utilization_percent": 100.5525405170587,
+        "peak_rss_bytes": 247431168,
+        "rss_delta_bytes": 210518016,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.88423416567755,
-        "strings_per_s": 1260.1320978756512,
-        "files_per_s": 1.2210582343756309,
+        "throughput_mib_s": 4.814472233576849,
+        "strings_per_s": 1242.1335239195391,
+        "files_per_s": 1.2036177557359875,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -300,17 +301,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.04713749996153638,
-        "wall_seconds": 104.94732333300635,
-        "user_cpu_seconds": 104.858557,
-        "system_cpu_seconds": 0.7064429999999999,
-        "cpu_utilization_percent": 100.58855876203121,
-        "peak_rss_bytes": 244039680,
-        "rss_delta_bytes": 207470592,
+        "startup_seconds": 0.04925079201348126,
+        "wall_seconds": 106.09193412493914,
+        "user_cpu_seconds": 105.505297,
+        "system_cpu_seconds": 1.167273,
+        "cpu_utilization_percent": 100.54729502280264,
+        "peak_rss_bytes": 223559680,
+        "rss_delta_bytes": 184762368,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.878639230477702,
-        "strings_per_s": 1258.688604957067,
-        "files_per_s": 1.2196595009273903,
+        "throughput_mib_s": 4.826004285519725,
+        "strings_per_s": 1245.108792572649,
+        "files_per_s": 1.206500767996753,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -327,17 +328,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.04706916701979935,
-        "wall_seconds": 104.58516470802715,
-        "user_cpu_seconds": 104.50304200000001,
-        "system_cpu_seconds": 0.6936249999999999,
-        "cpu_utilization_percent": 100.58469314809611,
-        "peak_rss_bytes": 225345536,
-        "rss_delta_bytes": 188776448,
+        "startup_seconds": 0.048079917090944946,
+        "wall_seconds": 108.08977520791814,
+        "user_cpu_seconds": 107.507195,
+        "system_cpu_seconds": 1.283178,
+        "cpu_utilization_percent": 100.64816287269932,
+        "peak_rss_bytes": 231882752,
+        "rss_delta_bytes": 193658880,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.895533034492946,
-        "strings_per_s": 1263.0472052969988,
-        "files_per_s": 1.2238829508691849,
+        "throughput_mib_s": 4.7368044550112645,
+        "strings_per_s": 1222.0952420883866,
+        "files_per_s": 1.1842008159771187,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -354,17 +355,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.046712165989447385,
-        "wall_seconds": 104.80793895898387,
-        "user_cpu_seconds": 104.720469,
-        "system_cpu_seconds": 0.7013919999999999,
-        "cpu_utilization_percent": 100.58575910099366,
-        "peak_rss_bytes": 234668032,
-        "rss_delta_bytes": 198098944,
+        "startup_seconds": 0.04842487501446158,
+        "wall_seconds": 109.61921054101549,
+        "user_cpu_seconds": 109.035839,
+        "system_cpu_seconds": 1.290054,
+        "cpu_utilization_percent": 100.6446702685567,
+        "peak_rss_bytes": 232554496,
+        "rss_delta_bytes": 194117632,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.885127346568677,
-        "strings_per_s": 1260.362538487616,
-        "files_per_s": 1.2212815295422634,
+        "throughput_mib_s": 4.670715344683686,
+        "strings_per_s": 1205.0442559114629,
+        "files_per_s": 1.167678542549867,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -381,17 +382,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.047257083002477884,
-        "wall_seconds": 104.6053543749731,
-        "user_cpu_seconds": 104.51878,
-        "system_cpu_seconds": 0.696108,
-        "cpu_utilization_percent": 100.58269830322637,
-        "peak_rss_bytes": 215859200,
-        "rss_delta_bytes": 179290112,
+        "startup_seconds": 0.04888000001665205,
+        "wall_seconds": 108.08465949993115,
+        "user_cpu_seconds": 107.532015,
+        "system_cpu_seconds": 1.151406,
+        "cpu_utilization_percent": 100.55397454443498,
+        "peak_rss_bytes": 223494144,
+        "rss_delta_bytes": 185024512,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.894588157607055,
-        "strings_per_s": 1262.8034271217387,
-        "files_per_s": 1.2236467317071111,
+        "throughput_mib_s": 4.737028650641758,
+        "strings_per_s": 1222.153084546509,
+        "files_per_s": 1.1842568648706484,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -408,17 +409,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.046694250020664185,
-        "wall_seconds": 104.71190816699527,
-        "user_cpu_seconds": 104.62774,
-        "system_cpu_seconds": 0.6943360000000001,
-        "cpu_utilization_percent": 100.58271102464454,
-        "peak_rss_bytes": 212828160,
-        "rss_delta_bytes": 176259072,
+        "startup_seconds": 0.049977790913544595,
+        "wall_seconds": 107.82549533410929,
+        "user_cpu_seconds": 107.26715399999999,
+        "system_cpu_seconds": 1.1532,
+        "cpu_utilization_percent": 100.55168646714532,
+        "peak_rss_bytes": 247922688,
+        "rss_delta_bytes": 209207296,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.889607473578758,
-        "strings_per_s": 1261.5184109655645,
-        "files_per_s": 1.222401561013144,
+        "throughput_mib_s": 4.748414344488225,
+        "strings_per_s": 1225.0905928202403,
+        "files_per_s": 1.187103287616512,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -435,17 +436,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.047283791995141655,
-        "wall_seconds": 104.70669758296572,
-        "user_cpu_seconds": 104.61951499999999,
-        "system_cpu_seconds": 0.698281,
-        "cpu_utilization_percent": 100.58362877556142,
-        "peak_rss_bytes": 236126208,
-        "rss_delta_bytes": 199196672,
+        "startup_seconds": 0.048959541018120944,
+        "wall_seconds": 107.87067883391865,
+        "user_cpu_seconds": 107.260679,
+        "system_cpu_seconds": 1.158393,
+        "cpu_utilization_percent": 100.50838019377413,
+        "peak_rss_bytes": 235520000,
+        "rss_delta_bytes": 196984832,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.889850798133928,
-        "strings_per_s": 1261.5811886850124,
-        "files_per_s": 1.22246239213664,
+        "throughput_mib_s": 4.746425389000522,
+        "strings_per_s": 1224.5774424334484,
+        "files_per_s": 1.1866060488696204,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -462,17 +463,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.04739466600585729,
-        "wall_seconds": 104.77220804197714,
-        "user_cpu_seconds": 104.677616,
-        "system_cpu_seconds": 0.6954499999999999,
-        "cpu_utilization_percent": 100.57348983022494,
-        "peak_rss_bytes": 221265920,
-        "rss_delta_bytes": 184696832,
+        "startup_seconds": 0.048581707989796996,
+        "wall_seconds": 111.72965983394533,
+        "user_cpu_seconds": 109.687083,
+        "system_cpu_seconds": 1.4855159999999998,
+        "cpu_utilization_percent": 99.50142080914482,
+        "peak_rss_bytes": 239452160,
+        "rss_delta_bytes": 200753152,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.886793342571335,
-        "strings_per_s": 1260.7923653482185,
-        "files_per_s": 1.2216980284381962,
+        "throughput_mib_s": 4.582490714703479,
+        "strings_per_s": 1182.2823071002229,
+        "files_per_s": 1.1456223906009912,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -489,17 +490,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.04736987501382828,
-        "wall_seconds": 104.62499799998477,
-        "user_cpu_seconds": 104.53738200000001,
-        "system_cpu_seconds": 0.70323,
-        "cpu_utilization_percent": 100.58840048915971,
-        "peak_rss_bytes": 229703680,
-        "rss_delta_bytes": 193134592,
+        "startup_seconds": 0.061217332957312465,
+        "wall_seconds": 106.8752188750077,
+        "user_cpu_seconds": 105.895181,
+        "system_cpu_seconds": 1.355044,
+        "cpu_utilization_percent": 100.35088220537904,
+        "peak_rss_bytes": 228360192,
+        "rss_delta_bytes": 189743104,
         "input_bytes": 536871047,
-        "throughput_mib_s": 4.893669185504857,
-        "strings_per_s": 1262.5663323789906,
-        "files_per_s": 1.223416988739332,
+        "throughput_mib_s": 4.7906346684990195,
+        "strings_per_s": 1235.9834336759432,
+        "files_per_s": 1.1976583659650613,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -518,17 +519,17 @@
     ],
     "auto-w8": [
       {
-        "startup_seconds": 0.07405133300926536,
-        "wall_seconds": 87.17298783396836,
-        "user_cpu_seconds": 93.08351099999999,
-        "system_cpu_seconds": 5.418953,
-        "cpu_utilization_percent": 112.99654451171273,
-        "peak_rss_bytes": 225984512,
-        "rss_delta_bytes": 186990592,
+        "startup_seconds": 0.06072216702159494,
+        "wall_seconds": 88.13887074997183,
+        "user_cpu_seconds": 93.60873799999999,
+        "system_cpu_seconds": 5.1492450000000005,
+        "cpu_utilization_percent": 112.04816009062786,
+        "peak_rss_bytes": 242319360,
+        "rss_delta_bytes": 202194944,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.873380521512004,
-        "strings_per_s": 1515.3317935091661,
-        "files_per_s": 1.4683447611522928,
+        "throughput_mib_s": 5.8090162080525225,
+        "strings_per_s": 1498.7258048123135,
+        "files_per_s": 1.452253686833637,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -545,17 +546,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.061720707977656275,
-        "wall_seconds": 87.18754883302609,
-        "user_cpu_seconds": 93.121408,
-        "system_cpu_seconds": 5.420085,
-        "cpu_utilization_percent": 113.02243762893025,
-        "peak_rss_bytes": 234536960,
-        "rss_delta_bytes": 196149248,
+        "startup_seconds": 0.060393374995328486,
+        "wall_seconds": 88.52676729205996,
+        "user_cpu_seconds": 93.974502,
+        "system_cpu_seconds": 5.062806999999999,
+        "cpu_utilization_percent": 111.87272734501256,
+        "peak_rss_bytes": 230735872,
+        "rss_delta_bytes": 191135744,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.872399621264388,
-        "strings_per_s": 1515.078721308918,
-        "files_per_s": 1.4680995361520524,
+        "throughput_mib_s": 5.783562920092694,
+        "strings_per_s": 1492.1588581699832,
+        "files_per_s": 1.445890366443782,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -572,17 +573,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.06226691696792841,
-        "wall_seconds": 86.99979729100596,
-        "user_cpu_seconds": 92.92960699999999,
-        "system_cpu_seconds": 5.402479,
-        "cpu_utilization_percent": 113.0256495553531,
-        "peak_rss_bytes": 238977024,
-        "rss_delta_bytes": 200589312,
+        "startup_seconds": 0.0612367499852553,
+        "wall_seconds": 88.1218147079926,
+        "user_cpu_seconds": 93.64281100000001,
+        "system_cpu_seconds": 5.118326,
+        "cpu_utilization_percent": 112.07342623079508,
+        "peak_rss_bytes": 244645888,
+        "rss_delta_bytes": 205094912,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.885072663255082,
-        "strings_per_s": 1518.3483653203418,
-        "files_per_s": 1.4712677958530445,
+        "throughput_mib_s": 5.8101405474074355,
+        "strings_per_s": 1499.0158842929386,
+        "files_per_s": 1.4525347716016845,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -599,17 +600,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.061907249968498945,
-        "wall_seconds": 87.30482600000687,
-        "user_cpu_seconds": 93.241622,
-        "system_cpu_seconds": 5.445571,
-        "cpu_utilization_percent": 113.0375003553552,
-        "peak_rss_bytes": 238518272,
-        "rss_delta_bytes": 200130560,
+        "startup_seconds": 0.06265066692139953,
+        "wall_seconds": 92.24108545808122,
+        "user_cpu_seconds": 97.480674,
+        "system_cpu_seconds": 5.133570000000001,
+        "cpu_utilization_percent": 111.2457030296254,
+        "peak_rss_bytes": 251101184,
+        "rss_delta_bytes": 210796544,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.864511186884359,
-        "strings_per_s": 1513.0435057506397,
-        "files_per_s": 1.4661274280529455,
+        "throughput_mib_s": 5.55067328407264,
+        "strings_per_s": 1432.0733471857372,
+        "files_per_s": 1.3876679720792027,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -626,17 +627,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.061649832990951836,
-        "wall_seconds": 87.06653795798775,
-        "user_cpu_seconds": 93.006767,
-        "system_cpu_seconds": 5.402157,
-        "cpu_utilization_percent": 113.02726203203957,
-        "peak_rss_bytes": 230588416,
-        "rss_delta_bytes": 191840256,
+        "startup_seconds": 0.06009741604793817,
+        "wall_seconds": 91.98833429196384,
+        "user_cpu_seconds": 97.265649,
+        "system_cpu_seconds": 4.991455,
+        "cpu_utilization_percent": 111.16312170132778,
+        "peak_rss_bytes": 254607360,
+        "rss_delta_bytes": 214450176,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.880561473491554,
-        "strings_per_s": 1517.1844786540191,
-        "files_per_s": 1.4701399986957548,
+        "throughput_mib_s": 5.565924556487609,
+        "strings_per_s": 1436.0081744793588,
+        "files_per_s": 1.391480789224185,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -653,17 +654,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.06115429202327505,
-        "wall_seconds": 87.00861174997408,
-        "user_cpu_seconds": 92.94510700000001,
-        "system_cpu_seconds": 5.407068,
-        "cpu_utilization_percent": 113.03728794412042,
-        "peak_rss_bytes": 242974720,
-        "rss_delta_bytes": 204587008,
+        "startup_seconds": 0.06139312498271465,
+        "wall_seconds": 90.07276608294342,
+        "user_cpu_seconds": 95.397322,
+        "system_cpu_seconds": 5.118849,
+        "cpu_utilization_percent": 111.59440902196762,
+        "peak_rss_bytes": 244957184,
+        "rss_delta_bytes": 204603392,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.884476472481878,
-        "strings_per_s": 1518.1945481395335,
-        "files_per_s": 1.4711187481972223,
+        "throughput_mib_s": 5.684294498900566,
+        "strings_per_s": 1466.5476119425434,
+        "files_per_s": 1.4210732673861857,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -680,17 +681,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.061185042024590075,
-        "wall_seconds": 86.93306974996813,
-        "user_cpu_seconds": 92.873766,
-        "system_cpu_seconds": 5.4212739999999995,
-        "cpu_utilization_percent": 113.06979068231516,
-        "peak_rss_bytes": 235061248,
-        "rss_delta_bytes": 196673536,
+        "startup_seconds": 0.06156287505291402,
+        "wall_seconds": 88.60035991703626,
+        "user_cpu_seconds": 94.00651599999999,
+        "system_cpu_seconds": 5.154745,
+        "cpu_utilization_percent": 111.91970449426252,
+        "peak_rss_bytes": 224100352,
+        "rss_delta_bytes": 183173120,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.889589890459614,
-        "strings_per_s": 1519.5138096460516,
-        "files_per_s": 1.4723971023702052,
+        "throughput_mib_s": 5.778759016616413,
+        "strings_per_s": 1490.9194513847604,
+        "files_per_s": 1.4446893908767058,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -707,17 +708,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.06172637501731515,
-        "wall_seconds": 87.10691549995681,
-        "user_cpu_seconds": 93.038754,
-        "system_cpu_seconds": 5.43271,
-        "cpu_utilization_percent": 113.0466661972996,
-        "peak_rss_bytes": 255672320,
-        "rss_delta_bytes": 217300992,
+        "startup_seconds": 0.0599991250783205,
+        "wall_seconds": 92.71540241700131,
+        "user_cpu_seconds": 97.47060900000001,
+        "system_cpu_seconds": 5.268505,
+        "cpu_utilization_percent": 110.81126902509205,
+        "peak_rss_bytes": 245596160,
+        "rss_delta_bytes": 205586432,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.8778355978669286,
-        "strings_per_s": 1516.4812029197096,
-        "files_per_s": 1.4694585299609588,
+        "throughput_mib_s": 5.522276939954766,
+        "strings_per_s": 1424.7470922455645,
+        "files_per_s": 1.3805688878348492,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -734,17 +735,17 @@
         "exit_status": 0
       },
       {
-        "startup_seconds": 0.06180308299371973,
-        "wall_seconds": 87.22964845900424,
-        "user_cpu_seconds": 93.143324,
-        "system_cpu_seconds": 5.449688999999999,
-        "cpu_utilization_percent": 113.02695212206004,
-        "peak_rss_bytes": 247267328,
-        "rss_delta_bytes": 208879616,
+        "startup_seconds": 0.07373879197984934,
+        "wall_seconds": 88.58419766603038,
+        "user_cpu_seconds": 93.798366,
+        "system_cpu_seconds": 5.145233,
+        "cpu_utilization_percent": 111.69441232964078,
+        "peak_rss_bytes": 248365056,
+        "rss_delta_bytes": 208027648,
         "input_bytes": 536871047,
-        "throughput_mib_s": 5.869565426331622,
-        "strings_per_s": 1514.3474992001352,
-        "files_per_s": 1.4673909875970303,
+        "throughput_mib_s": 5.779813355383257,
+        "strings_per_s": 1491.1914707182048,
+        "files_per_s": 1.4449529755021364,
         "files": 128,
         "strings": 132096,
         "suppressed": 0,
@@ -1050,27 +1051,27 @@
   },
   "summaries": {
     "stdlib-w8": {
-      "median_seconds": 104.71190816699527,
-      "min_seconds": 104.58516470802715,
-      "max_seconds": 104.94732333300635,
-      "p95_seconds": 104.94732333300635,
-      "mad_seconds": 0.09603079198859632,
-      "median_mib_s": 4.889607473578758
+      "median_seconds": 107.87067883391865,
+      "min_seconds": 106.09193412493914,
+      "max_seconds": 111.72965983394533,
+      "p95_seconds": 111.72965983394533,
+      "mad_seconds": 0.9954599589109421,
+      "median_mib_s": 4.746425389000522
     },
     "auto-w8": {
-      "median_seconds": 87.10691549995681,
-      "min_seconds": 86.93306974996813,
-      "max_seconds": 87.30482600000687,
-      "p95_seconds": 87.30482600000687,
-      "mad_seconds": 0.09830374998273328,
-      "median_mib_s": 5.8778355978669286
+      "median_seconds": 88.60035991703626,
+      "min_seconds": 88.1218147079926,
+      "max_seconds": 92.71540241700131,
+      "p95_seconds": 92.71540241700131,
+      "mad_seconds": 0.47854520904365927,
+      "median_mib_s": 5.778759016616413
     }
   },
   "comparisons": {
     "w8": {
-      "median_percent": 20.21078644099985,
-      "ci95_low_percent": 19.999930495068007,
-      "ci95_high_percent": 20.41590589107216
+      "median_percent": 21.74970726408647,
+      "ci95_low_percent": 16.8953019130617,
+      "ci95_high_percent": 23.723211331941418
     }
   }
 }

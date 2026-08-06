@@ -20,43 +20,45 @@ snapshots, corpus hashes, and finding hashes are committed under
 - Formal matrices use isolated child processes, two warmups and nine measured
   trials per configuration. Configurations are randomly interleaved with a
   fixed seed; no best-result selection is used.
-- Median child-process startup was 50.6 ms (`stdlib`) versus 65.1 ms (`auto`)
-  on CPU-heavy input, and 47.3 ms versus 61.7 ms on realistic input: a
-  14–15 ms RE2 import/registry cost, within the 100 ms target. The default
+- Median child-process startup was 49.7 ms (`stdlib`) versus 61.9 ms (`auto`)
+  on CPU-heavy input, and 48.9 ms versus 61.2 ms on realistic input: a
+  roughly 12 ms RE2 import/registry cost, within the 100 ms target. The default
   no-RE2 path was separately tested as a full fallback.
 - The committed raw result files total 1.4 MiB; generated corpora are not
   committed.
+- The standard 512 MiB and soak artifacts were regenerated from clean commit
+  `821607645479573281281e4336e02ba9ebae4c40`; every environment snapshot
+  records `git_dirty: false`. Earlier E02–E21 files are development-stage
+  experiment records with `git_dirty: true`, not exact checkout identifiers.
 
 These measurements describe this machine and dependency set, not all CPUs or
 operating systems.
 
 ## Standard 512 MiB evidence
 
-Both standard corpora use seed 42. Swap usage was unchanged before and after
-each formal matrix (266.50 MiB used); the machine remained on AC with Low
-Power Mode disabled.
+Both standard corpora use seed 42; execution-order seeds are 20260825 and
+20260826. Swap usage was unchanged before and after each formal matrix
+(258.50 MiB used); the machine remained on AC with Low Power Mode disabled.
 
 | Corpus | Engine | Workers | Median s | MiB/s | CPU | Peak RSS | Finding hash |
 |---|---|---:|---:|---:|---:|---:|---|
-| CPU-heavy `few_large_strings` | stdlib | 8 | 60.47 | 8.47 | 100.5% | 136.9 MiB | `4f53cda…02b945` |
-| CPU-heavy `few_large_strings` | auto | 8 | 21.23 | 24.13 | 171.5% | 172.6 MiB | `4f53cda…02b945` |
-| realistic mixed | stdlib | 8 | 104.71 | 4.89 | 100.6% | 232.7 MiB | `b071756…0bd789` |
-| realistic mixed | auto | 8 | 87.11 | 5.88 | 113.0% | 243.8 MiB | `b071756…0bd789` |
+| CPU-heavy `few_large_strings` | stdlib | 8 | 60.50 | 8.47 | 100.5% | 136.1 MiB | `4f53cda…02b945` |
+| CPU-heavy `few_large_strings` | auto | 8 | 21.21 | 24.16 | 171.7% | 175.5 MiB | `4f53cda…02b945` |
+| realistic mixed | stdlib | 8 | 107.87 | 4.75 | 100.6% | 236.4 MiB | `b071756…0bd789` |
+| realistic mixed | auto | 8 | 88.60 | 5.78 | 111.7% | 242.8 MiB | `b071756…0bd789` |
 
-- CPU-heavy improvement: **+184.86%**, bootstrap 95% CI **[+184.25%,
-  +185.25%]**. Corpus SHA-256:
+- CPU-heavy improvement: **+185.33%**, bootstrap 95% CI **[+184.97%,
+  +185.99%]**. Corpus SHA-256:
   `e58f0333fc5d069eee0d3b7eecae1083b9cc80079294f16998a778ecda3ebb2d`.
   See [`e25_cpu_heavy_512m_final.json`](../artifacts/benchmarks/e25_cpu_heavy_512m_final.json).
-- Realistic mixed improvement: **+20.21%**, bootstrap 95% CI **[+20.00%,
-  +20.42%]**. Its 9,909 findings include 6,606 RE2-compatible and 3,303
+- Realistic mixed improvement: **+21.75%**, bootstrap 95% CI **[+16.90%,
+  +23.72%]**. Its 9,909 findings include 6,606 RE2-compatible and 3,303
   fallback-rule findings. Corpus SHA-256:
   `9c4719e5ebf9c3ede0f16650356c71853a814a6fba5dba35216023ab3e8e7663`.
   See [`e26_realistic_512m_final.json`](../artifacts/benchmarks/e26_realistic_512m_final.json).
 
-Measured samples are effectively flat in both standard artifacts. The
-CPU-heavy auto warmup includes one expected cold 22.82 s sample before its
-21.2 s steady state; the raw `execution_order` fields retain it for thermal
-review.
+The raw `execution_order` fields retain every warmup and measured sample for
+thermal review; both artifacts record the exact execution seed.
 
 ## Quick worker scaling
 
@@ -75,6 +77,9 @@ versus stdlib's 100.4%. See
 That is 19.5% parallel efficiency for auto at eight workers, versus 12.5% for
 stdlib. The remaining work is Python-side JSON traversal, BIP-39, finding
 construction/deduplication, and the intentionally retained fallback rules.
+E15 and the E27 forced-stdlib control use the same generator-v1 corpus. Their
+within-record comparisons remain valid, but their absolute seconds should not
+be compared with the generator-v2 standard artifacts above.
 
 ## Regression checks (16 MiB, 8 workers)
 
@@ -105,11 +110,12 @@ findings and the same hash. Raw samples are in
 `auto`, 8 workers, and the 16 MiB realistic corpus completed 90 consecutive
 same-process scans with the same finding hash (`effb132e…ce265b8`), 312
 findings, zero truncated files, no crash, and no deadlock. Median wall time
-was 2.728 s; the first and final ten-round means were 2.727 s and 2.732 s.
+was 2.745 s; the first and final ten-round means were 2.769 s and 2.725 s.
 
-RSS rose during allocator warm-up (63.8 MiB to 106.9 MiB by round 60), then
-only about 3 MiB across the final 30 rounds (ending at 106.9 MiB). A 30-round
-stdlib control showed the same behavior and a larger initial rise (36.6 MiB).
+RSS rose during allocator warm-up (64.1 MiB to 109.5 MiB by round 60), then
+only 0.8 MiB net across the final 30 rounds (ending at 110.2 MiB; 0.6 MiB
+range). A 30-round stdlib control showed the same behavior and a larger initial
+rise (61.3 MiB to 97.8 MiB).
 The raw records are [`e24_auto_realistic_90.json`](../artifacts/soak/e24_auto_realistic_90.json)
 and [`e23_stdlib_realistic_30.json`](../artifacts/soak/e23_stdlib_realistic_30.json).
 This is a scaled 90-round check, not a claim of a 30–60 minute soak.
