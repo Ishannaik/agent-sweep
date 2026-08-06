@@ -7,6 +7,7 @@
     "workers": 8,
     "warmups_per_code_version": 2,
     "trials_per_code_version": 9,
+    "interleaved_order_scope": "measured trials only; excludes 2 warmup runs per code version",
     "interleaved_order": [
       "current-stdlib",
       "main",
@@ -37,7 +38,8 @@
     "strings": 40,
     "expected_findings": 0,
     "expected_finding_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-    "corpus_sha256": "9a82168ccaf6206e83a2590629eee067896d55378b7afccfea69fff86dfa005a"
+    "corpus_sha256": "9a82168ccaf6206e83a2590629eee067896d55378b7afccfea69fff86dfa005a",
+    "comparison_scope": "Both arms use this generator-v1 corpus; compare within this record, not with generator-v2 artifacts."
   },
   "samples_seconds": {
     "main": [

@@ -36,6 +36,12 @@ def _run(corpus: Path, workers: int, rounds: int) -> dict[str, object]:
     from agentsweep.scanner import ENGINE_SUMMARY, PREFILTER_BACKEND
     from agentsweep.sources import CodexSource
 
+    if (
+        ENGINE_SUMMARY["requested_engine"] == "auto"
+        and int(ENGINE_SUMMARY["re2_rule_count"]) == 0
+    ):
+        raise RuntimeError("auto soak selected zero RE2 rules; install the fast extra first")
+
     manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
     source = CodexSource(root=corpus)
     files = source.files()

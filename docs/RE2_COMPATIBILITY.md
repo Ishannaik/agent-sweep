@@ -10,7 +10,7 @@ The machine-readable audit, including every original pattern, is
 - Rules: 144 RE2, 58 stdlib
 - Unicode-guarded RE2 rules use stdlib only for non-ASCII text, preserving Python ``re`` semantics.
 - RE2 uses exact stdlib iteration below 512 characters or after 4 matches for one rule; registry selection remains static.
-- Every rule has a synthetic fixture and is covered by full-finding parity tests.
+- Synthetic fixture coverage: 202/202 rules; covered fixtures participate in full-finding parity tests.
 
 ## Selection categories
 

@@ -42,8 +42,13 @@ def _audit() -> dict[str, object]:
     for entry in ENGINE_INVENTORY:
         copied = dict(entry)
         copied["reason_category"] = _reason_category(cast(str | None, entry["fallback_reason"]))
-        copied["fixture_exists"] = entry["rule_id"] in ALL_FIXTURES
-        copied["parity_status"] = "covered by tests/test_regex_engine_parity.py"
+        fixture_exists = entry["rule_id"] in ALL_FIXTURES
+        copied["fixture_exists"] = fixture_exists
+        copied["parity_status"] = (
+            "covered by tests/test_regex_engine_parity.py"
+            if fixture_exists
+            else "missing synthetic fixture"
+        )
         rules.append(copied)
     return {"summary": ENGINE_SUMMARY, "rules": rules}
 
@@ -53,6 +58,7 @@ def _markdown(audit: dict[str, object]) -> str:
     rules = audit["rules"]
     assert isinstance(summary, dict)
     assert isinstance(rules, list)
+    fixture_count = sum(bool(rule["fixture_exists"]) for rule in rules if isinstance(rule, dict))
     fallback_categories: dict[str, int] = {}
     for rule in rules:
         assert isinstance(rule, dict)
@@ -72,7 +78,7 @@ def _markdown(audit: dict[str, object]) -> str:
         f"- Rules: {summary['re2_rule_count']} RE2, {summary['stdlib_rule_count']} stdlib",
         "- Unicode-guarded RE2 rules use stdlib only for non-ASCII text, preserving Python ``re`` semantics.",
         f"- RE2 uses exact stdlib iteration below {summary['short_input_fallback_chars']} characters or after {summary['dense_match_fallback_limit']} matches for one rule; registry selection remains static.",
-        "- Every rule has a synthetic fixture and is covered by full-finding parity tests.",
+        f"- Synthetic fixture coverage: {fixture_count}/{len(rules)} rules; covered fixtures participate in full-finding parity tests.",
         "",
         "## Selection categories",
         "",
@@ -113,6 +119,7 @@ def main() -> int:
     audit = _audit()
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(audit, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.write_text(_markdown(audit), encoding="utf-8")
     print(f"wrote {args.json}")
     print(f"wrote {args.markdown}")

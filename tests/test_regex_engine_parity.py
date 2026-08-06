@@ -14,7 +14,7 @@ from test_ported_rules import FIXTURES
 def _core_fixtures() -> dict[str, str]:
     return {
         "aws-access-key": "AKIAIOSFODNN7EXAMPLE",
-        "aws-session-token": "ASIAIOSFODNN7EXAMPLE",
+        "aws-session-token": "ASIA" + "IOSFODNN7EXAMPLE",
         "github-pat": "ghp_" + "a" * 36,
         "github-oauth": "gho_" + "a" * 36,
         "github-app": "ghs_" + "a" * 36,

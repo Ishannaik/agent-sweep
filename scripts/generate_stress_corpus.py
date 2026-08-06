@@ -164,7 +164,8 @@ def _compatibility_counts(per_rule: Counter[str]) -> tuple[int, int, bool]:
         rule_id: pattern.backend_name
         for rule_id, _display, pattern in build_rule_registry(_RAW_RULES, mode="auto")
     }
-    compatible = sum(count for rule_id, count in per_rule.items() if backend[rule_id] == "re2")
+    # Function-based detectors such as BIP-39 are outside the regex registry.
+    compatible = sum(count for rule_id, count in per_rule.items() if backend.get(rule_id) == "re2")
     return compatible, sum(per_rule.values()) - compatible, RE2_AVAILABLE
 
 
