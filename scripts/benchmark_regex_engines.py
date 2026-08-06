@@ -296,6 +296,7 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         "workers": workers,
         "warmups_per_config": args.warmups,
         "trials_per_config": args.trials,
+        "execution_seed": args.seed,
         "execution_order": execution_order,
         "samples": samples,
         "engine_metadata": engine_metadata,

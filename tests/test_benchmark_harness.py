@@ -48,6 +48,7 @@ def test_synthetic_corpus_manifest_and_stdlib_runner(tmp_path: Path) -> None:
     )
     assert benchmarked.returncode == 0, benchmarked.stderr
     result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["execution_seed"] == 42
     sample = result["samples"]["stdlib-w1"][0]
     assert sample["correctness_ok"] is True
     assert sample["finding_hash"] == manifest["expected_finding_hash"]
