@@ -58,6 +58,10 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         re.compile(r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+")),
     ("huggingface", "Hugging Face token",
         re.compile(r"\bhf_[A-Za-z0-9]{34}\b")),
+    ("supabase-access-token", "Supabase personal access token",
+        re.compile(r"(?<![A-Za-z0-9_-])sbp_[a-f0-9]{40}(?![A-Za-z0-9_-])")),
+    ("supabase-secret-key", "Supabase secret key",
+        re.compile(r"(?<![A-Za-z0-9_-])sb_secret_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{8}(?![A-Za-z0-9_-])")),
     ("jwt", "JSON Web Token",
         re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
     ("private-key-pem", "Private key (PEM block)",
@@ -624,6 +628,8 @@ _PREFILTER: dict[str, tuple[str, ...]] = {
 _PREFILTER.update({
     "stripe-live":         ("sk_live_", "rk_live_"),
     "stripe-test":         ("sk_test_", "rk_test_"),
+    "supabase-access-token": ("sbp_",),
+    "supabase-secret-key":   ("sb_secret_",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
@@ -641,7 +647,7 @@ for _i, (_rid, _d, _p) in enumerate(RULES):
 
 # Single-pass anchor matching. Aho-Corasick (pyahocorasick) finds every
 # anchor — including overlapping ones like `git` inside `gitlab` — in one
-# O(n) pass, replacing ~189 substring scans per string (~4.7x on real
+# O(n) pass, replacing ~199 anchor checks per string (~4.7x on real
 # histories). If the optional wheel is absent we fall back to the correct
 # per-anchor substring check (no behavior change, just the slower path —
 # never the lossy single-regex-alternation approach, which would miss a
@@ -741,6 +747,8 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "slack-user": "Rotate: https://api.slack.com/apps (OAuth & Permissions)",
     "slack-webhook": "Regenerate the webhook in the Slack app that owns it.",
     "huggingface": "Revoke: https://huggingface.co/settings/tokens",
+    "supabase-access-token": "Revoke: https://supabase.com/dashboard/account/tokens",
+    "supabase-secret-key": "Rotate: Supabase Dashboard > Project Settings > API Keys",
     "jwt": "Invalidate at the issuing service; short-lived tokens may expire naturally.",
     "private-key-pem": "Regenerate the key pair and rotate any authorized_keys / cert stores that reference it.",
     "db-url-with-password": "Change the database user's password and update connection strings.",

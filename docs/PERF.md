@@ -1,6 +1,6 @@
 # Scanner performance notes
 
-Detection runs 189 regexes + a BIP-39 mnemonic check over every string
+Detection runs 205 regexes + a BIP-39 mnemonic check over every string
 value in every JSONL line. History sizes are large (900+ files, some with
 multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 
@@ -8,7 +8,7 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 
 - **Keyword pre-filter (approx 7.5x).** Each rule carries a required literal
   anchor (`akia`, `ghp_`, `twitter`, ...) extracted from its pattern; the
-  regex is skipped when the anchor is absent. 180/189 rules are gated.
+  regex is skipped when the anchor is absent. 199/205 rules are gated.
   Provably lossless (a match always contains its anchor); gated by the
   per-rule fixture tests. See `scanner.py:_prefilter_literals`.
 - **Mnemonic gate.** `detect_mnemonics` returns early when a string has
@@ -37,7 +37,7 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 ## Evaluated and dropped
 
 - **multiprocessing across files.** On Windows `spawn` re-imports modules
-  and recompiles all 189 regexes per worker; measured ~1.1× on a 2.4 MB /
+  and recompiles all 205 regexes per worker; measured ~1.1× on a 2.4 MB /
   200-file corpus (startup cost dominates), with one run at 0.4×. It also
   risks a re-import fork bomb if an entry point isn't `__main__`-guarded.
   Not worth the risk/complexity for the gain. (Cheap, shared-memory
@@ -45,6 +45,7 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
   free; Python can't match that without a native engine.)
 
 ## Open levers (under research)
+
 
 - **Native multi-pattern engines** (`google-re2`, `hyperscan`) — large
   speedups but a portability/packaging cost (Windows wheels?).
