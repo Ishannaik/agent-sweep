@@ -94,7 +94,6 @@ jobs:
         run: >-
           python scripts/audit_re2_compatibility.py
           --json /tmp/re2_compatibility.json
-          --markdown /tmp/RE2_COMPATIBILITY.md
 
   security:
     name: Bandit SAST

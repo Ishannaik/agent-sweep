@@ -21,6 +21,8 @@ from benchmark_regex_engines import _environment, _normalise, _resource_usage  #
 
 def _current_rss_bytes() -> int | None:
     """Read only this benchmark process's current RSS, when the OS exposes it."""
+    if os.name == "nt":
+        return None
     try:
         rss_kib = subprocess.check_output(
             ["ps", "-o", "rss=", "-p", str(os.getpid())],

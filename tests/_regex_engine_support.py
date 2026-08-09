@@ -105,11 +105,13 @@ print(json.dumps({"summary": __import__("agentsweep.scanner", fromlist=["ENGINE_
 def _run(program: str, payload: dict[str, Any], *, mode: str, block_re2: bool) -> dict[str, Any]:
     env = os.environ.copy()
     env["AGENTSWEEP_REGEX_ENGINE"] = mode
+    env["PYTHONIOENCODING"] = "utf-8"
     command = _BLOCK_RE2 + program if block_re2 else program
     result = subprocess.run(
         [sys.executable, "-c", command],
         input=json.dumps(payload, ensure_ascii=False),
         text=True,
+        encoding="utf-8",
         capture_output=True,
         env=env,
         check=False,

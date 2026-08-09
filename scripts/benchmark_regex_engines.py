@@ -16,6 +16,7 @@ import math
 import os
 import platform
 import random
+import shutil
 import statistics
 import subprocess
 import sys
@@ -144,6 +145,7 @@ def _measure(corpus: Path, workers: int) -> dict[str, object]:
 def _child(corpus: Path, workers: int, engine: str) -> dict[str, object]:
     env = os.environ.copy()
     env["AGENTSWEEP_REGEX_ENGINE"] = engine
+    env["PYTHONIOENCODING"] = "utf-8"
     command = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -154,7 +156,12 @@ def _child(corpus: Path, workers: int, engine: str) -> dict[str, object]:
         str(workers),
     ]
     completed = subprocess.run(
-        command, text=True, capture_output=True, env=env, check=False
+        command,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        env=env,
+        check=False,
     )
     if completed.returncode:
         raise RuntimeError(
@@ -189,11 +196,11 @@ def _package_version(name: str) -> str | None:
 
 
 def _memory_snapshot(corpus: Path) -> dict[str, object]:
-    disk = os.statvfs(corpus)
+    disk = shutil.disk_usage(corpus)
     return {
         "corpus_filesystem": _safe_command("stat", "-f", "%T", str(corpus)),
-        "corpus_disk_total_bytes": disk.f_blocks * disk.f_frsize,
-        "corpus_disk_free_bytes": disk.f_bavail * disk.f_frsize,
+        "corpus_disk_total_bytes": disk.total,
+        "corpus_disk_free_bytes": disk.free,
         "swap_usage": _safe_command("sysctl", "-n", "vm.swapusage"),
         "memory_pressure": _safe_command("memory_pressure"),
     }
@@ -216,7 +223,7 @@ def _environment(corpus: Path | None = None) -> dict[str, object]:
                 )
             )
         ]
-    disk = os.statvfs(ROOT)
+    disk = shutil.disk_usage(ROOT)
     battery = _safe_command("pmset", "-g", "batt") or ""
     power_settings = _safe_command("pmset", "-g") or ""
     low_power_lines = [
@@ -246,8 +253,8 @@ def _environment(corpus: Path | None = None) -> dict[str, object]:
         "git_commit": _safe_command("git", "rev-parse", "HEAD"),
         "git_branch": _safe_command("git", "branch", "--show-current"),
         "git_dirty": bool(_safe_command("git", "status", "--porcelain")),
-        "disk_total_bytes": disk.f_blocks * disk.f_frsize,
-        "disk_free_bytes": disk.f_bavail * disk.f_frsize,
+        "disk_total_bytes": disk.total,
+        "disk_free_bytes": disk.free,
         "power": "AC" if "AC Power" in battery else "battery-or-unavailable",
         "low_power_mode": low_power_lines,
         "memory_snapshot": _memory_snapshot(corpus) if corpus is not None else None,
