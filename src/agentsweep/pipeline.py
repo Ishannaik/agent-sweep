@@ -83,6 +83,12 @@ def run(args, *, _findings_out: list | None = None,
             _print_empty_machine_output()
         return 2
 
+    if args.root is not None and not source.root.is_dir():
+        print(f"--root must be a directory, not a file: {source.root}", file=sys.stderr)
+        if machine:
+            _print_empty_machine_output()
+        return 2
+
     if not machine:
         ui.banner(__version__)
         if getattr(source, "experimental", False):
