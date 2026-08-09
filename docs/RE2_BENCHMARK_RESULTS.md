@@ -2,8 +2,8 @@
 
 All inputs were generated synthetic JSONL. No agent history, application data,
 or real credentials were used. Raw samples, execution order, environment
-snapshots, corpus hashes, and finding hashes are committed under
-[`artifacts/benchmarks`](../artifacts/benchmarks/).
+snapshots, corpus hashes, and finding hashes are reproducible local output and
+are intentionally excluded from Git.
 
 ## Environment and method
 
@@ -24,12 +24,12 @@ snapshots, corpus hashes, and finding hashes are committed under
   on CPU-heavy input, and 48.9 ms versus 61.2 ms on realistic input: a
   roughly 12 ms RE2 import/registry cost, within the 100 ms target. The default
   no-RE2 path was separately tested as a full fallback.
-- The committed raw result files total 1.4 MiB; generated corpora are not
-  committed.
-- The standard 512 MiB and soak artifacts were regenerated from clean commit
+- Raw JSON output and generated corpora are intentionally excluded from Git;
+  the commands below recreate them locally.
+- The standard 512 MiB and soak runs were regenerated from clean commit
   `821607645479573281281e4336e02ba9ebae4c40`; every environment snapshot
-  records `git_dirty: false`. Earlier E02–E21 files are development-stage
-  experiment records with `git_dirty: true`, not exact checkout identifiers.
+  records `git_dirty: false`. Earlier E02–E21 development-stage runs reported
+  `git_dirty: true`, not exact checkout identifiers.
 
 These measurements describe this machine and dependency set, not all CPUs or
 operating systems.
@@ -50,15 +50,13 @@ Both standard corpora use seed 42; execution-order seeds are 20260825 and
 - CPU-heavy improvement: **+185.33%**, bootstrap 95% CI **[+184.97%,
   +185.99%]**. Corpus SHA-256:
   `e58f0333fc5d069eee0d3b7eecae1083b9cc80079294f16998a778ecda3ebb2d`.
-  See [`e25_cpu_heavy_512m_final.json`](../artifacts/benchmarks/e25_cpu_heavy_512m_final.json).
 - Realistic mixed improvement: **+21.75%**, bootstrap 95% CI **[+16.90%,
   +23.72%]**. Its 9,909 findings include 6,606 RE2-compatible and 3,303
   fallback-rule findings. Corpus SHA-256:
   `9c4719e5ebf9c3ede0f16650356c71853a814a6fba5dba35216023ab3e8e7663`.
-  See [`e26_realistic_512m_final.json`](../artifacts/benchmarks/e26_realistic_512m_final.json).
 
-The raw `execution_order` fields retain every warmup and measured sample for
-thermal review; both artifacts record the exact execution seed.
+Local `execution_order` output retains every warmup and measured sample for
+thermal review; both runs use the exact execution seed.
 
 ## Quick worker scaling
 
@@ -72,8 +70,7 @@ above supplies the standard-size evidence.
 
 At eight workers, auto is +177.07% over stdlib (95% CI
 [+175.66%, +179.15%]) and reaches 165.8% median process CPU utilization,
-versus stdlib's 100.4%. See
-[`e15_cpu_heavy_16m_final.json`](../artifacts/benchmarks/e15_cpu_heavy_16m_final.json).
+versus stdlib's 100.4%.
 That is 19.5% parallel efficiency for auto at eight workers, versus 12.5% for
 stdlib. The remaining work is Python-side JSON traversal, BIP-39, finding
 construction/deduplication, and the intentionally retained fallback rules.
@@ -91,19 +88,14 @@ be compared with the generator-v2 standard artifacts above.
 | anchor-heavy, no hit | 6.118 | 5.872 | +4.18% | [+3.64%, +4.48%] | improved |
 | adversarial | 10.416 | 10.071 | +3.43% | [+3.22%, +3.71%] | improved |
 
-Every measured sample has a single stable finding hash. The raw files are
-[`e17_benign_16m_final.json`](../artifacts/benchmarks/e17_benign_16m_final.json),
-[`e18_many_small_16m_final.json`](../artifacts/benchmarks/e18_many_small_16m_final.json),
-[`e19_hit_heavy_16m_final.json`](../artifacts/benchmarks/e19_hit_heavy_16m_final.json),
-[`e20_anchor_heavy_16m_final.json`](../artifacts/benchmarks/e20_anchor_heavy_16m_final.json),
-and [`e21_adversarial_16m_final.json`](../artifacts/benchmarks/e21_adversarial_16m_final.json).
+Every measured sample has a single stable finding hash; local JSON output
+retains the individual samples.
 
 The forced-stdlib control was also compared directly with the pre-Issue-90
 `main` commit on the same 16 MiB CPU corpus: 2 warmups and 9 interleaved trials
 per version gave 1.9114 s for `main` and 1.9138 s for current forced stdlib,
 or **−0.13%** (well inside the 3% regression bound). Both produced zero
-findings and the same hash. Raw samples are in
-[`e27_stdlib_main_baseline_16m.json`](../artifacts/benchmarks/e27_stdlib_main_baseline_16m.json).
+findings and the same hash; local output retains all samples.
 
 ## Soak check
 
@@ -116,8 +108,7 @@ RSS rose during allocator warm-up (64.1 MiB to 109.5 MiB by round 60), then
 only 0.8 MiB net across the final 30 rounds (ending at 110.2 MiB; 0.6 MiB
 range). A 30-round stdlib control showed the same behavior and a larger initial
 rise (61.3 MiB to 97.8 MiB).
-The raw records are [`e24_auto_realistic_90.json`](../artifacts/soak/e24_auto_realistic_90.json)
-and [`e23_stdlib_realistic_30.json`](../artifacts/soak/e23_stdlib_realistic_30.json).
+Local soak output retains the per-round records.
 This is a scaled 90-round check, not a claim of a 30–60 minute soak.
 
 ## Reproduce
@@ -129,15 +120,16 @@ uv run python scripts/generate_stress_corpus.py \
   --profile realistic_mixed --size-mib 512 --output "$TMPDIR/agentsweep-realistic"
 uv run python scripts/benchmark_regex_engines.py \
   --corpus "$TMPDIR/agentsweep-realistic" --workers 8 --warmups 2 --trials 9 \
-  --seed 20260826 --output artifacts/benchmarks/local-realistic.json
+  --seed 20260826 --output "$TMPDIR/agentsweep-benchmark.json"
 
 AGENTSWEEP_REGEX_ENGINE=auto uv run python scripts/run_re2_soak.py \
   --corpus "$TMPDIR/agentsweep-realistic" --workers 8 --rounds 30 \
-  --output artifacts/soak/local-auto.json
+  --output "$TMPDIR/agentsweep-soak.json"
 ```
 
 Use a writable, empty output directory; the scripts refuse to overwrite a
-corpus or result file. Generated corpora are intentionally not committed.
+corpus or result file. Generated corpora and raw results are intentionally not
+committed.
 
 A fresh archive of this commit was also installed with `uv sync --extra dev
 --extra fast` on CPython 3.12: the 37 mixed-engine contract tests passed, and

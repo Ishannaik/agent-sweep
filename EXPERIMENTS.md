@@ -2,6 +2,8 @@
 
 All corpora and tokens used below are synthetic. No user history, VPN data, or
 other application data is read by these experiments.
+Raw JSON outputs named below are generated locally and intentionally excluded
+from Git.
 
 ## Environment
 
@@ -46,8 +48,7 @@ other application data is read by these experiments.
 - Corpus: 16 MiB `few_large_strings`, SHA-256
   `201c2b63a84bb667aa7260cfe07cf2aaf453eda3c9c2738400514eecceb03df3`.
 - Result: the 3-trial quick matrix gained only 4.0–9.9%; the 95% interval at
-  one worker crossed zero. Raw data:
-  [`e02_quick_few_large.json`](artifacts/benchmarks/e02_quick_few_large.json).
+  one worker crossed zero. Local output: `e02_quick_few_large.json`.
 - Diagnosis: `google-re2` encoded a Python string once per rule invocation;
   the spaced corpus also spent most time in BIP-39 tokenization.
 - Decision: dropped this conservative selection as insufficient.
@@ -61,8 +62,8 @@ other application data is read by these experiments.
   needed. Selection rose to 144 RE2 and 58 syntax fallbacks.
 - Correctness: parity, Unicode/NUL/newline, 10,000 fixed-seed differential,
   source integration, and 30-repeat worker tests passed.
-- Result: CPU-heavy 16 MiB formal matrix was strongly positive. Raw data:
-  [`e03_cpu_heavy_16m.json`](artifacts/benchmarks/e03_cpu_heavy_16m.json).
+- Result: CPU-heavy 16 MiB formal matrix was strongly positive. Local output:
+  `e03_cpu_heavy_16m.json`.
 - Decision: retained, then tested realistic workloads separately.
 
 ## E04–E07 — realistic workload calibration
@@ -72,14 +73,14 @@ other application data is read by these experiments.
   more than normal history scanning. This failed the 10% realistic goal.
 - E05 changed the profile to sparse findings, but prose remained BIP-39-heavy.
   Formal 16 MiB result at eight workers: +6.45%, CI [+6.25%, +6.94%]. Raw:
-  [`e05_realistic_16m.json`](artifacts/benchmarks/e05_realistic_16m.json).
+  `e05_realistic_16m.json`.
 - E06 reused the scanner's existing ASCII lowercase text in the BIP-39 walker;
   mnemonic and parity tests passed, but this alone did not establish the
   realistic threshold.
 - E07 revised `realistic_mixed` v2 to 60% prose/log and 40% compact structured
   tool/config payloads, with sparse compatible and fallback findings. Formal
   result was +20.88%, CI [+20.49%, +21.20%]. Raw:
-  [`e07_realistic_16m.json`](artifacts/benchmarks/e07_realistic_16m.json).
+  `e07_realistic_16m.json`.
 - Decision: retained the semantic profile change because it adds the source
   shapes required by the goal; E04/E05 remain recorded failures.
 
@@ -89,11 +90,9 @@ other application data is read by these experiments.
   hit-heavy, anchor-heavy, and adversarial inputs.
 - Result: benign, anchor-heavy, and adversarial improved, but all-RE2 bytes
   execution regressed many-small by 30.52% and hit-heavy by 28.29%.
-- Evidence: [`e08_benign_16m_w8.json`](artifacts/benchmarks/e08_benign_16m_w8.json),
-  [`e09_many_small_16m_w8.json`](artifacts/benchmarks/e09_many_small_16m_w8.json),
-  [`e10_hit_heavy_16m_w8.json`](artifacts/benchmarks/e10_hit_heavy_16m_w8.json),
-  [`e11_anchor_heavy_16m_w8.json`](artifacts/benchmarks/e11_anchor_heavy_16m_w8.json),
-  and [`e12_adversarial_16m_w8.json`](artifacts/benchmarks/e12_adversarial_16m_w8.json).
+- Local outputs: `e08_benign_16m_w8.json`, `e09_many_small_16m_w8.json`,
+  `e10_hit_heavy_16m_w8.json`, `e11_anchor_heavy_16m_w8.json`, and
+  `e12_adversarial_16m_w8.json`.
 - Profile evidence: RE2's Python match objects add per-result overhead; short
   strings also pay wrapper setup cost. The initial 64-match dense guard was
   itself too expensive and was dropped.
@@ -108,14 +107,9 @@ other application data is read by these experiments.
   re-scans from the beginning with its existing compiled stdlib pattern.
 - Correctness: dedicated long-ASCII RE2 dispatch and dense-restart tests,
   plus all parity tests, passed.
-- Final 16 MiB results: CPU-heavy matrix
-  [`e15_cpu_heavy_16m_final.json`](artifacts/benchmarks/e15_cpu_heavy_16m_final.json),
-  realistic matrix [`e16_realistic_16m_final.json`](artifacts/benchmarks/e16_realistic_16m_final.json),
-  and regression matrices [`e17_benign_16m_final.json`](artifacts/benchmarks/e17_benign_16m_final.json),
-  [`e18_many_small_16m_final.json`](artifacts/benchmarks/e18_many_small_16m_final.json),
-  [`e19_hit_heavy_16m_final.json`](artifacts/benchmarks/e19_hit_heavy_16m_final.json),
-  [`e20_anchor_heavy_16m_final.json`](artifacts/benchmarks/e20_anchor_heavy_16m_final.json),
-  and [`e21_adversarial_16m_final.json`](artifacts/benchmarks/e21_adversarial_16m_final.json).
+- Final 16 MiB local outputs: CPU-heavy `e15_cpu_heavy_16m_final.json`,
+  realistic `e16_realistic_16m_final.json`, and regression
+  `e17_benign_16m_final.json` through `e21_adversarial_16m_final.json`.
 - Result: many-small −0.52%, hit-heavy −1.94%, benign +4.89%, anchor-heavy
   +4.18%, and adversarial +3.43%; all satisfy the no-regression limits.
 
@@ -128,10 +122,8 @@ other application data is read by these experiments.
 - Result: 30-round auto and stdlib controls had identical findings; both
   showed allocator warm-up. The clean-checkout 90-round auto run rose 45.4 MiB
   through round 60, then only 0.8 MiB net in its final 30 rounds; wall-time
-  first and final deciles were stable. Raw:
-  [`e22_auto_realistic_30.json`](artifacts/soak/e22_auto_realistic_30.json),
-  [`e23_stdlib_realistic_30.json`](artifacts/soak/e23_stdlib_realistic_30.json),
-  [`e24_auto_realistic_90.json`](artifacts/soak/e24_auto_realistic_90.json).
+  first and final deciles were stable. Local outputs: `e22_auto_realistic_30.json`,
+  `e23_stdlib_realistic_30.json`, and `e24_auto_realistic_90.json`.
 - Decision: retained; documented as a scaled 90-round soak, not a 30–60 minute
   claim.
 
@@ -143,13 +135,13 @@ other application data is read by these experiments.
   20260825 and 20260826.
 - CPU-heavy: 512 MiB, 632 files, zero findings, SHA-256
   `e58f0333fc5d069eee0d3b7eecae1083b9cc80079294f16998a778ecda3ebb2d`.
-  Auto +185.33%, CI [+184.97%, +185.99%]. Raw:
-  [`e25_cpu_heavy_512m_final.json`](artifacts/benchmarks/e25_cpu_heavy_512m_final.json).
+  Auto +185.33%, CI [+184.97%, +185.99%]. Local output:
+  `e25_cpu_heavy_512m_final.json`.
 - Realistic: 512 MiB, 128 files, 9,909 findings (6,606 compatible / 3,303
   fallback), SHA-256
   `9c4719e5ebf9c3ede0f16650356c71853a814a6fba5dba35216023ab3e8e7663`.
-  Auto +21.75%, CI [+16.90%, +23.72%]. Raw:
-  [`e26_realistic_512m_final.json`](artifacts/benchmarks/e26_realistic_512m_final.json).
+  Auto +21.75%, CI [+16.90%, +23.72%]. Local output:
+  `e26_realistic_512m_final.json`.
 - Decision: both required performance gates are met. Full tables and
   reproduction commands are in [RE2 benchmark results](docs/RE2_BENCHMARK_RESULTS.md).
 
@@ -165,5 +157,5 @@ other application data is read by these experiments.
 - Result: baseline median 1.9114 s; current forced-stdlib median 1.9138 s;
   current relative change −0.13%. Both runs scanned 40 strings, returned zero
   findings, and matched finding hash `4f53cda…02b945`.
-- Raw data: [`e27_stdlib_main_baseline_16m.json`](artifacts/benchmarks/e27_stdlib_main_baseline_16m.json).
+- Local output: `e27_stdlib_main_baseline_16m.json`.
 - Decision: retained; the control is within the required 3% stdlib bound.

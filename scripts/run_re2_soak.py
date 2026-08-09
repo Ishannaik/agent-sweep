@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import resource
 import subprocess
 import sys
 import time
@@ -17,14 +16,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from benchmark_regex_engines import _environment, _normalise, _rss_bytes  # noqa: E402
+from benchmark_regex_engines import _environment, _normalise, _resource_usage  # noqa: E402
 
 
 def _current_rss_bytes() -> int | None:
     """Read only this benchmark process's current RSS, when the OS exposes it."""
     try:
         rss_kib = subprocess.check_output(
-            ["ps", "-o", "rss=", "-p", str(os.getpid())], text=True,
+            ["ps", "-o", "rss=", "-p", str(os.getpid())],
+            text=True,
         ).strip()
         return int(rss_kib) * 1024
     except (OSError, ValueError, subprocess.CalledProcessError):
@@ -40,7 +40,9 @@ def _run(corpus: Path, workers: int, rounds: int) -> dict[str, object]:
         ENGINE_SUMMARY["requested_engine"] == "auto"
         and int(ENGINE_SUMMARY["re2_rule_count"]) == 0
     ):
-        raise RuntimeError("auto soak selected zero RE2 rules; install the fast extra first")
+        raise RuntimeError(
+            "auto soak selected zero RE2 rules; install the fast extra first"
+        )
 
     manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
     source = CodexSource(root=corpus)
@@ -48,34 +50,45 @@ def _run(corpus: Path, workers: int, rounds: int) -> dict[str, object]:
     pipeline._SCAN_WORKERS = workers  # type: ignore[attr-defined]  # private production knob
     samples = []
     for round_index in range(rounds):
-        before = resource.getrusage(resource.RUSAGE_SELF)
+        before = _resource_usage()
         started = time.perf_counter()
         found, strings, suppressed, truncated = pipeline._scan_all(  # type: ignore[attr-defined]
-            source, files, ignores=None,
+            source,
+            files,
+            ignores=None,
         )
         elapsed = time.perf_counter() - started
-        after = resource.getrusage(resource.RUSAGE_SELF)
+        after = _resource_usage()
         rows = _normalise(found, corpus)
         finding_hash = hashlib.sha256(
             json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()
         ).hexdigest()
         if (len(rows), finding_hash) != (
-            manifest["expected_findings"], manifest["expected_finding_hash"],
+            manifest["expected_findings"],
+            manifest["expected_finding_hash"],
         ):
             raise RuntimeError(f"finding mismatch on soak round {round_index}")
-        samples.append({
-            "round": round_index,
-            "wall_seconds": elapsed,
-            "user_cpu_seconds": after.ru_utime - before.ru_utime,
-            "system_cpu_seconds": after.ru_stime - before.ru_stime,
-            "peak_rss_bytes": _rss_bytes(after),
-            "current_rss_bytes": _current_rss_bytes(),
-            "strings": strings,
-            "suppressed": suppressed,
-            "truncated_files": len(truncated),
-            "finding_count": len(rows),
-            "finding_hash": finding_hash,
-        })
+        if before is None or after is None:
+            user_cpu_seconds = system_cpu_seconds = peak_rss = None
+        else:
+            user_cpu_seconds = after[0] - before[0]
+            system_cpu_seconds = after[1] - before[1]
+            peak_rss = after[2]
+        samples.append(
+            {
+                "round": round_index,
+                "wall_seconds": elapsed,
+                "user_cpu_seconds": user_cpu_seconds,
+                "system_cpu_seconds": system_cpu_seconds,
+                "peak_rss_bytes": peak_rss,
+                "current_rss_bytes": _current_rss_bytes(),
+                "strings": strings,
+                "suppressed": suppressed,
+                "truncated_files": len(truncated),
+                "finding_count": len(rows),
+                "finding_hash": finding_hash,
+            }
+        )
 
     current = [sample["current_rss_bytes"] for sample in samples]
     known_current = [value for value in current if isinstance(value, int)]
@@ -88,7 +101,8 @@ def _run(corpus: Path, workers: int, rounds: int) -> dict[str, object]:
         "workers": workers,
         "rounds": rounds,
         "samples": samples,
-        "all_finding_hashes_equal": len({sample["finding_hash"] for sample in samples}) == 1,
+        "all_finding_hashes_equal": len({sample["finding_hash"] for sample in samples})
+        == 1,
         "current_rss_growth_bytes": (
             max(known_current) - min(known_current) if known_current else None
         ),
@@ -113,7 +127,9 @@ def main() -> int:
     except RuntimeError as exc:
         parser.error(str(exc))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f"wrote {args.output}")
     return 0
 

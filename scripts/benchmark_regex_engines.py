@@ -16,13 +16,17 @@ import math
 import os
 import platform
 import random
-import resource
 import statistics
 import subprocess
 import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+try:
+    import resource
+except ModuleNotFoundError:  # Windows does not expose POSIX resource APIs.
+    resource = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,17 +37,33 @@ def _normalise(found: dict, root: Path) -> list[list[object]]:
     rows: list[list[object]] = []
     for path, entries in found.items():
         for line, keypath, _value, finding in entries:
-            rows.append([
-                path.relative_to(root).as_posix(), line, keypath,
-                finding.rule, finding.display, finding.value, finding.masked,
-                finding.span[0], finding.span[1],
-            ])
+            rows.append(
+                [
+                    path.relative_to(root).as_posix(),
+                    line,
+                    keypath,
+                    finding.rule,
+                    finding.display,
+                    finding.value,
+                    finding.masked,
+                    finding.span[0],
+                    finding.span[1],
+                ]
+            )
     return rows
 
 
-def _rss_bytes(usage: resource.struct_rusage) -> int:
+def _rss_bytes(usage: object) -> int:
     # macOS reports ru_maxrss in bytes; Linux reports KiB.
-    return usage.ru_maxrss if sys.platform == "darwin" else usage.ru_maxrss * 1024
+    max_rss = int(getattr(usage, "ru_maxrss"))
+    return max_rss if sys.platform == "darwin" else max_rss * 1024
+
+
+def _resource_usage() -> tuple[float, float, int] | None:
+    if resource is None:
+        return None
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    return usage.ru_utime, usage.ru_stime, _rss_bytes(usage)
 
 
 def _measure(corpus: Path, workers: int) -> dict[str, object]:
@@ -57,30 +77,47 @@ def _measure(corpus: Path, workers: int) -> dict[str, object]:
     files = source.files()
     pipeline._SCAN_WORKERS = workers  # type: ignore[attr-defined]  # private production knob
     input_bytes = sum(path.stat().st_size for path in files)
-    before = resource.getrusage(resource.RUSAGE_SELF)
+    before = _resource_usage()
     started = time.perf_counter()
     found, strings, suppressed, truncated = pipeline._scan_all(  # type: ignore[attr-defined]
-        source, files, ignores=None,
+        source,
+        files,
+        ignores=None,
     )
     elapsed = time.perf_counter() - started
-    after = resource.getrusage(resource.RUSAGE_SELF)
+    after = _resource_usage()
     rows = _normalise(found, corpus)
     encoded = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
     finding_hash = hashlib.sha256(encoded.encode()).hexdigest()
     finding_count = len(rows)
     expected_hash = manifest["expected_finding_hash"]
     expected_count = manifest["expected_findings"]
-    cpu_seconds = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
-    peak_rss = _rss_bytes(after)
-    baseline_rss = _rss_bytes(before)
+    if before is None or after is None:
+        user_cpu_seconds = system_cpu_seconds = peak_rss = baseline_rss = None
+    else:
+        user_cpu_seconds = after[0] - before[0]
+        system_cpu_seconds = after[1] - before[1]
+        peak_rss = after[2]
+        baseline_rss = before[2]
+    cpu_seconds = (
+        user_cpu_seconds + system_cpu_seconds
+        if user_cpu_seconds is not None and system_cpu_seconds is not None
+        else None
+    )
     return {
         "startup_seconds": started - _PROCESS_STARTED,
         "wall_seconds": elapsed,
-        "user_cpu_seconds": after.ru_utime - before.ru_utime,
-        "system_cpu_seconds": after.ru_stime - before.ru_stime,
-        "cpu_utilization_percent": (cpu_seconds / elapsed * 100) if elapsed else 0.0,
+        "user_cpu_seconds": user_cpu_seconds,
+        "system_cpu_seconds": system_cpu_seconds,
+        "cpu_utilization_percent": (
+            cpu_seconds / elapsed * 100 if cpu_seconds is not None and elapsed else None
+        ),
         "peak_rss_bytes": peak_rss,
-        "rss_delta_bytes": max(0, peak_rss - baseline_rss),
+        "rss_delta_bytes": (
+            max(0, peak_rss - baseline_rss)
+            if peak_rss is not None and baseline_rss is not None
+            else None
+        ),
         "input_bytes": input_bytes,
         "throughput_mib_s": input_bytes / (1024 * 1024) / elapsed if elapsed else 0.0,
         "strings_per_s": strings / elapsed if elapsed else 0.0,
@@ -93,7 +130,8 @@ def _measure(corpus: Path, workers: int) -> dict[str, object]:
         "finding_hash": finding_hash,
         "expected_finding_count": expected_count,
         "expected_finding_hash": expected_hash,
-        "correctness_ok": finding_count == expected_count and finding_hash == expected_hash,
+        "correctness_ok": finding_count == expected_count
+        and finding_hash == expected_hash,
         "requested_workers": workers,
         "effective_workers": min(workers, len(files)),
         "engine": ENGINE_SUMMARY,
@@ -107,17 +145,28 @@ def _child(corpus: Path, workers: int, engine: str) -> dict[str, object]:
     env = os.environ.copy()
     env["AGENTSWEEP_REGEX_ENGINE"] = engine
     command = [
-        sys.executable, str(Path(__file__).resolve()), "--measure",
-        "--corpus", str(corpus), "--workers", str(workers),
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--measure",
+        "--corpus",
+        str(corpus),
+        "--workers",
+        str(workers),
     ]
-    completed = subprocess.run(command, text=True, capture_output=True, env=env, check=False)
+    completed = subprocess.run(
+        command, text=True, capture_output=True, env=env, check=False
+    )
     if completed.returncode:
-        raise RuntimeError(f"benchmark child failed ({completed.returncode}): {completed.stderr}")
+        raise RuntimeError(
+            f"benchmark child failed ({completed.returncode}): {completed.stderr}"
+        )
     result = json.loads(completed.stdout)
     engine_data = result["engine"]
     assert isinstance(engine_data, dict)
     if engine == "auto" and int(engine_data["re2_rule_count"]) == 0:
-        raise RuntimeError("auto benchmark selected zero RE2 rules; install the fast extra first")
+        raise RuntimeError(
+            "auto benchmark selected zero RE2 rules; install the fast extra first"
+        )
     if not result["correctness_ok"]:
         raise RuntimeError("benchmark finding hash differs from corpus manifest")
     return result
@@ -125,7 +174,9 @@ def _child(corpus: Path, workers: int, engine: str) -> dict[str, object]:
 
 def _safe_command(*command: str) -> str | None:
     try:
-        return subprocess.check_output(command, text=True, stderr=subprocess.DEVNULL).strip()
+        return subprocess.check_output(
+            command, text=True, stderr=subprocess.DEVNULL
+        ).strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -153,17 +204,24 @@ def _environment(corpus: Path | None = None) -> dict[str, object]:
     safe_hardware = []
     if hardware:
         safe_hardware = [
-            line.strip() for line in hardware.splitlines()
-            if line.strip().startswith((
-                "Model Name:", "Model Identifier:", "Chip:",
-                "Total Number of Cores:", "Memory:",
-            ))
+            line.strip()
+            for line in hardware.splitlines()
+            if line.strip().startswith(
+                (
+                    "Model Name:",
+                    "Model Identifier:",
+                    "Chip:",
+                    "Total Number of Cores:",
+                    "Memory:",
+                )
+            )
         ]
     disk = os.statvfs(ROOT)
     battery = _safe_command("pmset", "-g", "batt") or ""
     power_settings = _safe_command("pmset", "-g") or ""
     low_power_lines = [
-        line.strip() for line in power_settings.splitlines()
+        line.strip()
+        for line in power_settings.splitlines()
         if "lowpowermode" in line.lower()
     ]
     return {
@@ -216,17 +274,24 @@ def _stats(samples: list[dict[str, object]]) -> dict[str, float]:
     }
 
 
-def _bootstrap_improvement(stdlib: list[dict[str, object]], auto: list[dict[str, object]], seed: int) -> dict[str, float]:
+def _bootstrap_improvement(
+    stdlib: list[dict[str, object]], auto: list[dict[str, object]], seed: int
+) -> dict[str, float]:
     rng = random.Random(seed)
     stdlib_walls = [_number(sample, "wall_seconds") for sample in stdlib]
     auto_walls = [_number(sample, "wall_seconds") for sample in auto]
     changes = []
     for _ in range(2_000):
-        stdlib_median = statistics.median(rng.choice(stdlib_walls) for _ in stdlib_walls)
+        stdlib_median = statistics.median(
+            rng.choice(stdlib_walls) for _ in stdlib_walls
+        )
         auto_median = statistics.median(rng.choice(auto_walls) for _ in auto_walls)
         changes.append((stdlib_median / auto_median - 1) * 100)
     return {
-        "median_percent": (statistics.median(stdlib_walls) / statistics.median(auto_walls) - 1) * 100,
+        "median_percent": (
+            statistics.median(stdlib_walls) / statistics.median(auto_walls) - 1
+        )
+        * 100,
         "ci95_low_percent": _percentile(changes, 2.5),
         "ci95_high_percent": _percentile(changes, 97.5),
     }
@@ -271,10 +336,15 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
                 result = _child(args.corpus, worker, engine)
                 key = f"{engine}-w{worker}"
                 engine_metadata.setdefault(key, result.pop("engine"))
-                execution_order.append({
-                    "phase": phase, "round": round_index, "engine": engine,
-                    "workers": worker, "wall_seconds": result["wall_seconds"],
-                })
+                execution_order.append(
+                    {
+                        "phase": phase,
+                        "round": round_index,
+                        "engine": engine,
+                        "workers": worker,
+                        "wall_seconds": result["wall_seconds"],
+                    }
+                )
                 if phase == "measure":
                     samples[key].append(result)
 
@@ -283,7 +353,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
     if {"stdlib", "auto"} <= set(engines):
         for worker in workers:
             comparisons[f"w{worker}"] = _bootstrap_improvement(
-                samples[f"stdlib-w{worker}"], samples[f"auto-w{worker}"], args.seed + worker
+                samples[f"stdlib-w{worker}"],
+                samples[f"auto-w{worker}"],
+                args.seed + worker,
             )
     return {
         "schema_version": 1,
@@ -332,7 +404,9 @@ def main() -> int:
     except (ValueError, RuntimeError) as exc:
         parser.error(str(exc))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f"wrote {args.output}")
     return 0
 
