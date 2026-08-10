@@ -109,3 +109,32 @@ exclude_dirs = ["tests"]
 # deptry), not imported by src/. Telling deptry these belong to a dev group
 # avoids false DEP002 "unused dependency" hits on every one of them.
 optional_dependencies_dev_groups = ["dev"]
+
+[tool.ruff.lint]
+# Ruff runs as a dev dependency but was never wired into CI, so none of this
+# was enforced. The `lint` job in ci.yml now runs it.
+#
+# Thresholds are deliberately looser than the textbook 10. Pydantic ships
+# max-complexity 14 for the same reason: a limit that fires constantly gets
+# ignored, and an ignored limit is worse than none.
+extend-select = ["C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 14
+
+[tool.ruff.lint.pylint]
+max-branches = 15
+max-statements = 60
+max-args = 8
+max-returns = 8
+
+[tool.ruff.lint.per-file-ignores]
+# Debt register, not an amnesty. These four files hold all 18 existing
+# violations; everything else in src/ is already clean and stays that way from
+# this commit on. cli.py and pipeline.py are also the two highest-churn files
+# in the repo (42 and 36 changes in 90 days), so they are where the next bug
+# is most likely to land. Shrink this list, do not grow it.
+"src/agentsweep/cli.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
+"src/agentsweep/pipeline.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
+"src/agentsweep/redactor.py" = ["C901", "PLR0912", "PLR0915"]
+"src/agentsweep/ui/picker.py" = ["C901"]

@@ -61,6 +61,33 @@ jobs:
       - name: Run mypy
         run: python -m mypy src/
 
+  lint:
+    name: Lint (ruff + file length)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+      - name: Run ruff (style + complexity budgets)
+        run: python -m ruff check src/
+      - name: Enforce max file length
+        # Ruff has no module-length rule (pylint's C0302 was never ported),
+        # so this is the check. 700 is above today's worst (pipeline.py at
+        # 1675 is exempted below) and below the next thing that would rot.
+        run: |
+          over=$(find src -name '*.py' \
+            ! -path 'src/agentsweep/pipeline.py' \
+            ! -path 'src/agentsweep/scanner.py' \
+            ! -path 'src/agentsweep/cli.py' \
+            -exec wc -l {} + | awk '$2!="total" && $1>700 {print $1"  "$2}')
+          if [ -n "$over" ]; then
+            echo "Files over 700 lines:"; echo "$over"; exit 1
+          fi
+          echo "No new oversized files."
+
   security:
     name: Bandit SAST
     runs-on: ubuntu-latest
