@@ -1,4 +1,5 @@
 """Core sources: ClaudeCode, Codex, OpenCode, Aider."""
+
 from __future__ import annotations
 
 import json
@@ -87,8 +88,8 @@ class ClaudeCodeSource(JsonlSource):
 
 
 class CodexSource(JsonlSource):
-    """OpenAI Codex CLI — rollout JSONL under ~/.codex/sessions/YYYY/MM/DD/,
-    plus history.jsonl and session_index.jsonl at the root."""
+    """OpenAI Codex CLI — rollout JSONL under $CODEX_HOME/sessions/YYYY/MM/DD/
+    (default ~/.codex), plus history.jsonl and session_index.jsonl at the root."""
 
     name = "codex"
     display_name = "Codex"
@@ -96,7 +97,9 @@ class CodexSource(JsonlSource):
 
     @classmethod
     def default_root(cls) -> Path:
-        return Path.home() / ".codex"
+        """CODEX_HOME relocates the whole Codex home; else ~/.codex."""
+        relocated = os.environ.get("CODEX_HOME")
+        return Path(relocated) if relocated else Path.home() / ".codex"
 
 
 class OpenCodeSource(Source):
@@ -273,7 +276,6 @@ _AIDER_HISTORY_NAME = ".aider.chat.history.md"
 # deep inside nested vendor trees. Users with odd layouts can pass --root.
 # Hitting the cap is surfaced on stderr (never silent) — see below.
 _AIDER_MAX_DEPTH = 12
-
 
 class AiderSource(Source):
     """Aider CLI — per-repo Markdown history files named .aider.chat.history.md.

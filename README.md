@@ -238,8 +238,8 @@ The legacy flag form `agentsweep --fix` is still accepted and behaves identicall
 Pick which agent's history to target with `--source`. The default is `claude-code`.
 
 ```bash
-agentsweep scan --source claude-code          # ~/.claude/projects/ (or $CLAUDE_CONFIG_DIR)
-agentsweep scan --source codex                # ~/.codex/sessions/
+agentsweep scan --source claude-code          # ~/.claude/projects/ or $CLAUDE_CONFIG_DIR/projects/
+agentsweep scan --source codex                # ~/.codex/ or $CODEX_HOME/
 agentsweep scan --source opencode             # OpenCode SQLite store
 agentsweep scan --source cursor               # Cursor history
 agentsweep scan --source windsurf             # Windsurf history
@@ -289,11 +289,20 @@ agentsweep scan --all --json          # aggregated JSON (each finding has "sourc
 agentsweep scan --all --json -o out.json
 ```
 
-Override the default root directory to scan any arbitrary folder:
+Claude Code and Codex relocated homes are detected automatically when `--root`
+is omitted:
 
 ```bash
-agentsweep scan --root ~/backups/claude-history
-agentsweep fix  --root /tmp/history-copy --allow-production
+CLAUDE_CONFIG_DIR="$HOME/.claude-work" agentsweep scan --source claude-code
+CODEX_HOME="$HOME/.codex-work" agentsweep scan --source codex
+```
+
+An explicit `--root` takes precedence over these defaults and can target any
+arbitrary folder:
+
+```bash
+agentsweep scan --source claude-code --root ~/backups/claude-history
+agentsweep fix  --source codex --root /tmp/codex-history-copy
 ```
 
 ### Scan / fix flags
