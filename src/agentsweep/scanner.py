@@ -39,6 +39,10 @@ RULES: list[tuple[str, str, re.Pattern]] = [
         # and OpenRouter keys, which would otherwise tie on span and win the
         # overlap dedupe by list order.
         re.compile(r"\bsk-(?!ant-)(?!or-v1-)(?:proj-)?[A-Za-z0-9_-]{40,}\b")),
+    ("pinecone-api-key", "Pinecone API key",
+        # Legacy project keys use the distinctive pcsk_ prefix. Their body is
+        # URL-safe alphanumeric text with an optional label separator.
+        re.compile(r"\bpcsk_[A-Za-z0-9_]{64,128}\b")),
     ("anthropic", "Anthropic API key",
         re.compile(r"\bsk-ant-(?:api|sid)[0-9]*-[A-Za-z0-9_-]{32,}\b")),
     ("google-api", "Google API key",
@@ -725,6 +729,7 @@ def _dedupe_overlapping(findings: list[Finding]) -> list[Finding]:
 ROTATION_GUIDANCE: dict[str, str] = {
     'bip39-mnemonic': 'Move ALL funds to a freshly generated wallet immediately — a leaked seed phrase cannot be rotated, only abandoned. Treat every chain derived from it as compromised.',
     "aws-access-key": "Rotate: aws iam create-access-key, then aws iam delete-access-key --access-key-id <ID>",
+    "pinecone-api-key": "Rotate: delete the exposed key and create a replacement in the Pinecone console (project > API keys): https://app.pinecone.io/",
     "aws-session-token": "Session tokens are short-lived; rotate the underlying IAM role/user credentials.",
     "github-pat": "Revoke: https://github.com/settings/tokens",
     "github-oauth": "Revoke: https://github.com/settings/applications",
