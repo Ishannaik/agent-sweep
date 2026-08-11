@@ -18,8 +18,8 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
   prefilter checks into one O(n) pass (substring fallback if the wheel is
   absent). See `scanner.py:_triggered_indices`.
 - **Optional mixed RE2 engine.** `pip install 'agentsweep[fast]'` enables
-  `google-re2` for the rules it can compile; the current registry selects 144
-  RE2 rules and keeps 58 Python-`re` fallbacks with explicit audit reasons.
+  `google-re2` for the rules it can compile; the current registry selects 145
+  RE2 rules and keeps 61 Python-`re` fallbacks with explicit audit reasons.
   Missing wheels leave the default install fully functional on stdlib. Python
   `re` remains the semantic oracle for non-ASCII Unicode-sensitive rules, for
   short strings, and for a rule with more than four matches, where the RE2

@@ -657,6 +657,7 @@ _PREFILTER: dict[str, tuple[str, ...]] = {
 _PREFILTER.update({
     "stripe-live":         ("sk_live_", "rk_live_"),
     "stripe-test":         ("sk_test_", "rk_test_"),
+    "pinecone-api-key":    ("pcsk_",),
     "supabase-access-token": ("sbp_",),
     "supabase-secret-key":   ("sb_secret_",),
     "terraform-api-token": ("atlasv1.",),
