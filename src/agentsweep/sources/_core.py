@@ -45,16 +45,14 @@ class ClaudeCodeSource(JsonlSource):
     def __init__(self, root: Path | None = None):
         # Explicit --root wins and stays single, matching every other source;
         # only default discovery fans out across profiles.
-        self._project_roots = ([root] if root is not None
-                               else self._profile_roots())
+        self._project_roots = [root] if root is not None else self._profile_roots()
         self.root = self._project_roots[0]
 
     @classmethod
     def _profile_roots(cls) -> list[Path]:
         env = os.environ.get("CLAUDE_CONFIG_DIR")
         if env:
-            dirs = [Path(p.strip()).expanduser() for p in env.split(",")
-                    if p.strip()]
+            dirs = [Path(p.strip()).expanduser() for p in env.split(",") if p.strip()]
         else:
             dirs = []
         if not dirs:
@@ -256,9 +254,7 @@ class OpenCodeSource(Source):
         for table, cols in known.items():
             if table not in tables:
                 continue
-            actual = {
-                row[1] for row in con.execute(f"PRAGMA table_info({table})")
-            }
+            actual = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
             present = [c for c in cols if c in actual]
             if not present:
                 raise RuntimeError(
@@ -271,11 +267,13 @@ class OpenCodeSource(Source):
             pairs.extend((table, c) for c in present)
         return pairs
 
+
 _AIDER_HISTORY_NAME = ".aider.chat.history.md"
 # Soft cap from the discovery root. Aider histories live at repo roots, not
 # deep inside nested vendor trees. Users with odd layouts can pass --root.
 # Hitting the cap is surfaced on stderr (never silent) — see below.
 _AIDER_MAX_DEPTH = 12
+
 
 class AiderSource(Source):
     """Aider CLI — per-repo Markdown history files named .aider.chat.history.md.
@@ -331,7 +329,9 @@ class AiderSource(Source):
 
 
 def _find_aider_history(
-    dirpath: Path, _dirnames: list[str], filenames: list[str],
+    dirpath: Path,
+    _dirnames: list[str],
+    filenames: list[str],
 ) -> Iterator[Path]:
     if _AIDER_HISTORY_NAME in filenames:
         p = dirpath / _AIDER_HISTORY_NAME

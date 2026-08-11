@@ -38,7 +38,9 @@ def test_apply_redactions_preserves_json_validity(tmp_path: Path) -> None:
     redactions = []
     for line_num, kp, value in src.iter_strings(target):
         if "AKIAIOSFODNN7EXAMPLE" in value:
-            redactions.append((line_num, kp, value.replace("AKIAIOSFODNN7EXAMPLE", "[REDACTED]")))
+            redactions.append(
+                (line_num, kp, value.replace("AKIAIOSFODNN7EXAMPLE", "[REDACTED]"))
+            )
 
     assert redactions, "fixture should contain the AWS key"
     new_content = src.apply_redactions(target, redactions)

@@ -87,9 +87,10 @@ def test_auto_inventory_is_complete_and_auditable() -> None:
 
     assert len(inventory) == len(ALL_FIXTURES)
     assert len({entry["rule_id"] for entry in inventory}) == len(inventory)
-    assert sum(entry["selected_backend"] == "re2" for entry in inventory) == summary[
-        "re2_rule_count"
-    ]
+    assert (
+        sum(entry["selected_backend"] == "re2" for entry in inventory)
+        == summary["re2_rule_count"]
+    )
     assert all(
         entry["fallback_reason"]
         for entry in inventory
@@ -118,16 +119,28 @@ def test_stdlib_mode_forces_every_rule_to_the_oracle() -> None:
 
     assert result["summary"]["effective_engine_mode"] == "stdlib"
     assert all(entry["selected_backend"] == "stdlib" for entry in result["inventory"])
-    assert all(entry["compile_status"] == "not-attempted" for entry in result["inventory"])
+    assert all(
+        entry["compile_status"] == "not-attempted" for entry in result["inventory"]
+    )
 
 
 def _random_samples(seed: int, count: int) -> list[str]:
     rng = random.Random(seed)
     fixtures = list(ALL_FIXTURES.values())
     atoms = [
-        "normal assistant response", "def handle(value): return value", "INFO token check",
-        "中 文", "emoji 😀", "e\u0301", "\x00", "\r\n", "\n", "near-miss ghp_short",
-        "curl authorization token", "gitlab github stripe secret", "ＡＢＣ１２３",
+        "normal assistant response",
+        "def handle(value): return value",
+        "INFO token check",
+        "中 文",
+        "emoji 😀",
+        "e\u0301",
+        "\x00",
+        "\r\n",
+        "\n",
+        "near-miss ghp_short",
+        "curl authorization token",
+        "gitlab github stripe secret",
+        "ＡＢＣ１２３",
     ]
     texts: list[str] = []
     for _ in range(count):
@@ -146,7 +159,8 @@ def test_ten_thousand_fixed_seed_samples_are_exactly_equal() -> None:
 
     if stdlib["results"] != auto["results"]:
         first = next(
-            index for index, pair in enumerate(zip(stdlib["results"], auto["results"]))
+            index
+            for index, pair in enumerate(zip(stdlib["results"], auto["results"]))
             if pair[0] != pair[1]
         )
         pytest.fail(

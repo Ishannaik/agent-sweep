@@ -1,4 +1,5 @@
 """Extended sources: Cline, GeminiCLI, Continue, GitHub Copilot Chat."""
+
 from __future__ import annotations
 
 import json
@@ -228,7 +229,8 @@ class ContinueSource(Source):
         if not sessions.exists():
             return []
         return sorted(
-            p for p in sessions.glob("*.json")
+            p
+            for p in sessions.glob("*.json")
             if p.is_file() and p.name != "sessions.json"
         )
 

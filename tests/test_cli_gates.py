@@ -3,8 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from agentsweep.sources import ClaudeCodeSource  # noqa: E402
@@ -33,7 +31,9 @@ def test_is_production_root_false_for_override(tmp_path, monkeypatch):
     assert not is_production_root(overridden, ClaudeCodeSource)
 
 
-def test_cli_fix_refuses_default_root_without_allow_production(tmp_path, monkeypatch, capsys):
+def test_cli_fix_refuses_default_root_without_allow_production(
+    tmp_path, monkeypatch, capsys
+):
     from agentsweep.cli import main
 
     fake_home = tmp_path / "home"

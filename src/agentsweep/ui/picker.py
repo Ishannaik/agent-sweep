@@ -6,6 +6,7 @@ source_picker() — multi-select source chooser with a Run Scan button.
 Both use Rich Live for rendering and consume keys from ui.keys.read_key().
 They return plain data (strings / lists) and never call the pipeline.
 """
+
 from __future__ import annotations
 
 from typing import Literal, overload
@@ -22,6 +23,7 @@ from . import keys as _keys
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
+
 
 def _check(selected: bool, target: "console") -> str:  # type: ignore[valid-type]
     if _encodes(target, "✓"):
@@ -76,8 +78,8 @@ def _run_menu(
         grid.add_column(style="dim")
 
         for i, (label, hint) in enumerate(rows):
-            focused = (i == focus)
-            is_btn = (i == button_idx)
+            focused = i == focus
+            is_btn = i == button_idx
 
             if focused:
                 row_style = "bold white on red"
@@ -90,7 +92,9 @@ def _run_menu(
                 ch = _check(i in checked, console)
                 pfx = Text(f"[{ch}]", style="bold red" if i in checked else "dim")
             elif is_btn:
-                pfx = Text("►", style="bold red" if not focused else "bold white on red")
+                pfx = Text(
+                    "►", style="bold red" if not focused else "bold white on red"
+                )
             else:
                 pfx = Text("", style="")
 
@@ -113,8 +117,9 @@ def _run_menu(
         )
 
     try:
-        with Live(_build(), console=console, refresh_per_second=30,
-                  transient=False) as live:
+        with Live(
+            _build(), console=console, refresh_per_second=30, transient=False
+        ) as live:
             while True:
                 live.update(_build())
                 try:
@@ -146,13 +151,13 @@ def _run_menu(
 # ── Public widgets ────────────────────────────────────────────────────────────
 
 _ACTION_ROWS: list[tuple[str, str]] = [
-    ("Scan history",          "read-only — find secrets"),
-    ("Redact secrets",        "asks to confirm · .bak backups"),
-    ("Undo last redaction",   "restores .bak backups"),
-    ("Findings as JSON",      "read-only · machine-readable"),
-    ("Check for updates",     ""),
-    ("Star / contribute",     "★ open the repo — add your agent, PRs welcome"),
-    ("Quit",                  ""),
+    ("Scan history", "read-only — find secrets"),
+    ("Redact secrets", "asks to confirm · .bak backups"),
+    ("Undo last redaction", "restores .bak backups"),
+    ("Findings as JSON", "read-only · machine-readable"),
+    ("Check for updates", ""),
+    ("Star / contribute", "★ open the repo — add your agent, PRs welcome"),
+    ("Quit", ""),
 ]
 
 _ACTION_KEYS = ["scan", "redact", "undo", "json", "updates", "star", "quit"]
@@ -180,21 +185,26 @@ def source_picker() -> list[str] | None:
     from ..sources import SOURCES  # late import: avoids top-level cycle
 
     source_entries: list[tuple[str, str]] = [
-        (SOURCES[k].display_name
-         + ("  (experimental)" if getattr(SOURCES[k], "experimental", False) else ""),
-         k)
+        (
+            SOURCES[k].display_name
+            + (
+                "  (experimental)" if getattr(SOURCES[k], "experimental", False) else ""
+            ),
+            k,
+        )
         for k in SOURCES
     ]
     # "All sources" first, then each source, then Custom folder + Run Scan button.
-    rows: list[tuple[str, str]] = [
-        ("All sources", "scan every agent in parallel"),
-    ] + [
-        (display, key)
-        for display, key in source_entries
-    ] + [
-        ("Custom folder…", "scan a specific directory"),
-        ("[ Run Scan ]",   ""),
-    ]
+    rows: list[tuple[str, str]] = (
+        [
+            ("All sources", "scan every agent in parallel"),
+        ]
+        + [(display, key) for display, key in source_entries]
+        + [
+            ("Custom folder…", "scan a specific directory"),
+            ("[ Run Scan ]", ""),
+        ]
+    )
     source_keys = ["__all__"] + list(SOURCES.keys()) + ["__custom__"]
     button_idx = len(rows) - 1
 

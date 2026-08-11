@@ -1,5 +1,6 @@
 """Format-specific helpers: SQLite copy-and-redact, JSONL, JSON, plaintext,
 plus discovery for agents that store history beside each project."""
+
 from __future__ import annotations
 
 import json
@@ -17,6 +18,7 @@ from ._base import KeyPath, _line_ending, _set_by_path, _walk_json
 # ---------------------------------------------------------------------------
 # SQLite helpers
 # ---------------------------------------------------------------------------
+
 
 def _quote_ident(name: str) -> str:
     """Quote a SQLite identifier (table/column name) per the SQL standard.
@@ -61,7 +63,8 @@ def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
     pairs; redactions targeting anything outside that whitelist are skipped.
     """
     fd, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent), prefix=f".{path.name}.", suffix=".redact")
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".redact"
+    )
     os.close(fd)
     tmp = Path(tmp_name)
     try:
@@ -90,15 +93,15 @@ def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
                 if row is None or row[0] != "ok":
                     raise SafetyError(
                         f"Redacted copy of {path.name} failed "
-                        f"integrity_check; refusing to write")
+                        f"integrity_check; refusing to write"
+                    )
             finally:
                 dst_con.close()
         finally:
             src_con.close()
         return tmp.read_bytes()
     except sqlite3.Error as e:
-        raise SafetyError(
-            f"SQLite error while redacting {path.name}: {e}") from e
+        raise SafetyError(f"SQLite error while redacting {path.name}: {e}") from e
     finally:
         try:
             tmp.unlink()
@@ -168,6 +171,7 @@ def _apply_sqlite_updates(
 # ---------------------------------------------------------------------------
 # Format helpers (JSONL, whole-file JSON, plaintext)
 # ---------------------------------------------------------------------------
+
 
 def _iter_jsonl_strings(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
     """Yield (line_num, keypath, value) for every string in a JSONL file."""
@@ -249,13 +253,13 @@ def _apply_json_file_redactions(
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        raise SafetyError(
-            f"Cannot re-read {path.name} for redaction: {e}") from e
+        raise SafetyError(f"Cannot re-read {path.name} for redaction: {e}") from e
     try:
         obj = json.loads(text)
     except json.JSONDecodeError as e:
         raise SafetyError(
-            f"{path.name} is no longer valid JSON; refusing to redact") from e
+            f"{path.name} is no longer valid JSON; refusing to redact"
+        ) from e
     for _line_num, kp, new_val in redactions:
         _set_by_path(obj, kp, new_val)
     out = json.dumps(obj, ensure_ascii=False, indent=2)
@@ -283,24 +287,26 @@ def _iter_plaintext_lines(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
 # Vendor / VCS / build-cache dirs — never a project root, so they are pruned at
 # ANY depth. A directory with one of these names holds tooling, not a project
 # the user ran an agent in, so dropping it can't hide a real history.
-_PROJECT_SKIP_DIRS: frozenset[str] = frozenset({
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".tox",
-    ".nox",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".cache",
-    ".npm",
-    ".yarn",
-    ".pnpm-store",
-    ".cargo",
-    ".rustup",
-})
+_PROJECT_SKIP_DIRS: frozenset[str] = frozenset(
+    {
+        ".git",
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".tox",
+        ".nox",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".cache",
+        ".npm",
+        ".yarn",
+        ".pnpm-store",
+        ".cargo",
+        ".rustup",
+    }
+)
 
 # OS-profile trees (caches, not project roots) — pruned ONLY when they sit
 # directly under $HOME. Unlike the vendor set, these are ordinary words a real
@@ -312,13 +318,15 @@ _PROJECT_SKIP_DIRS: frozenset[str] = frozenset({
 # ponytail: home-top-only prune, not per-name cache-child pruning. If ~/.config
 # on some box (large browser profiles) makes a scan slow, add the specific
 # cache-child dir names — don't re-blanket-prune .config and lose real repos.
-_PROJECT_SKIP_DIRS_HOME_TOP: frozenset[str] = frozenset({
-    "AppData",
-    "Library",
-    ".Trash",
-    "Trash",
-    ".local",
-})
+_PROJECT_SKIP_DIRS_HOME_TOP: frozenset[str] = frozenset(
+    {
+        "AppData",
+        "Library",
+        ".Trash",
+        "Trash",
+        ".local",
+    }
+)
 
 
 def _iter_project_histories(
@@ -356,7 +364,9 @@ def _iter_project_histories(
 
     # os.walk so we can mutate dirs in place and skip huge subtrees.
     for dirpath, dirnames, filenames in os.walk(
-        root, topdown=True, onerror=_onerror,
+        root,
+        topdown=True,
+        onerror=_onerror,
     ):
         # Depth relative to root (root itself is depth 0). ``resolved`` is
         # reused for the home-top check, so there's no extra resolve() per dir.
@@ -375,7 +385,8 @@ def _iter_project_histories(
         else:
             at_home_top = resolved == home
             dirnames[:] = [
-                d for d in dirnames
+                d
+                for d in dirnames
                 if d not in _PROJECT_SKIP_DIRS
                 and not (at_home_top and d in _PROJECT_SKIP_DIRS_HOME_TOP)
             ]
@@ -406,8 +417,7 @@ def _apply_plaintext_redactions(
     try:
         text = path.read_bytes().decode("utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        raise SafetyError(
-            f"Cannot re-read {path.name} for redaction: {e}") from e
+        raise SafetyError(f"Cannot re-read {path.name} for redaction: {e}") from e
     lines = text.splitlines(keepends=True)
     by_line: dict[int, str] = {ln: nv for ln, _kp, nv in redactions}
     out: list[str] = []

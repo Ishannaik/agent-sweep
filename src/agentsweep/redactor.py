@@ -50,8 +50,9 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def safety_check(path: Path, source_root: Path | Iterable[Path],
-                 force: bool = False) -> None:
+def safety_check(
+    path: Path, source_root: Path | Iterable[Path], force: bool = False
+) -> None:
     """Raise SafetyError if `path` is not safe to modify.
 
     Refuses: paths outside the source's root(s), symlinks, and files modified
@@ -77,9 +78,7 @@ def safety_check(path: Path, source_root: Path | Iterable[Path],
     if not resolved_roots:
         raise SafetyError("Cannot resolve any source root")
 
-    contained = any(
-        resolved == r or r in resolved.parents for r in resolved_roots
-    )
+    contained = any(resolved == r or r in resolved.parents for r in resolved_roots)
     if not contained:
         raise SafetyError(
             f"Refusing to modify path outside source root(s): {path} "
@@ -100,9 +99,13 @@ def safety_check(path: Path, source_root: Path | Iterable[Path],
             )
 
 
-def safe_write(path: Path, new_content: str | bytes,
-               backup: bool = True, fmt: str = "jsonl",
-               sidecars: Sequence[Path] = ()) -> WriteRecord:
+def safe_write(
+    path: Path,
+    new_content: str | bytes,
+    backup: bool = True,
+    fmt: str = "jsonl",
+    sidecars: Sequence[Path] = (),
+) -> WriteRecord:
     """Atomically replace `path`'s content with `new_content`.
 
     Guarantees:
@@ -148,9 +151,7 @@ def safe_write(path: Path, new_content: str | bytes,
         elif fmt == "json":
             _validate_json(new_content)
         elif fmt != "text":
-            raise SafetyError(
-                f"Unknown content format {fmt!r}; refusing to write"
-            )
+            raise SafetyError(f"Unknown content format {fmt!r}; refusing to write")
 
         if fmt != "json":
             original_text = original_bytes.decode("utf-8")
@@ -170,8 +171,15 @@ def safe_write(path: Path, new_content: str | bytes,
         # redaction changes nothing. Don't create a backup or rewrite; report
         # it so the caller renders a calm "already redacted" skip instead of a
         # confusing FAIL on the no-clobber backup check.
-        return WriteRecord(path, original_hash, new_hash, None,
-                           len(original_bytes), len(new_bytes), unchanged=True)
+        return WriteRecord(
+            path,
+            original_hash,
+            new_hash,
+            None,
+            len(original_bytes),
+            len(new_bytes),
+            unchanged=True,
+        )
 
     # Sidecars are backed up before the replace and removed after it, so a
     # crash in between leaves the original database recoverable from the pair
@@ -313,14 +321,19 @@ def _append_audit(record: WriteRecord) -> None:
         target = audit_path()
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "path": str(record.path),
-                "original_sha256": record.original_sha256,
-                "new_sha256": record.new_sha256,
-                "backup": str(record.backup) if record.backup else None,
-                "bytes_before": record.bytes_before,
-                "bytes_after": record.bytes_after,
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "path": str(record.path),
+                        "original_sha256": record.original_sha256,
+                        "new_sha256": record.new_sha256,
+                        "backup": str(record.backup) if record.backup else None,
+                        "bytes_before": record.bytes_before,
+                        "bytes_after": record.bytes_after,
+                    }
+                )
+                + "\n"
+            )
     except OSError:
         pass

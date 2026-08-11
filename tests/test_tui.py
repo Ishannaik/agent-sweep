@@ -1,5 +1,6 @@
 """Tests for the interactive TUI components (keys.py, picker.py) and the
 parallel file-scan path added in _scan_all (pipeline.py Task 7)."""
+
 from __future__ import annotations
 
 import io
@@ -13,10 +14,10 @@ import pytest
 
 from agentsweep.ui import keys as _keys
 from agentsweep.ui.picker import action_menu, source_picker, _run_menu
-from agentsweep.sources import SOURCES
 
 
 # ── keys.py ──────────────────────────────────────────────────────────────────
+
 
 def test_key_constants_are_distinct_strings():
     consts = [_keys.UP, _keys.DOWN, _keys.ENTER, _keys.SPACE, _keys.QUIT, _keys.OTHER]
@@ -32,26 +33,30 @@ def test_raw_input_available_is_bool():
 def test_raw_input_unavailable_in_test_subprocess(monkeypatch):
     """pytest runs without a tty, so _probe() must return False."""
     import sys
+
     # The probe checks isatty(); in test env stdin is a pipe, so False.
     assert not sys.stdin.isatty()
     # RAW_INPUT_AVAILABLE was set at import time, reflect that.
     assert _keys.RAW_INPUT_AVAILABLE is False
 
+
 # ── keys._read_key_unix real byte parsing (pty regression) ────────────────────
 
 _BYTE_SEQ_CASES = [
-    (b"\x1b[A", _keys.UP),     # CSI up
-    (b"\x1b[B", _keys.DOWN),   # CSI down
-    (b"\x1bOA", _keys.UP),     # SS3 up (application-cursor-key mode)
-    (b"\x1bOB", _keys.DOWN),   # SS3 down
-    (b"\x1b", _keys.QUIT),     # bare ESC key
+    (b"\x1b[A", _keys.UP),  # CSI up
+    (b"\x1b[B", _keys.DOWN),  # CSI down
+    (b"\x1bOA", _keys.UP),  # SS3 up (application-cursor-key mode)
+    (b"\x1bOB", _keys.DOWN),  # SS3 down
+    (b"\x1b", _keys.QUIT),  # bare ESC key
     (b"\r", _keys.ENTER),
     (b" ", _keys.SPACE),
     (b"q", _keys.QUIT),
 ]
 
+
 def _feed_keys_when_raw(master_fd, slave_fd, data):
     import termios
+
     # Wait until _read_key_unix switches the slave out of canonical mode
     # (setcbreak clears ICANON) before writing, so the bytes are neither
     # discarded by setcbreak(TCSAFLUSH) nor held by the canonical line
@@ -61,7 +66,6 @@ def _feed_keys_when_raw(master_fd, slave_fd, data):
             break
         time.sleep(0.005)
     os.write(master_fd, data)
-
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="unix key reader")
@@ -77,6 +81,7 @@ def test_read_key_unix_parses_real_byte_sequences(seq, expected, monkeypatch):
     to sys.stdin.read.
     """
     import pty
+
     master, slave = pty.openpty()
     # Buffered TextIOWrapper over the slave: the exact stdin shape that
     # triggered the original bug.
@@ -93,7 +98,9 @@ def test_read_key_unix_parses_real_byte_sequences(seq, expected, monkeypatch):
         os.close(master)
         os.close(slave)
 
+
 # ── picker._run_menu single-select ───────────────────────────────────────────
+
 
 def _run_with_keys(key_seq, **kw):
     """Run _run_menu driven by a pre-canned key sequence."""
@@ -131,6 +138,7 @@ def test_single_select_quit_returns_none():
 
 # ── picker._run_menu multi-select ─────────────────────────────────────────────
 
+
 def test_multi_select_space_toggles():
     """SPACE on row 0 checks it; DOWN twice to Run button + ENTER returns it in the set."""
     rows = [("A", ""), ("B", ""), ("[ Run ]", "")]
@@ -165,6 +173,7 @@ def test_multi_select_run_button_returns_run_true():
 
 # ── picker.action_menu ────────────────────────────────────────────────────────
 
+
 def test_action_menu_quit_returns_quit():
     with patch("agentsweep.ui.picker._keys.read_key", return_value=_keys.QUIT):
         with patch("agentsweep.ui.picker.Live") as mock_live:
@@ -188,6 +197,7 @@ def test_action_menu_select_scan():
 
 # ── picker.source_picker ──────────────────────────────────────────────────────
 
+
 def test_source_picker_quit_returns_none():
     with patch("agentsweep.ui.picker._keys.read_key", return_value=_keys.QUIT):
         with patch("agentsweep.ui.picker.Live") as mock_live:
@@ -201,6 +211,7 @@ def test_source_picker_quit_returns_none():
 def test_source_picker_default_when_nothing_selected():
     """Pressing Run with nothing checked defaults to claude-code."""
     from agentsweep.sources import SOURCES
+
     n_sources = len(SOURCES)
     # Rows: "All sources" + n_sources + Custom folder + Run, so the Run button
     # is at index n_sources + 2.
@@ -219,6 +230,7 @@ def test_source_picker_default_when_nothing_selected():
 def test_source_picker_select_first_source():
     """DOWN to the first source (claude-code, now index 1), Space, then Run."""
     from agentsweep.sources import SOURCES
+
     n_sources = len(SOURCES)
     run_idx = n_sources + 2
     # DOWN onto claude-code, Space to select, then DOWN to the Run button, ENTER
@@ -237,6 +249,7 @@ def test_source_picker_select_first_source():
 def test_source_picker_all_sources_returns_sentinel():
     """Space on the first row ('All sources') returns the __all__ sentinel."""
     from agentsweep.sources import SOURCES
+
     n_sources = len(SOURCES)
     run_idx = n_sources + 2
     # Space to check 'All sources' (row 0), then navigate to Run and Enter.
@@ -253,10 +266,12 @@ def test_source_picker_all_sources_returns_sentinel():
 
 # ── menu.py dispatch ──────────────────────────────────────────────────────────
 
+
 def test_run_menu_uses_numbered_fallback_when_raw_unavailable(monkeypatch, capsys):
     """When RAW_INPUT_AVAILABLE=False the numbered menu path is used."""
     from agentsweep import menu
     from agentsweep import cli
+
     monkeypatch.setattr(cli, "_interactive", lambda: True)
     monkeypatch.setattr("agentsweep.ui.keys.RAW_INPUT_AVAILABLE", False)
     inputs = iter(["q"])
@@ -267,12 +282,12 @@ def test_run_menu_uses_numbered_fallback_when_raw_unavailable(monkeypatch, capsy
 
 # ── pipeline parallel scan (Task 7) ──────────────────────────────────────────
 
+
 def test_parallel_scan_same_results_as_sequential(tmp_path):
     """_scan_all with >4 files (threadpool path) must produce identical results
     to sequential scan.  We write 6 JSONL files — 5 clean, 1 with a secret —
     and confirm findings are detected correctly in both modes."""
     import json
-    from pathlib import Path
     from agentsweep.pipeline import _scan_all
     from agentsweep.sources import ClaudeCodeSource
 
@@ -281,14 +296,16 @@ def test_parallel_scan_same_results_as_sequential(tmp_path):
     # 5 clean files + 1 with a real AWS key
     for i in range(5):
         (tmp_path / f"clean_{i}.jsonl").write_text(
-            json.dumps({"type": "assistant", "message": {"content": f"hello {i}"}}) + "\n",
+            json.dumps({"type": "assistant", "message": {"content": f"hello {i}"}})
+            + "\n",
             encoding="utf-8",
         )
     dirty = tmp_path / "dirty.jsonl"
     dirty.write_text(
-        json.dumps({"type": "assistant", "message": {
-            "content": f"my aws key is {secret}"
-        }}) + "\n",
+        json.dumps(
+            {"type": "assistant", "message": {"content": f"my aws key is {secret}"}}
+        )
+        + "\n",
         encoding="utf-8",
     )
 

@@ -5,6 +5,7 @@ and dispatches on the returned constant.
 
 RAW_INPUT_AVAILABLE is probed once at import; callers gate the TUI on it.
 """
+
 from __future__ import annotations
 
 import sys
@@ -20,6 +21,7 @@ OTHER = "OTHER"
 
 def _read_key_windows() -> str:
     import msvcrt
+
     ch = msvcrt.getwch()
     if ch in ("\x00", "\xe0"):
         # Arrow keys: second byte distinguishes
@@ -92,6 +94,7 @@ def _probe() -> bool:
     if sys.platform == "win32":
         try:
             import msvcrt  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -99,6 +102,7 @@ def _probe() -> bool:
         import tty  # noqa: F401
         import termios  # noqa: F401
         import select  # noqa: F401
+
         return True
     except ImportError:
         return False

@@ -4,6 +4,7 @@ Uses pytest-benchmark to provide trend data across commits and catch
 gradual drift — a complement to the existing hard-threshold asserts in
 test_scan_performance.py, which remain the catastrophic-regression floor.
 """
+
 from __future__ import annotations
 
 import sys
@@ -13,7 +14,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from agentsweep import scanner  # noqa: E402
 from agentsweep.mnemonic import detect_mnemonics  # noqa: E402
 from agentsweep.scanner import _triggered_indices, scan_text  # noqa: E402
 
@@ -42,7 +42,8 @@ SMALL = (
     "Let me also share my .env file for reference:\n"
     "DATABASE_URL=postgresql://admin:secret123@localhost:5432/app\n"
     "REDIS_URL=redis://:redis_pass@localhost:6379/0\n"
-    "STRIPE_SECRET_KEY=sk_" "live_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d\n"
+    "STRIPE_SECRET_KEY=sk_"
+    "live_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d\n"
     "TWILIO_AUTH_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\n"
 )
 
@@ -94,7 +95,8 @@ _MEDIUM_BASE = (
     "gitlab_token = 'glpat-featureflagtokensoandso'\n"
     "jfrog_token = 'AKCp8k7exampletokenvaluewithcharslong'\n"
     "sendgrid_key = 'SG.xYz789abcdefghijklmnopqr.abcdefghijklmno'\n"
-    "stripe_key = 'sk_" "test_abcdefghijklmnopqrstuvwxyz012345'\n"
+    "stripe_key = 'sk_"
+    "test_abcdefghijklmnopqrstuvwxyz012345'\n"
 )
 MEDIUM = _MEDIUM_BASE * 30  # ~200 KB
 

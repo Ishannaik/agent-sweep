@@ -17,6 +17,7 @@ Regression coverage for two composition bugs:
    be fixed: safety_check refused them as outside source.root, and undo
    never globbed there. Sources now declare every tree via roots().
 """
+
 from __future__ import annotations
 
 import argparse
@@ -72,8 +73,7 @@ def test_aider_markdown_fix_end_to_end(tmp_path: Path) -> None:
     source = AiderSource(root=root)
     assert hist in source.files()
 
-    rows, errors, _ = _redact_all(source, _scan(source, hist),
-                               backup=True, force=True)
+    rows, errors, _ = _redact_all(source, _scan(source, hist), backup=True, force=True)
     # Before: always ("fail", ..., "line 1 is not valid JSON ...").
     assert errors == 0
     assert rows[0][0] == "ok"
@@ -83,8 +83,7 @@ def test_aider_markdown_fix_end_to_end(tmp_path: Path) -> None:
     assert "[REDACTED:" in after
     assert len(after.splitlines()) == len(original.splitlines())
     assert "That looks like an AWS access key id." in after
-    assert hist.with_name(hist.name + ".bak").read_text(
-        encoding="utf-8") == original
+    assert hist.with_name(hist.name + ".bak").read_text(encoding="utf-8") == original
 
 
 def test_opencode_legacy_json_fix_end_to_end(tmp_path: Path) -> None:
@@ -92,16 +91,22 @@ def test_opencode_legacy_json_fix_end_to_end(tmp_path: Path) -> None:
     msgdir = root / "storage" / "session" / "message"
     msgdir.mkdir(parents=True)
     f = msgdir / "msg_001.json"
-    f.write_text(json.dumps(
-        {"role": "user",
-         "parts": [{"type": "text", "text": f"my key is {SECRET}"}]},
-        indent=2) + "\n", encoding="utf-8")
+    f.write_text(
+        json.dumps(
+            {
+                "role": "user",
+                "parts": [{"type": "text", "text": f"my key is {SECRET}"}],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     original = f.read_text(encoding="utf-8")
     source = OpenCodeSource(root=root)
     assert source.files() == [f]
 
-    rows, errors, _ = _redact_all(source, _scan(source, f),
-                               backup=True, force=True)
+    rows, errors, _ = _redact_all(source, _scan(source, f), backup=True, force=True)
     assert errors == 0
     assert rows[0][0] == "ok"
 
@@ -117,16 +122,23 @@ def test_cline_task_json_fix_end_to_end(tmp_path: Path) -> None:
     task = root / "tasks" / "171"
     task.mkdir(parents=True)
     f = task / "api_conversation_history.json"
-    f.write_text(json.dumps([
-        {"role": "user",
-         "content": [{"type": "text", "text": f"use {SECRET} for s3"}]},
-    ], indent=2), encoding="utf-8")
+    f.write_text(
+        json.dumps(
+            [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": f"use {SECRET} for s3"}],
+                },
+            ],
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     original = f.read_text(encoding="utf-8")
     source = ClineSource(root=root)
     assert source.files() == [f]
 
-    rows, errors, _ = _redact_all(source, _scan(source, f),
-                               backup=True, force=True)
+    rows, errors, _ = _redact_all(source, _scan(source, f), backup=True, force=True)
     assert errors == 0
     assert rows[0][0] == "ok"
     after = f.read_text(encoding="utf-8")
@@ -140,9 +152,10 @@ def test_gemini_checkpoint_json_is_scanned_and_fixed(tmp_path: Path) -> None:
     chats = root / "tmp" / "proj-1" / "chats"
     chats.mkdir(parents=True)
     f = chats / "checkpoint-main.json"
-    f.write_text(json.dumps(
-        [{"role": "user", "parts": [{"text": f"key {SECRET}"}]}], indent=2),
-        encoding="utf-8")
+    f.write_text(
+        json.dumps([{"role": "user", "parts": [{"text": f"key {SECRET}"}]}], indent=2),
+        encoding="utf-8",
+    )
     source = GeminiCliSource(root=root)
     assert f in source.files()
 
@@ -151,8 +164,7 @@ def test_gemini_checkpoint_json_is_scanned_and_fixed(tmp_path: Path) -> None:
     # invisible to the scan.
     assert any(SECRET in v for _, _, v in source.iter_strings(f))
 
-    rows, errors, _ = _redact_all(source, _scan(source, f),
-                               backup=True, force=True)
+    rows, errors, _ = _redact_all(source, _scan(source, f), backup=True, force=True)
     assert errors == 0
     assert rows[0][0] == "ok"
     after = f.read_text(encoding="utf-8")
@@ -174,8 +186,7 @@ def test_windsurf_memory_fix_outside_user_root_and_undo(tmp_path: Path) -> None:
     source = WindsurfSource(root=user_root)
     assert mem in source.files()
 
-    rows, errors, _ = _redact_all(source, _scan(source, mem),
-                               backup=True, force=True)
+    rows, errors, _ = _redact_all(source, _scan(source, mem), backup=True, force=True)
     # Before roots(): always ("skip", ..., "outside source root").
     assert errors == 0
     assert rows[0][0] == "ok"

@@ -1,4 +1,5 @@
 """Base abstractions: Source ABC, JsonlSource, and JSON-walk helpers."""
+
 from __future__ import annotations
 
 import json
@@ -184,6 +185,7 @@ class JsonlSource(Source):
 # ---------------------------------------------------------------------------
 # JSON-walk helpers (shared by all source modules)
 # ---------------------------------------------------------------------------
+
 
 def _walk_json_with_base(
     obj,

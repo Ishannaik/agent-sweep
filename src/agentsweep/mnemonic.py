@@ -9,6 +9,7 @@ matches — cryptographic validation, not pattern matching.
 
 Monero uses its own 1626-word list (25 words) and is not covered yet.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -34,8 +35,8 @@ _MAX_GAP = 3  # chars between words: tighter than prose, loose enough for \r\n
 
 def _bip39_checksum_ok(words: list[str]) -> bool:
     n = len(words)
-    cs_bits = n // 3            # 12->4 ... 24->8
-    ent_bits = 32 * cs_bits     # 128 ... 256
+    cs_bits = n // 3  # 12->4 ... 24->8
+    ent_bits = 32 * cs_bits  # 128 ... 256
     acc = 0
     for w in words:
         acc = (acc << 11) | _INDEX[w]
@@ -46,8 +47,9 @@ def _bip39_checksum_ok(words: list[str]) -> bool:
 
 
 def _electrum_version_ok(words: list[str]) -> bool:
-    tag = hmac.new(b"Seed version", " ".join(words).encode("utf-8"),
-                   hashlib.sha512).hexdigest()
+    tag = hmac.new(
+        b"Seed version", " ".join(words).encode("utf-8"), hashlib.sha512
+    ).hexdigest()
     return tag.startswith(_ELECTRUM_PREFIXES)
 
 
@@ -61,8 +63,7 @@ def detect_mnemonics(text: str, ascii_lowered: str | None = None):
     # word separators. A big tokenless blob (base64, minified JS, a long
     # path) has far fewer, so skip it without the per-token regex scan.
     # Lossless: any string holding 12 separated words has >= 11 separators.
-    if (text.count(" ") + text.count("\n")
-            + text.count(",") + text.count(";")) < 11:
+    if (text.count(" ") + text.count("\n") + text.count(",") + text.count(";")) < 11:
         return []
 
     from .scanner import Finding  # late import: scanner imports this module
@@ -82,9 +83,9 @@ def detect_mnemonics(text: str, ascii_lowered: str | None = None):
         word = m.group()
         if not already_lowered:
             word = word.lower()
-        gap_ok = (last_end is None
-                  or (m.start() - last_end <= _MAX_GAP
-                      and _GAP.match(text, last_end, m.start())))
+        gap_ok = last_end is None or (
+            m.start() - last_end <= _MAX_GAP and _GAP.match(text, last_end, m.start())
+        )
         if word in _WORDSET and (gap_ok or not current):
             if not gap_ok:
                 runs.append(current)
@@ -106,18 +107,20 @@ def detect_mnemonics(text: str, ascii_lowered: str | None = None):
             for length in _LENGTHS:
                 if i + length > len(run):
                     continue
-                window = run[i:i + length]
+                window = run[i : i + length]
                 if _valid([w for w, _, _ in window]):
                     start = window[0][1]
                     end = window[-1][2]
                     words = [w for w, _, _ in window]
-                    findings.append(Finding(
-                        rule="bip39-mnemonic",
-                        display="Crypto seed phrase (BIP-39/Electrum)",
-                        value=text[start:end],
-                        masked=f"{words[0]} …[{length} words]… {words[-1]}",
-                        span=(start, end),
-                    ))
+                    findings.append(
+                        Finding(
+                            rule="bip39-mnemonic",
+                            display="Crypto seed phrase (BIP-39/Electrum)",
+                            value=text[start:end],
+                            masked=f"{words[0]} …[{length} words]… {words[-1]}",
+                            span=(start, end),
+                        )
+                    )
                     i += length
                     claimed = True
                     break

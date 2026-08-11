@@ -1,4 +1,5 @@
 """Graceful Ctrl-C farewell: dissolve outro on a tty, one line on pipes."""
+
 from __future__ import annotations
 
 import contextlib
@@ -26,8 +27,7 @@ def _animate_shutdown(message: str) -> None:
             t.append(f"{ic['warn']} ", style="bold yellow")
             t.append(message[:locked], style="bold red")
             for ch in message[locked:]:
-                t.append(rng.choice(pool) if ch != " " else " ",
-                         style="dark_red")
+                t.append(rng.choice(pool) if ch != " " else " ", style="dark_red")
             live.update(t, refresh=True)
             time.sleep(0.028)
 
@@ -40,15 +40,29 @@ def shutdown_notice(during_fix: bool = False, plain: bool = False) -> None:
     line — never make an impatient interrupt wait.
     """
     ic = _icons(err_console)
-    if (not plain and err_console.is_terminal
-            and not os.environ.get("AGENTSWEEP_NO_ANIM")):
+    if (
+        not plain
+        and err_console.is_terminal
+        and not os.environ.get("AGENTSWEEP_NO_ANIM")
+    ):
         with contextlib.suppress(KeyboardInterrupt):
             _animate_shutdown("sweep interrupted — shutting down clean")
-    err_console.print(Text(
-        _safe(err_console, f"  {ic['warn']} interrupted — sweep aborted cleanly"),
-        style="bold yellow"), soft_wrap=True)
+    err_console.print(
+        Text(
+            _safe(err_console, f"  {ic['warn']} interrupted — sweep aborted cleanly"),
+            style="bold yellow",
+        ),
+        soft_wrap=True,
+    )
     if during_fix:
-        err_console.print(Text(_safe(
-            err_console,
-            "    writes are atomic — no file was left torn; finished files "
-            "keep their .bak backups"), style="dim"), soft_wrap=True)
+        err_console.print(
+            Text(
+                _safe(
+                    err_console,
+                    "    writes are atomic — no file was left torn; finished files "
+                    "keep their .bak backups",
+                ),
+                style="dim",
+            ),
+            soft_wrap=True,
+        )

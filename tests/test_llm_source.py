@@ -12,6 +12,7 @@ triggers) so the tests exercise the two things that actually matter:
      fires responses_au, and _redact_sqlite_copy runs with secure_delete + a
      final VACUUM, no plaintext token survives in the FTS shadow tables.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -155,8 +156,15 @@ def test_llm_iter_strings_finds_secret(tmp_path: Path) -> None:
     # Every free-text column secret is found...
     assert {KEY_PROMPT, KEY_SYSTEM, KEY_RESPONSE, KEY_FRAGMENT, KEY_CONVNAME} <= found
     # ...across exactly the whitelisted columns present in this db...
-    assert cols == {"prompt", "system", "response", "reasoning", "content",
-                    "name", "output"}
+    assert cols == {
+        "prompt",
+        "system",
+        "response",
+        "reasoning",
+        "content",
+        "name",
+        "output",
+    }
     # ...and the *_json duplicate-noise columns are never scanned.
     assert KEY_JSON_ONLY not in found
     assert "prompt_json" not in cols
@@ -173,8 +181,13 @@ def test_llm_scans_model_and_tool_columns(tmp_path: Path) -> None:
     found = {fd.value for *_rest, fd in items}
     assert {KEY_REASONING, KEY_TOOL_OUTPUT} <= found
 
-    safe_write(db, _redact(source, db), backup=True,
-               fmt=source.content_format(db), sidecars=source.sidecars(db))
+    safe_write(
+        db,
+        _redact(source, db),
+        backup=True,
+        fmt=source.content_format(db),
+        sidecars=source.sidecars(db),
+    )
     redacted = db.read_bytes()
     for key in (KEY_REASONING, KEY_TOOL_OUTPUT):
         assert key.encode() not in redacted, f"{key} survived redaction"
@@ -187,10 +200,13 @@ def test_llm_redactions_preserve_structure_and_scrub_fts(tmp_path: Path) -> None
 
     # Sanity: the FTS index really does hold the prompt/response tokens first.
     con = sqlite3.connect(db)
-    assert con.execute(
-        "SELECT count(*) FROM responses_fts WHERE responses_fts MATCH ?",
-        (KEY_PROMPT.lower(),),
-    ).fetchone()[0] == 1
+    assert (
+        con.execute(
+            "SELECT count(*) FROM responses_fts WHERE responses_fts MATCH ?",
+            (KEY_PROMPT.lower(),),
+        ).fetchone()[0]
+        == 1
+    )
     con.close()
 
     new_content = _redact(source, db)
@@ -200,8 +216,11 @@ def test_llm_redactions_preserve_structure_and_scrub_fts(tmp_path: Path) -> None
     assert db.read_bytes() == original
 
     record = safe_write(
-        db, new_content, backup=True,
-        fmt=source.content_format(db), sidecars=source.sidecars(db),
+        db,
+        new_content,
+        backup=True,
+        fmt=source.content_format(db),
+        sidecars=source.sidecars(db),
     )
     assert record.backup == db.with_name(db.name + ".bak")
     assert record.backup.read_bytes() == original  # .bak is the true original
@@ -211,8 +230,9 @@ def test_llm_redactions_preserve_structure_and_scrub_fts(tmp_path: Path) -> None
         assert key.encode() not in redacted, f"{key} survived in the db file"
         # The FTS5 unicode61 tokenizer stores a case-folded copy; the secret
         # must be physically gone in that form too, not merely un-MATCH-able.
-        assert key.lower().encode() not in redacted, \
+        assert key.lower().encode() not in redacted, (
             f"{key} survived case-folded in the FTS index"
+        )
 
     con = sqlite3.connect(db)
     try:
@@ -228,10 +248,13 @@ def test_llm_redactions_preserve_structure_and_scrub_fts(tmp_path: Path) -> None
         assert "[REDACTED:" in frag and "[REDACTED:" in name
         # The FTS index no longer matches the redacted prompt/response tokens.
         for key in (KEY_PROMPT, KEY_RESPONSE):
-            assert con.execute(
-                "SELECT count(*) FROM responses_fts WHERE responses_fts MATCH ?",
-                (key.lower(),),
-            ).fetchone()[0] == 0, f"{key} still MATCH-able in FTS index"
+            assert (
+                con.execute(
+                    "SELECT count(*) FROM responses_fts WHERE responses_fts MATCH ?",
+                    (key.lower(),),
+                ).fetchone()[0]
+                == 0
+            ), f"{key} still MATCH-able in FTS index"
     finally:
         con.close()
 

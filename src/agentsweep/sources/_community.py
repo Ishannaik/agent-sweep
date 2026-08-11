@@ -1,4 +1,5 @@
 """Community sources: OpenClaw, Hermes Agent, Goose."""
+
 from __future__ import annotations
 
 import os
@@ -329,9 +330,7 @@ class LlmSource(Source):
         finally:
             con.close()
 
-    def _sqlite_text_columns(
-        self, con: sqlite3.Connection
-    ) -> list[tuple[str, str]]:
+    def _sqlite_text_columns(self, con: sqlite3.Connection) -> list[tuple[str, str]]:
         try:
             tables = {
                 row[0]
@@ -345,7 +344,10 @@ class LlmSource(Source):
         for table, cols in self._KNOWN_COLUMNS.items():
             if table not in tables:
                 continue
-            actual = {row[1] for row in con.execute(f"PRAGMA table_info({_quote_ident(table)})")}
+            actual = {
+                row[1]
+                for row in con.execute(f"PRAGMA table_info({_quote_ident(table)})")
+            }
             present = [c for c in cols if c in actual]
             if not present:
                 raise RuntimeError(
@@ -366,5 +368,3 @@ class LlmSource(Source):
 
     def sidecars(self, path: Path) -> list[Path]:
         return sqlite_sidecars(path)
-
-

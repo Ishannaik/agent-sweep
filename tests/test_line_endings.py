@@ -6,6 +6,7 @@ files written on Windows can carry \r\n (and a final line with no trailing
 newline), so each fixture variant must survive scan -> redact -> undo
 byte-identically outside the redacted spans.
 """
+
 from __future__ import annotations
 
 import re
@@ -46,8 +47,7 @@ def _isolated_home(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_running_agent(monkeypatch):
-    monkeypatch.setattr(pipeline, "is_agent_running",
-                        lambda markers: (False, ""))
+    monkeypatch.setattr(pipeline, "is_agent_running", lambda markers: (False, ""))
 
 
 def _endings(data: bytes) -> list[bytes]:
@@ -63,8 +63,7 @@ def test_redact_preserves_line_ending_bytes(tmp_path, variant):
     original = VARIANTS[variant]
     session.write_bytes(original)
 
-    code = main(["--source", "claude-code", "--root", str(root),
-                 "--fix", "--force"])
+    code = main(["--source", "claude-code", "--root", str(root), "--fix", "--force"])
     assert code == 0
 
     redacted = session.read_bytes()
@@ -82,8 +81,9 @@ def test_undo_restores_original_bytes(tmp_path, variant):
     original = VARIANTS[variant]
     session.write_bytes(original)
 
-    assert main(["--source", "claude-code", "--root", str(root),
-                 "--fix", "--force"]) == 0
+    assert (
+        main(["--source", "claude-code", "--root", str(root), "--fix", "--force"]) == 0
+    )
     backup = session.with_name(session.name + ".bak")
     assert backup.read_bytes() == original
 

@@ -4,6 +4,7 @@ Claude Code stores history under <profile>/projects/. agentsweep historically
 scanned only ~/.claude, so a side-project profile (e.g. ~/.claude-personal)
 went unscanned. These cover the env override and the default staying put.
 """
+
 from __future__ import annotations
 
 import json
@@ -114,8 +115,7 @@ def test_fix_redacts_in_custom_profile(_isolate_home, monkeypatch):
     f = _seed_profile(custom)
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom))
 
-    code = main(["fix", "--source", "claude-code", "--force",
-                 "--allow-production"])
+    code = main(["fix", "--source", "claude-code", "--force", "--allow-production"])
     assert code == 0
     assert AWS_KEY not in f.read_text(encoding="utf-8")
     assert f.with_name(f.name + ".bak").exists()

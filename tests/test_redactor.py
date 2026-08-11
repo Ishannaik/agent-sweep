@@ -28,7 +28,9 @@ def test_safe_write_creates_backup(tmp_path: Path) -> None:
     assert target.read_text(encoding="utf-8") == new
     assert record.backup is not None
     assert record.backup.exists()
-    assert record.backup.read_text(encoding="utf-8") == '{"role":"user","content":"hi"}\n'
+    assert (
+        record.backup.read_text(encoding="utf-8") == '{"role":"user","content":"hi"}\n'
+    )
 
 
 def test_safe_write_refuses_existing_backup(tmp_path: Path) -> None:

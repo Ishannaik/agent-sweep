@@ -3,6 +3,7 @@
 Default Aider root is $HOME. Unbounded rglob thrashed real machines and made
 list-sources always report Aider as present. These tests stay under tmp_path.
 """
+
 from __future__ import annotations
 
 import json
@@ -155,7 +156,8 @@ def test_is_detected_true_from_config_marker(_isolate_home: Path) -> None:
 
 
 def test_list_sources_aider_detection_tracks_history(
-    _isolate_home: Path, capsys,
+    _isolate_home: Path,
+    capsys,
 ) -> None:
     def _aider_row():
         main(["list-sources", "--json"])

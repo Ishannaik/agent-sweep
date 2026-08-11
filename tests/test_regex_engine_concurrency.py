@@ -30,7 +30,9 @@ def _write_synthetic_codex_history(root: Path) -> None:
                 "message": {"content": "中AKIAIOSFODNN7EXAMPLE中 benign\x00text"},
             },
         ]
-        content = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
+        content = "".join(
+            json.dumps(record, ensure_ascii=False) + "\n" for record in records
+        )
         (root / f"session-{file_index:02}.jsonl").write_text(content, encoding="utf-8")
 
 
@@ -57,12 +59,15 @@ def test_source_to_pipeline_file_parity_and_filters(tmp_path: Path) -> None:
         exclude_rules=["github-pat"],
         only_rules=["aws-access-key", "openai", "github-pat"],
     )
-    assert {
-        row[3] for row in _first(filtered)["records"]
-    } == {"aws-access-key", "openai"}
+    assert {row[3] for row in _first(filtered)["records"]} == {
+        "aws-access-key",
+        "openai",
+    }
 
 
-def test_threaded_file_scans_are_deterministic_for_every_worker_count(tmp_path: Path) -> None:
+def test_threaded_file_scans_are_deterministic_for_every_worker_count(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "codex"
     _write_synthetic_codex_history(root)
 
@@ -76,7 +81,10 @@ def test_threaded_file_scans_are_deterministic_for_every_worker_count(tmp_path: 
             result = run_file_scan(root, mode=mode, workers=workers, repeats=30)
             attempts = result["attempts"]
             hashes = {attempt["finding_hash"] for attempt in attempts}
-            records = {json.dumps(attempt["records"], ensure_ascii=False) for attempt in attempts}
+            records = {
+                json.dumps(attempt["records"], ensure_ascii=False)
+                for attempt in attempts
+            }
             assert len(hashes) == 1, (mode, workers)
             assert len(records) == 1, (mode, workers)
             assert not attempts[0]["truncated"]

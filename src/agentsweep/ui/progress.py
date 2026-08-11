@@ -1,4 +1,5 @@
 """Per-file scan progress: live bar on terminals, silent no-op on pipes."""
+
 from __future__ import annotations
 
 import os
@@ -97,14 +98,18 @@ class _RichScanProgress:
 
     def __init__(self, total: int):
         from rich.progress import (
-            BarColumn, MofNCompleteColumn, Progress, TaskProgressColumn,
-            TextColumn, TimeElapsedColumn,
+            BarColumn,
+            MofNCompleteColumn,
+            Progress,
+            TaskProgressColumn,
+            TextColumn,
+            TimeElapsedColumn,
         )
+
         self._progress = Progress(
             TextColumn("        "),
             TextColumn("SCAN", style="bold cyan"),
-            BarColumn(bar_width=28, complete_style="red",
-                      finished_style="bold green"),
+            BarColumn(bar_width=28, complete_style="red", finished_style="bold green"),
             TaskProgressColumn(),
             MofNCompleteColumn(),
             TimeElapsedColumn(),
@@ -146,7 +151,7 @@ class _RichScanProgress:
         n = len(feed_list)
         bullet = self._bullet()
         for i, (rule, masked, loc) in enumerate(feed_list):
-            age = n - 1 - i          # 0 = newest
+            age = n - 1 - i  # 0 = newest
             dim_factor = age / max(n, 1)
 
             line = Text("        ")
@@ -193,8 +198,7 @@ class _RichScanProgress:
 
     def __enter__(self) -> "_RichScanProgress":
         self._start_time = time.monotonic()
-        self._task = self._progress.add_task(
-            "scan", total=self._total, current="")
+        self._task = self._progress.add_task("scan", total=self._total, current="")
         live = Live(
             self._build_renderable(),
             console=console,
@@ -222,8 +226,7 @@ class _RichScanProgress:
     def advance(self, current: str) -> None:
         if self._task is None:
             return
-        self._progress.update(
-            self._task, advance=1, current=_safe(console, current))
+        self._progress.update(self._task, advance=1, current=_safe(console, current))
         if self._live is not None:
             self._live.update(self._build_renderable())
 

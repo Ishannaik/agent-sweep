@@ -14,6 +14,7 @@ config file, even if present — those safety-gating flags must stay explicit
 on every invocation so a stale or malicious config file can never silently
 weaken a redaction safety gate.
 """
+
 from __future__ import annotations
 
 import sys
@@ -68,8 +69,10 @@ def load_config() -> dict:
         with path.open("rb") as f:
             data = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as exc:
-        print(f"agentsweep: warning: ignoring unreadable config file {path}: {exc}",
-              file=sys.stderr)
+        print(
+            f"agentsweep: warning: ignoring unreadable config file {path}: {exc}",
+            file=sys.stderr,
+        )
         return {}
 
     forbidden_present = sorted(FORBIDDEN_KEYS & data.keys())

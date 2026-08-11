@@ -1,4 +1,5 @@
 """Rotating scan tips — shown during long scans to keep things lively."""
+
 from __future__ import annotations
 
 TIPS: list[str] = [

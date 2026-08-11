@@ -20,8 +20,14 @@ def test_synthetic_corpus_manifest_and_stdlib_runner(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"
     generated = subprocess.run(
         [
-            sys.executable, str(ROOT / "scripts/generate_stress_corpus.py"),
-            "--profile", "many_small_strings", "--size-mib", "0.05", "--output", str(corpus),
+            sys.executable,
+            str(ROOT / "scripts/generate_stress_corpus.py"),
+            "--profile",
+            "many_small_strings",
+            "--size-mib",
+            "0.05",
+            "--output",
+            str(corpus),
         ],
         text=True,
         capture_output=True,
@@ -31,16 +37,30 @@ def test_synthetic_corpus_manifest_and_stdlib_runner(tmp_path: Path) -> None:
     manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["files"] >= 8
     assert manifest["expected_findings"] > 0
-    assert manifest["compatible_findings"] + manifest["fallback_findings"] == manifest["expected_findings"]
+    assert (
+        manifest["compatible_findings"] + manifest["fallback_findings"]
+        == manifest["expected_findings"]
+    )
     assert manifest["expected_engine"] == "stdlib"
     assert len(manifest["corpus_sha256"]) == 64
 
     output = tmp_path / "result.json"
     benchmarked = subprocess.run(
         [
-            sys.executable, str(ROOT / "scripts/benchmark_regex_engines.py"),
-            "--corpus", str(corpus), "--engines", "stdlib", "--workers", "1",
-            "--warmups", "0", "--trials", "1", "--output", str(output),
+            sys.executable,
+            str(ROOT / "scripts/benchmark_regex_engines.py"),
+            "--corpus",
+            str(corpus),
+            "--engines",
+            "stdlib",
+            "--workers",
+            "1",
+            "--warmups",
+            "0",
+            "--trials",
+            "1",
+            "--output",
+            str(output),
         ],
         text=True,
         capture_output=True,
@@ -58,8 +78,14 @@ def test_soak_runner_records_stable_hashes(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"
     generated = subprocess.run(
         [
-            sys.executable, str(ROOT / "scripts/generate_stress_corpus.py"),
-            "--profile", "few_large_strings", "--size-mib", "0.05", "--output", str(corpus),
+            sys.executable,
+            str(ROOT / "scripts/generate_stress_corpus.py"),
+            "--profile",
+            "few_large_strings",
+            "--size-mib",
+            "0.05",
+            "--output",
+            str(corpus),
         ],
         text=True,
         capture_output=True,
@@ -71,8 +97,16 @@ def test_soak_runner_records_stable_hashes(tmp_path: Path) -> None:
     env["AGENTSWEEP_REGEX_ENGINE"] = "stdlib"
     soaked = subprocess.run(
         [
-            sys.executable, str(ROOT / "scripts/run_re2_soak.py"),
-            "--corpus", str(corpus), "--workers", "1", "--rounds", "2", "--output", str(output),
+            sys.executable,
+            str(ROOT / "scripts/run_re2_soak.py"),
+            "--corpus",
+            str(corpus),
+            "--workers",
+            "1",
+            "--rounds",
+            "2",
+            "--output",
+            str(output),
         ],
         text=True,
         capture_output=True,

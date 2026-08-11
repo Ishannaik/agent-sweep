@@ -6,6 +6,7 @@ over the replaced database on the next open.
 These tests pin the whole contract — the secret leaves the disk, the redaction
 survives the next open, no rows are lost, and `undo` still round-trips.
 """
+
 from __future__ import annotations
 
 import json
@@ -63,8 +64,13 @@ def _redact(db: Path, *, backup: bool = True):
     assert len(hits) == 1, f"scan should find the secret through the WAL, got {hits}"
     ln, kp, val = hits[0]
     new_bytes = source.apply_redactions(db, [(ln, kp, val.replace(SECRET, REDACTED))])
-    return safe_write(db, new_bytes, backup=backup, fmt=source.content_format(db),
-                      sidecars=source.sidecars(db))
+    return safe_write(
+        db,
+        new_bytes,
+        backup=backup,
+        fmt=source.content_format(db),
+        sidecars=source.sidecars(db),
+    )
 
 
 def test_sidecars_are_reported_for_the_database(wal_db: Path) -> None:
@@ -82,8 +88,12 @@ def test_sidecars_are_empty_for_non_sqlite_paths(tmp_path: Path) -> None:
 def test_redaction_removes_the_wal_and_survives_reopen(wal_db: Path) -> None:
     _redact(wal_db)
 
-    assert not (wal_db.parent / "opencode.db-wal").exists(), "stale -wal must be retired"
-    assert not (wal_db.parent / "opencode.db-shm").exists(), "stale -shm must be retired"
+    assert not (wal_db.parent / "opencode.db-wal").exists(), (
+        "stale -wal must be retired"
+    )
+    assert not (wal_db.parent / "opencode.db-shm").exists(), (
+        "stale -shm must be retired"
+    )
     assert SECRET.encode() not in wal_db.read_bytes()
 
     # The next open is where the old code lost: WAL recovery replayed the
@@ -104,7 +114,9 @@ def test_redaction_removes_the_wal_and_survives_reopen(wal_db: Path) -> None:
 def test_no_plaintext_secret_left_anywhere_beside_the_database(wal_db: Path) -> None:
     _redact(wal_db, backup=False)
     for leftover in wal_db.parent.iterdir():
-        assert SECRET.encode() not in leftover.read_bytes(), f"secret survived in {leftover.name}"
+        assert SECRET.encode() not in leftover.read_bytes(), (
+            f"secret survived in {leftover.name}"
+        )
 
 
 def test_sidecars_are_backed_up_and_undo_round_trips(wal_db: Path) -> None:
@@ -129,8 +141,10 @@ def test_sidecars_are_backed_up_and_undo_round_trips(wal_db: Path) -> None:
     assert json.loads(content)["text"] == SECRET, "undo must restore the original rows"
 
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="POSIX permission bits are not meaningful on Windows")
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits are not meaningful on Windows",
+)
 def test_sidecar_backup_is_owner_only(wal_db: Path) -> None:
     """A `-wal` backup holds the same plaintext the `.bak` does."""
     old_umask = os.umask(0o000)
@@ -142,7 +156,9 @@ def test_sidecar_backup_is_owner_only(wal_db: Path) -> None:
     assert mode == 0o600, f"sidecar backup mode is {oct(mode)}, expected 0o600"
 
 
-def test_pipeline_redaction_is_not_undone_by_wal_replay(wal_db: Path, monkeypatch) -> None:
+def test_pipeline_redaction_is_not_undone_by_wal_replay(
+    wal_db: Path, monkeypatch
+) -> None:
     """The end-to-end guard, driving `_redact_all` — the real `fix` caller.
 
     Before the sidecar fix this test failed on behaviour, not on a missing
@@ -161,7 +177,9 @@ def test_pipeline_redaction_is_not_undone_by_wal_replay(wal_db: Path, monkeypatc
     found_by_file, *_ = pipeline._scan(source, source.files(), ignore_mod.IgnoreSet())
     assert found_by_file, "the scanner must see the secret through the WAL"
 
-    rows, errors, _ = pipeline._redact_all(source, found_by_file, backup=True, force=False)
+    rows, errors, _ = pipeline._redact_all(
+        source, found_by_file, backup=True, force=False
+    )
     assert errors == 0, f"redaction reported errors: {rows}"
 
     con = sqlite3.connect(str(wal_db))
@@ -174,7 +192,9 @@ def test_pipeline_redaction_is_not_undone_by_wal_replay(wal_db: Path, monkeypatc
     assert SECRET not in content, "WAL replay resurrected the redacted secret"
 
 
-def test_failed_write_leaves_sidecars_and_their_backups_alone(wal_db: Path, monkeypatch) -> None:
+def test_failed_write_leaves_sidecars_and_their_backups_alone(
+    wal_db: Path, monkeypatch
+) -> None:
     d = wal_db.parent
     before = (d / "opencode.db-wal").read_bytes()
 
@@ -185,6 +205,10 @@ def test_failed_write_leaves_sidecars_and_their_backups_alone(wal_db: Path, monk
     with pytest.raises(OSError):
         _redact(wal_db)
 
-    assert (d / "opencode.db-wal").read_bytes() == before, "-wal must survive a failed write"
-    assert not (d / "opencode.db-wal.bak").exists(), "aborted write must clean its backups"
+    assert (d / "opencode.db-wal").read_bytes() == before, (
+        "-wal must survive a failed write"
+    )
+    assert not (d / "opencode.db-wal.bak").exists(), (
+        "aborted write must clean its backups"
+    )
     assert not (d / "opencode.db.bak").exists()

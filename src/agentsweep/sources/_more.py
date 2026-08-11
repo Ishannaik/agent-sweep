@@ -10,6 +10,7 @@ Grouped by storage shape:
 A source whose path does not exist simply yields nothing (files() == []), so an
 imperfectly-located store is a harmless no-op rather than a crash.
 """
+
 from __future__ import annotations
 
 import json
@@ -54,6 +55,7 @@ from ._vscode import _VSCodeSqliteSource
 
 # ── shared helpers ────────────────────────────────────────────────────────────
 
+
 def _vscode_appdata_base() -> Path:
     """The per-OS base dir VS Code-fork editors put their data folder under."""
     if sys.platform == "win32":
@@ -72,7 +74,8 @@ def _all_table_columns(con: sqlite3.Connection) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     try:
         tables = [
-            r[0] for r in con.execute(
+            r[0]
+            for r in con.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
                 "AND name NOT LIKE 'sqlite_%'"
             )
@@ -89,7 +92,9 @@ def _all_table_columns(con: sqlite3.Connection) -> list[tuple[str, str]]:
     return pairs
 
 
-def _iter_sqlite_all_columns(path: Path, columns_fn) -> Iterator[tuple[int, KeyPath, str]]:
+def _iter_sqlite_all_columns(
+    path: Path, columns_fn
+) -> Iterator[tuple[int, KeyPath, str]]:
     try:
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     except sqlite3.Error:
@@ -97,8 +102,10 @@ def _iter_sqlite_all_columns(path: Path, columns_fn) -> Iterator[tuple[int, KeyP
     try:
         for table, col in columns_fn(con):
             try:
-                cur = con.execute(
-                    f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}")  # nosec B608 # table/col are SQL-escaped via _quote_ident(), not raw interpolation; bandit can't see through the helper
+                # Both identifiers are escaped by _quote_ident; Bandit cannot
+                # trace that helper through the formatted SQL expression.
+                query = f"SELECT rowid, {_quote_ident(col)} FROM {_quote_ident(table)}"  # nosec B608
+                cur = con.execute(query)
             except sqlite3.Error:
                 continue  # WITHOUT ROWID tables, virtual tables, etc.
             for rowid, value in cur:
@@ -107,7 +114,8 @@ def _iter_sqlite_all_columns(path: Path, columns_fn) -> Iterator[tuple[int, KeyP
                 try:
                     obj = json.loads(value)
                     yield from _walk_json_with_base(
-                        obj, [table, rowid, col], max(rowid, 1))
+                        obj, [table, rowid, col], max(rowid, 1)
+                    )
                 except (json.JSONDecodeError, TypeError):
                     yield (max(rowid, 1), [table, rowid, col], value)
     finally:
@@ -165,7 +173,9 @@ _CRUSH_MAX_DEPTH = 12
 
 
 def _find_crush_db(
-    dirpath: Path, dirnames: list[str], _filenames: list[str],
+    dirpath: Path,
+    dirnames: list[str],
+    _filenames: list[str],
 ) -> Iterator[Path]:
     if _CRUSH_DATA_DIR in dirnames:
         db = dirpath / _CRUSH_DATA_DIR / _CRUSH_DB_NAME
@@ -243,10 +253,12 @@ class WarpSource(_GenericSqliteSource):
             if base:
                 return Path(base) / "warp" / "Warp" / "data"
         elif sys.platform == "darwin":
-            return (Path.home() / "Library" / "Application Support"
-                    / "dev.warp.Warp-Stable")
+            return (
+                Path.home() / "Library" / "Application Support" / "dev.warp.Warp-Stable"
+            )
         state = os.environ.get("XDG_STATE_HOME") or str(
-            Path.home() / ".local" / "state")
+            Path.home() / ".local" / "state"
+        )
         return Path(state) / "warp-terminal"
 
     def _db(self) -> Path:
@@ -286,8 +298,7 @@ class ZedSource(_GenericSqliteSource):
                 return Path(base) / "Zed"
         elif sys.platform == "darwin":
             return Path.home() / "Library" / "Application Support" / "Zed"
-        data = os.environ.get("XDG_DATA_HOME") or str(
-            Path.home() / ".local" / "share")
+        data = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
         return Path(data) / "zed"
 
     def _db(self) -> Path:
@@ -324,6 +335,7 @@ class KiroCliSource(_GenericSqliteSource):
 
 # ── whole-file JSON agents ────────────────────────────────────────────────────
 
+
 class CodebuffSource(Source):
     """Codebuff (formerly Manicode) — per-chat whole-file JSON at
     ~/.config/manicode/projects/<project>/chats/<chatId>/chat-messages.json
@@ -344,8 +356,7 @@ class CodebuffSource(Source):
     def files(self) -> list[Path]:
         if not self.root.exists():
             return []
-        return sorted(p for p in self.root.rglob("chat-messages.json")
-                      if p.is_file())
+        return sorted(p for p in self.root.rglob("chat-messages.json") if p.is_file())
 
     def iter_files(self) -> Iterator[Path]:
         if not self.root.exists():
@@ -453,11 +464,17 @@ class PearAiSource(ClineSource):
 
     @classmethod
     def default_root(cls) -> Path:
-        return (_vscode_appdata_base() / "PearAI" / "User" / "globalStorage"
-                / "PearAI.pearai-roo-cline")
+        return (
+            _vscode_appdata_base()
+            / "PearAI"
+            / "User"
+            / "globalStorage"
+            / "PearAI.pearai-roo-cline"
+        )
 
 
 # ── VS Code SQLite forks ──────────────────────────────────────────────────────
+
 
 class TraeSource(_VSCodeSqliteSource):
     """Trae (ByteDance) — a VS Code fork; chat lives in its own state.vscdb
@@ -490,6 +507,7 @@ class VoidSource(_VSCodeSqliteSource):
 
 # ── line-oriented text / JSONL agents ─────────────────────────────────────────
 
+
 class JunieSource(Source):
     """JetBrains Junie CLI — per-session files under ~/.junie/sessions/. The
     on-disk format (json vs jsonl) isn't documented, so both are handled."""
@@ -513,8 +531,9 @@ class JunieSource(Source):
         d = self._sessions_dir()
         if not d.exists():
             return []
-        return sorted(p for p in d.rglob("*")
-                      if p.is_file() and p.suffix in (".json", ".jsonl"))
+        return sorted(
+            p for p in d.rglob("*") if p.is_file() and p.suffix in (".json", ".jsonl")
+        )
 
     def iter_files(self) -> Iterator[Path]:
         d = self._sessions_dir()
@@ -610,8 +629,7 @@ class JetBrainsAiSource(Source):
     def files(self) -> list[Path]:
         if not self.root.exists():
             return []
-        return sorted(p for p in self.root.glob("*/workspace/*.xml")
-                      if p.is_file())
+        return sorted(p for p in self.root.glob("*/workspace/*.xml") if p.is_file())
 
     def iter_files(self) -> Iterator[Path]:
         if not self.root.exists():

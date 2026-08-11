@@ -12,6 +12,7 @@ Covers:
   - ignore file found in BOTH scan root and cwd
   - round-trip: fingerprint from JSON payload matches what goes in the file
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from agentsweep import ignore as ignore_mod  # noqa: E402
 from agentsweep.ignore import IgnoreSet, IGNORE_FILENAME, fingerprint, load  # noqa: E402
 from agentsweep.cli import main  # noqa: E402
 
@@ -45,6 +45,7 @@ _AWS_ONLY_LINE = (
 # Autouse fixture: isolate HOME so tests never touch ~/.claude
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _isolated_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
@@ -57,6 +58,7 @@ def _isolated_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mkroot(tmp_path: Path, content: str = _SECRET_LINE) -> Path:
     root = tmp_path / "history"
@@ -79,10 +81,13 @@ def _scan_json(root: Path, extra_args: list[str] | None = None, capsys=None):
 # Unit tests: IgnoreSet / load / fingerprint
 # ===========================================================================
 
+
 class TestFingerprint:
     def test_format_is_relpath_line_rule(self):
-        assert fingerprint("some/file.jsonl", 5, "aws-access-key") == \
-               "some/file.jsonl:5:aws-access-key"
+        assert (
+            fingerprint("some/file.jsonl", 5, "aws-access-key")
+            == "some/file.jsonl:5:aws-access-key"
+        )
 
     def test_different_args_produce_different_fingerprints(self):
         fp1 = fingerprint("a.jsonl", 1, "aws-access-key")
@@ -104,7 +109,7 @@ class TestIgnoreSetAddLine:
         ig = IgnoreSet()
         ig.add_line("rule: aws-access-key ")
         assert "aws-access-key" in ig.rules
-        
+
     def test_path_prefix_goes_to_globs(self):
         ig = IgnoreSet()
         ig.add_line("path:*/fixtures/*")
@@ -157,12 +162,12 @@ class TestIgnoreSetAddLine:
         ig = IgnoreSet()
         ig.add_line(AWS_KEY)
         assert ig
-        
+
     def test_bool_true_when_has_glob(self):
         ig = IgnoreSet()
         ig.add_line("path:*/fixtures/*")
         assert ig
-        
+
     def test_file_named_path_is_classified_as_fingerprint(self):
         ig = IgnoreSet()
         ig.add_line("path:1:aws-access-key")
@@ -190,7 +195,9 @@ class TestIgnoreSetMatches:
         # matches the exact fingerprint
         assert ig.matches("aws-access-key", AWS_KEY, "session.jsonl:1:aws-access-key")
         # does NOT match a different line
-        assert not ig.matches("aws-access-key", AWS_KEY, "session.jsonl:2:aws-access-key")
+        assert not ig.matches(
+            "aws-access-key", AWS_KEY, "session.jsonl:2:aws-access-key"
+        )
         # does NOT match a different file
         assert not ig.matches("aws-access-key", AWS_KEY, "other.jsonl:1:aws-access-key")
 
@@ -199,7 +206,9 @@ class TestIgnoreSetMatches:
         ig.add_line(AWS_KEY)
         assert ig.matches("aws-access-key", AWS_KEY, "session.jsonl:1:aws-access-key")
         # does NOT match a different secret value
-        assert not ig.matches("aws-access-key", "AKIAOTHER12345678901", "f:1:aws-access-key")
+        assert not ig.matches(
+            "aws-access-key", "AKIAOTHER12345678901", "f:1:aws-access-key"
+        )
 
     def test_path_glob_matches_relpath(self):
         ig = IgnoreSet()
@@ -210,7 +219,7 @@ class TestIgnoreSetMatches:
             "tests/fixtures/sample.jsonl:1:aws-access-key",
             "tests/fixtures/sample.jsonl",
         )
-        
+
     def test_path_glob_matches_windows_separators(self):
         ig = IgnoreSet()
         ig.add_line("path:*/fixtures/*")
@@ -221,7 +230,7 @@ class TestIgnoreSetMatches:
             r"tests\fixtures\sample.jsonl:1:aws-access-key",
             r"tests\fixtures\sample.jsonl",
         )
-        
+
     def test_path_glob_does_not_match_other_paths(self):
         ig = IgnoreSet()
         ig.add_line("path:*/fixtures/*")
@@ -232,7 +241,7 @@ class TestIgnoreSetMatches:
             "tests/other/sample.jsonl:1:aws-access-key",
             "tests/other/sample.jsonl",
         )
-    
+
     def test_no_match_returns_false(self):
         ig = IgnoreSet()
         ig.add_line("rule:aws-access-key")
@@ -291,6 +300,7 @@ class TestLoad:
 # End-to-end: suppression through cli.main scan
 # ===========================================================================
 
+
 class TestRuleSuppression:
     """rule:<id> line suppresses ALL findings of that rule."""
 
@@ -330,7 +340,9 @@ class TestFingerprintSuppression:
         # First scan to get the real fingerprint
         code, payload, _ = _scan_json(root, capsys=capsys)
         assert code == 1
-        aws_fp = next(f["fingerprint"] for f in payload if f["rule"] == "aws-access-key")
+        aws_fp = next(
+            f["fingerprint"] for f in payload if f["rule"] == "aws-access-key"
+        )
 
         # Write the fingerprint as an ignore rule
         (root / IGNORE_FILENAME).write_text(aws_fp + "\n", encoding="utf-8")
@@ -392,8 +404,8 @@ class TestPathGlobSuppression:
         assert code == 1
         assert any(f["rule"] == "aws-access-key" for f in payload)
         assert "suppressed" not in err
-        
-        
+
+
 class TestLiteralValueSuppression:
     """A bare literal value line suppresses any finding whose secret matches."""
 
@@ -419,10 +431,7 @@ class TestCommentsAndBlankLines:
     def test_comments_and_blanks_do_not_cause_suppression(self, tmp_path, capsys):
         root = _mkroot(tmp_path, _AWS_ONLY_LINE)
         (root / IGNORE_FILENAME).write_text(
-            "# this is a comment\n"
-            "\n"
-            "   \n"
-            "# another comment\n",
+            "# this is a comment\n\n   \n# another comment\n",
             encoding="utf-8",
         )
         code, payload, _ = _scan_json(root, capsys=capsys)
@@ -453,7 +462,9 @@ class TestNoIgnoreFlag:
         root = _mkroot(tmp_path, _SECRET_LINE)
         # Scan first to get a fingerprint
         code, payload, _ = _scan_json(root, capsys=capsys)
-        aws_fp = next(f["fingerprint"] for f in payload if f["rule"] == "aws-access-key")
+        aws_fp = next(
+            f["fingerprint"] for f in payload if f["rule"] == "aws-access-key"
+        )
         (root / IGNORE_FILENAME).write_text(aws_fp + "\n", encoding="utf-8")
 
         code2, payload2, _ = _scan_json(root, extra_args=["--no-ignore"], capsys=capsys)
@@ -499,7 +510,7 @@ class TestSuppressedCountOutput:
 
     def test_human_mode_no_warning_when_nothing_suppressed(self, tmp_path, capsys):
         root = _mkroot(tmp_path, _AWS_ONLY_LINE)
-        code = main(["scan", "--root", str(root)])
+        main(["scan", "--root", str(root)])
         captured = capsys.readouterr()
         assert "suppressed" not in captured.err
 
@@ -527,7 +538,8 @@ class TestIgnoreFileDiscovery:
         assert payload == []
 
     def test_ignore_files_in_both_root_and_cwd_are_merged(
-            self, tmp_path, monkeypatch, capsys):
+        self, tmp_path, monkeypatch, capsys
+    ):
         root = _mkroot(tmp_path, _SECRET_LINE)
         cwd = tmp_path / "workdir"
         cwd.mkdir()
@@ -562,7 +574,9 @@ class TestIgnoreFileDiscovery:
 class TestFingerprintRoundTrip:
     """Fingerprint from JSON payload can be pasted into .agentsweepignore (round-trip)."""
 
-    def test_fingerprint_field_matches_ignore_fingerprint_format(self, tmp_path, capsys):
+    def test_fingerprint_field_matches_ignore_fingerprint_format(
+        self, tmp_path, capsys
+    ):
         root = _mkroot(tmp_path, _SECRET_LINE)
         code, payload, _ = _scan_json(root, capsys=capsys)
         assert code == 1
@@ -581,13 +595,13 @@ class TestFingerprintRoundTrip:
         # Step 1: scan to get fingerprints
         code, payload, _ = _scan_json(root, capsys=capsys)
         assert code == 1
-        aws_fp = next(f["fingerprint"] for f in payload if f["rule"] == "aws-access-key")
+        aws_fp = next(
+            f["fingerprint"] for f in payload if f["rule"] == "aws-access-key"
+        )
         gh_fp = next(f["fingerprint"] for f in payload if f["rule"] == "github-pat")
 
         # Step 2: paste both fingerprints into the ignore file
-        (root / IGNORE_FILENAME).write_text(
-            f"{aws_fp}\n{gh_fp}\n", encoding="utf-8"
-        )
+        (root / IGNORE_FILENAME).write_text(f"{aws_fp}\n{gh_fp}\n", encoding="utf-8")
 
         # Step 3: rescan — everything should be suppressed
         code2, payload2, err2 = _scan_json(root, capsys=capsys)
@@ -630,10 +644,13 @@ class TestVerbDispatch:
         out = capsys.readouterr().out
         assert code == 0
         assert json.loads(out) == []
+
+
 # ===========================================================================
 # Issue #134: edge-case coverage for add_line ambiguity, comments/blanks,
 # and root+cwd merge behavior with overlapping/conflicting entries.
 # ===========================================================================
+
 
 class TestAmbiguousLiteralLooksLikeFingerprint:
     """A literal value shaped like <text>:<digits>:<text> is currently
@@ -771,7 +788,8 @@ class TestMergeConflictingEntries:
         assert other_key in ig.values
 
     def test_end_to_end_root_and_cwd_conflicting_entries_merge(
-            self, tmp_path, monkeypatch, capsys):
+        self, tmp_path, monkeypatch, capsys
+    ):
         """End-to-end: root ignores by rule, cwd ignores the same finding
         again by fingerprint. Result should still just suppress it once,
         not double-count or error."""

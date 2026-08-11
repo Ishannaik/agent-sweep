@@ -3,6 +3,7 @@
 Everything that needs to answer "can this stream show that?" lives here:
 encoding probes, icon sets, box fallbacks, and the _safe() escape hatch.
 """
+
 from __future__ import annotations
 
 import os
@@ -45,6 +46,7 @@ def apply_no_color(enabled: bool) -> None:
     for c in (console, err_console):
         c.no_color = True
         c._color_system = None
+
 
 TOTAL_STAGES = 5
 

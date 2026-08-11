@@ -4,6 +4,7 @@ All external code imports from here:
     from .sources import SOURCES, Source
     from .sources import ClaudeCodeSource, ...
 """
+
 from ._base import JsonlSource, KeyPath, Source
 from ._community import GooseSource, HermesSource, LlmSource, OpenClawSource
 from ._core import AiderSource, ClaudeCodeSource, CodexSource, OpenCodeSource
@@ -35,37 +36,37 @@ from ._more import (
 from ._vscode import CursorSource, WindsurfSource
 
 SOURCES: dict[str, type[Source]] = {
-    "claude-code":           ClaudeCodeSource,
-    "codex":                 CodexSource,
-    "opencode":              OpenCodeSource,
-    "cursor":                CursorSource,
-    "windsurf":              WindsurfSource,
-    "aider":                 AiderSource,
-    "cline":                 ClineSource,
-    "kilo-code":             KiloCodeSource,
-    "roo-code":              RooCodeSource,
-    "pearai":                PearAiSource,
-    "trae":                  TraeSource,
-    "void":                  VoidSource,
-    "gemini-cli":            GeminiCliSource,
-    "qwen-code":             QwenCodeSource,
-    "continue-vscode":       ContinueSource,
-    "open-interpreter":      OpenInterpreterSource,
-    "github-copilot-chat":   GitHubCopilotSource,
-    "openclaw":              OpenClawSource,
-    "hermes":                HermesSource,
-    "goose":                 GooseSource,
-    "llm":                   LlmSource,
-    "warp":                  WarpSource,
-    "crush":                 CrushSource,
-    "grok-cli":              GrokCliSource,
-    "kiro-cli":              KiroCliSource,
-    "zed":                   ZedSource,
-    "codebuff":              CodebuffSource,
-    "plandex":               PlandexSource,
-    "junie":                 JunieSource,
-    "mentat":                MentatSource,
-    "jetbrains-ai":          JetBrainsAiSource,
+    "claude-code": ClaudeCodeSource,
+    "codex": CodexSource,
+    "opencode": OpenCodeSource,
+    "cursor": CursorSource,
+    "windsurf": WindsurfSource,
+    "aider": AiderSource,
+    "cline": ClineSource,
+    "kilo-code": KiloCodeSource,
+    "roo-code": RooCodeSource,
+    "pearai": PearAiSource,
+    "trae": TraeSource,
+    "void": VoidSource,
+    "gemini-cli": GeminiCliSource,
+    "qwen-code": QwenCodeSource,
+    "continue-vscode": ContinueSource,
+    "open-interpreter": OpenInterpreterSource,
+    "github-copilot-chat": GitHubCopilotSource,
+    "openclaw": OpenClawSource,
+    "hermes": HermesSource,
+    "goose": GooseSource,
+    "llm": LlmSource,
+    "warp": WarpSource,
+    "crush": CrushSource,
+    "grok-cli": GrokCliSource,
+    "kiro-cli": KiroCliSource,
+    "zed": ZedSource,
+    "codebuff": CodebuffSource,
+    "plandex": PlandexSource,
+    "junie": JunieSource,
+    "mentat": MentatSource,
+    "jetbrains-ai": JetBrainsAiSource,
 }
 
 __all__ = [

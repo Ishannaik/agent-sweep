@@ -15,6 +15,7 @@ Fingerprints are what agentsweep prints next to each finding, so the
 copy-paste path is: see a false positive, paste its fingerprint into
 .agentsweepignore, done.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -44,7 +45,7 @@ class IgnoreSet:
             return
 
         if line.startswith("rule:"):
-            self.rules.add(line[len("rule:"):].strip())
+            self.rules.add(line[len("rule:") :].strip())
             return
 
         # A fingerprint is "<path>:<line>:<rule>" — last segment a rule id,
@@ -55,22 +56,22 @@ class IgnoreSet:
             return
 
         if line.startswith("path:"):
-            glob = line[len("path:"):].strip()
+            glob = line[len("path:") :].strip()
             if glob:
                 self.globs.add(glob)
             return
 
         self.values.add(line)
-        
+
     def matches(self, rule: str, value: str, fp: str, relpath: str = "") -> bool:
-        return (rule in self.rules
-                or fp in self.fingerprints
-                or value in self.values
-                or any(
-                    fnmatch.fnmatch(relpath.replace("\\", "/"), glob)
-                    for glob in self.globs
-                )
-                )
+        return (
+            rule in self.rules
+            or fp in self.fingerprints
+            or value in self.values
+            or any(
+                fnmatch.fnmatch(relpath.replace("\\", "/"), glob) for glob in self.globs
+            )
+        )
 
 
 def load(roots: list[Path]) -> IgnoreSet:

@@ -22,7 +22,10 @@ def test_fast_extra_is_present_in_installed_metadata() -> None:
     requirements = metadata.get_all("Requires-Dist") or []
 
     assert "fast" in (metadata.get_all("Provides-Extra") or [])
-    assert any("google-re2" in requirement and "extra == 'fast'" in requirement for requirement in requirements)
+    assert any(
+        "google-re2" in requirement and "extra == 'fast'" in requirement
+        for requirement in requirements
+    )
 
 
 def test_default_auto_mode_handles_a_missing_optional_import() -> None:
@@ -49,7 +52,8 @@ def test_long_ascii_text_dispatches_a_selected_rule_to_re2() -> None:
     from agentsweep.scanner import ENGINE_RULES, scan_text
 
     rule = next(
-        pattern for rule_id, _display, pattern in ENGINE_RULES
+        pattern
+        for rule_id, _display, pattern in ENGINE_RULES
         if rule_id == "aws-access-key"
     )
     original = rule._compiled
@@ -75,7 +79,8 @@ def test_dense_re2_rule_restarts_with_the_exact_stdlib_iterator() -> None:
     from agentsweep.scanner import ENGINE_RULES, scan_text
 
     rule = next(
-        pattern for rule_id, _display, pattern in ENGINE_RULES
+        pattern
+        for rule_id, _display, pattern in ENGINE_RULES
         if rule_id == "aws-access-key"
     )
     original = rule._stdlib_pattern
@@ -86,8 +91,10 @@ def test_dense_re2_rule_restarts_with_the_exact_stdlib_iterator() -> None:
             calls.append(text)
             return original.finditer(text)
 
-    text = "x" * RE2_MIN_INPUT_CHARS + " " + (
-        "AKIAIOSFODNN7EXAMPLE " * (RE2_MAX_MATCHES + 1)
+    text = (
+        "x" * RE2_MIN_INPUT_CHARS
+        + " "
+        + ("AKIAIOSFODNN7EXAMPLE " * (RE2_MAX_MATCHES + 1))
     )
     object.__setattr__(rule, "_stdlib_pattern", TrackingPattern())
     try:
@@ -96,7 +103,10 @@ def test_dense_re2_rule_restarts_with_the_exact_stdlib_iterator() -> None:
         object.__setattr__(rule, "_stdlib_pattern", original)
 
     assert calls == [text]
-    assert sum(finding.rule == "aws-access-key" for finding in findings) == RE2_MAX_MATCHES + 1
+    assert (
+        sum(finding.rule == "aws-access-key" for finding in findings)
+        == RE2_MAX_MATCHES + 1
+    )
 
 
 @pytest.mark.skipif(

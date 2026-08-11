@@ -102,7 +102,9 @@ print(json.dumps({"summary": __import__("agentsweep.scanner", fromlist=["ENGINE_
 """
 
 
-def _run(program: str, payload: dict[str, Any], *, mode: str, block_re2: bool) -> dict[str, Any]:
+def _run(
+    program: str, payload: dict[str, Any], *, mode: str, block_re2: bool
+) -> dict[str, Any]:
     env = os.environ.copy()
     env["AGENTSWEEP_REGEX_ENGINE"] = mode
     env["PYTHONIOENCODING"] = "utf-8"

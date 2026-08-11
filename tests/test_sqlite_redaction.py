@@ -10,6 +10,7 @@ undo had nothing to restore. The fix makes apply_redactions side-effect
 free (it rewrites a temp copy and returns bytes), so safe_write owns the
 backup and the atomic replace for SQLite exactly as it does for JSONL.
 """
+
 from __future__ import annotations
 
 import argparse

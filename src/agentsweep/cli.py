@@ -401,7 +401,7 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         "the default report: sarif = SARIF 2.1.0 for GitHub "
         "code scanning and SARIF viewers (scan only). Pass "
         "'human' to force the default report even when a "
-        "config file sets format = \"sarif\".",
+        'config file sets format = "sarif".',
     )
     ap.add_argument(
         "--no-ignore",
@@ -496,7 +496,9 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     if args.exclude_rule and args.only_rule:
         ap.error("cannot use --exclude-rule with --only-rule")
 
-    all_rule_ids = {rule_id for rule_id, _display, _pattern in RULES} | set(DETECTOR_IDS)
+    all_rule_ids = {rule_id for rule_id, _display, _pattern in RULES} | set(
+        DETECTOR_IDS
+    )
     unknown = sorted(
         set(args.exclude_rule).union(args.only_rule).difference(all_rule_ids)
     )
@@ -517,7 +519,9 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         if args.fix:
             ap.error("--report is a scan output option; not valid with fix")
         if args.format is not None:
-            ap.error("cannot use --report with --format sarif; blast-radius is JSON-only")
+            ap.error(
+                "cannot use --report with --format sarif; blast-radius is JSON-only"
+            )
         # Contract: --report always emits machine JSON (with blast_radius).
         args.json = True
 
@@ -587,7 +591,9 @@ def _run_explain(rest: list[str]) -> int:
     from .scanner import DETECTOR_IDS, ROTATION_GUIDANCE, RULES
 
     if args.list:
-        all_ids = sorted({rule_id for rule_id, _display, _pattern in RULES} | set(DETECTOR_IDS))
+        all_ids = sorted(
+            {rule_id for rule_id, _display, _pattern in RULES} | set(DETECTOR_IDS)
+        )
         for rule_id in all_ids:
             print(rule_id)
         return 0
@@ -648,7 +654,9 @@ def rule_id_completer(prefix: str, **kwargs) -> list[str]:
     """Dynamically complete rule ids for `explain` from scanner's registries."""
     from .scanner import DETECTOR_IDS, RULES
 
-    all_ids = sorted({rule_id for rule_id, _display, _pattern in RULES} | set(DETECTOR_IDS))
+    all_ids = sorted(
+        {rule_id for rule_id, _display, _pattern in RULES} | set(DETECTOR_IDS)
+    )
     return [rule_id for rule_id in all_ids if rule_id.startswith(prefix)]
 
 

@@ -10,6 +10,7 @@ Menu actions invoke cli.main with verb argv — zero duplicated logic, and
 every action inherits the pipeline UI, safety gates, and exit codes. The
 imports are lazy to avoid a cycle (cli imports this module).
 """
+
 from __future__ import annotations
 
 import copy
@@ -72,6 +73,7 @@ def _passive_update_check() -> None:
 
     if not t.is_alive() and result[0] is not None:
         from .cli import _version_tuple
+
         if _version_tuple(result[0]) > _version_tuple(__version__):
             ui.console.print(
                 f"  [dim yellow]update available: agentsweep {result[0]} — "
@@ -96,6 +98,7 @@ def run_menu() -> int:
 
 
 # ── TUI path ─────────────────────────────────────────────────────────────────
+
 
 def _run_tui_menu(main) -> int:
     from .ui.picker import action_menu, source_picker
@@ -159,10 +162,12 @@ def _open_repo() -> None:
 
     star = "★" if ui._encodes(ui.console, "★") else "*"
     ui.console.print(
-        f"\n  [bold yellow]{star} agentsweep is open source and built by its users.[/]")
+        f"\n  [bold yellow]{star} agentsweep is open source and built by its users.[/]"
+    )
     ui.console.print(
         "  Star it, file an issue, or add your agent / a detection rule:\n"
-        f"  [yellow]{__repo__}[/]")
+        f"  [yellow]{__repo__}[/]"
+    )
     try:
         if webbrowser.open(__repo__):
             ui.console.print("  [dim]opened the repo in your browser...[/]")
@@ -171,6 +176,7 @@ def _open_repo() -> None:
 
 
 # ── Numbered fallback (non-tty / CI / dumb terminal) ─────────────────────────
+
 
 def _run_numbered_menu(main) -> int:
     while True:
@@ -211,6 +217,7 @@ def _run_numbered_menu(main) -> int:
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
 
 def _scan_all_sources() -> None:
     """Scan all registered sources via cli.main — no duplicated pipeline logic."""
@@ -264,8 +271,10 @@ def offer_redaction(args, *, source=None, found_by_file=None) -> int | None:
     for a --force override.
     """
     print()
-    ui.warn_line("those keys are sitting in plain text — redact them now? "
-                 "(.bak backups kept; `agentsweep undo` reverts)")
+    ui.warn_line(
+        "those keys are sitting in plain text — redact them now? "
+        "(.bak backups kept; `agentsweep undo` reverts)"
+    )
     try:
         typed = input("  type REDACT to confirm (anything else cancels): ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -286,8 +295,7 @@ def offer_redaction(args, *, source=None, found_by_file=None) -> int | None:
         from .pipeline import redact_findings
 
         def _apply(a):
-            return redact_findings(a, source, found_by_file,
-                                   _force_recoverable_out=rec)
+            return redact_findings(a, source, found_by_file, _force_recoverable_out=rec)
     else:
         from .pipeline import run
 
@@ -300,11 +308,15 @@ def offer_redaction(args, *, source=None, found_by_file=None) -> int | None:
     # exists" (already-redacted) file, --force can't help, so don't prompt.
     if code == 2 and not fix_args.force and rec and rec[-1]:
         try:
-            retry = input(
-                "  an active-session gate blocked the redaction (see above).\n"
-                "  override with --force? Only safe if no agent session is "
-                "actively writing. [y/N]: "
-            ).strip().lower()
+            retry = (
+                input(
+                    "  an active-session gate blocked the redaction (see above).\n"
+                    "  override with --force? Only safe if no agent session is "
+                    "actively writing. [y/N]: "
+                )
+                .strip()
+                .lower()
+            )
         except (EOFError, KeyboardInterrupt):
             print()
             return code

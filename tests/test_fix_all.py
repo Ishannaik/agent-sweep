@@ -4,6 +4,7 @@ Each source runs the single-source fix path, so a gate block on one must not
 cost the others their redaction — that is the whole point of --all over the
 per-source loop it replaces.
 """
+
 from __future__ import annotations
 
 import json
@@ -119,8 +120,11 @@ def test_each_source_gets_its_own_audit_entry(_isolate_home, capsys):
     assert main(["fix", "--all", "--force", "--allow-production"]) == 0
 
     audit = _isolate_home / ".agentsweep" / "audit.jsonl"
-    entries = [json.loads(x) for x in
-               audit.read_text(encoding="utf-8").splitlines() if x.strip()]
+    entries = [
+        json.loads(x)
+        for x in audit.read_text(encoding="utf-8").splitlines()
+        if x.strip()
+    ]
     written = {Path(e["path"]).name for e in entries}
     assert "session.jsonl" in written
     assert any(n.startswith("rollout-") for n in written)
@@ -135,8 +139,8 @@ def test_gate_block_on_one_source_leaves_others_redacted(_isolate_home, capsys):
     code = main(["fix", "--all", "--allow-production"])
 
     assert code == 2
-    assert AWS_KEY not in claude.read_text(encoding="utf-8")   # still redacted
-    assert GH_TOKEN in codex.read_text(encoding="utf-8")       # left untouched
+    assert AWS_KEY not in claude.read_text(encoding="utf-8")  # still redacted
+    assert GH_TOKEN in codex.read_text(encoding="utf-8")  # left untouched
     assert not codex.with_name(codex.name + ".bak").exists()
 
 

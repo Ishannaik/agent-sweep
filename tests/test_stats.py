@@ -16,12 +16,9 @@ ANTHROPIC_TOKEN = "sk-ant-api03-" + "A" * 40  # synthetic, non-live test value
 
 SINGLE_SOURCE_LINE = (
     '{"type":"user","message":{"content":[{"type":"text",'
-    f'"text":"key={AWS_KEY} token={GH_TOKEN} anthropic={ANTHROPIC_TOKEN}"' + '}]}}\n'
+    f'"text":"key={AWS_KEY} token={GH_TOKEN} anthropic={ANTHROPIC_TOKEN}"' + "}]}}\n"
 )
-CODEX_LINE = (
-    '{"type":"message","role":"user","content":'
-    f'"token {GH_TOKEN}"' + '}\n'
-)
+CODEX_LINE = f'{{"type":"message","role":"user","content":"token {GH_TOKEN}"' + "}\n"
 
 
 @pytest.fixture(autouse=True)
@@ -119,8 +116,9 @@ def test_scan_clean_stats_writes_output_file(tmp_path, capsys):
     """--stats -o on a clean scan writes {"findings": [], "stats": ...} to file."""
     root = tmp_path / "history"
     root.mkdir()
-    (root / "session.jsonl").write_text('{"type":"user","message":{"content":[]}}\n',
-                                        encoding="utf-8")
+    (root / "session.jsonl").write_text(
+        '{"type":"user","message":{"content":[]}}\n', encoding="utf-8"
+    )
     out_file = tmp_path / "report.json"
 
     code = main(["scan", "--root", str(root), "--stats", "--output", str(out_file)])
@@ -137,7 +135,9 @@ def test_scan_clean_stats_writes_output_file(tmp_path, capsys):
 def test_scan_all_clean_stats_writes_output_file(tmp_path, _isolated_home, capsys):
     """--all --stats -o on a clean multi-source scan writes the zero-stats payload."""
     _seed_claude(_isolated_home, content='{"type":"user","message":{"content":[]}}\n')
-    _seed_codex(_isolated_home, content='{"type":"message","role":"user","content":""}\n')
+    _seed_codex(
+        _isolated_home, content='{"type":"message","role":"user","content":""}\n'
+    )
     out_file = tmp_path / "report.json"
 
     code = main(["scan", "--all", "--stats", "--output", str(out_file)])

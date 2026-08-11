@@ -101,7 +101,7 @@ def test_version_does_not_scan(tmp_path, capsys):
     captured = capsys.readouterr()
     assert code == 0
     # The only output line should be the version string.
-    non_empty = [l for l in captured.out.splitlines() if l.strip()]
+    non_empty = [line for line in captured.out.splitlines() if line.strip()]
     assert len(non_empty) == 1
     assert "agentsweep" in non_empty[0]
 
@@ -200,10 +200,17 @@ def test_fix_verb_redact_with_custom_template(tmp_path, monkeypatch, capsys):
     root = _seed_root(tmp_path)
     session = root / "session.jsonl"
 
-    code = main([
-        "fix", "--root", str(root), "--force", "--allow-production",
-        "--redact-with", "<<HIDDEN:{rule}>>",
-    ])
+    code = main(
+        [
+            "fix",
+            "--root",
+            str(root),
+            "--force",
+            "--allow-production",
+            "--redact-with",
+            "<<HIDDEN:{rule}>>",
+        ]
+    )
     assert code == 0
     content = session.read_text(encoding="utf-8")
     assert AWS_KEY not in content
@@ -219,49 +226,66 @@ def test_fix_verb_redact_with_no_placeholder(tmp_path, monkeypatch, capsys):
     root = _seed_root(tmp_path)
     session = root / "session.jsonl"
 
-    code = main([
-        "fix", "--root", str(root), "--force", "--allow-production",
-        "--redact-with", "[SECRET]",
-    ])
+    code = main(
+        [
+            "fix",
+            "--root",
+            str(root),
+            "--force",
+            "--allow-production",
+            "--redact-with",
+            "[SECRET]",
+        ]
+    )
     assert code == 0
     content = session.read_text(encoding="utf-8")
     assert AWS_KEY not in content
     assert "[SECRET]" in content
 
 
-@pytest.mark.parametrize("bad_template", [
-    "../{rule}",           # path separator
-    "secrets\\{rule}",     # path separator (backslash)
-    "{unknown_field}",     # placeholder str.format() can't resolve
-    "unbalanced{",         # malformed brace
-    "{rule.foo}",          # attribute access -- naive value.format(rule="x")
-                           # probing wouldn't catch this ("x" has no .foo,
-                           # but a real rule id wouldn't either, and the
-                           # AttributeError would go uncaught mid-parse)
-    "{rule.upper}",        # attribute access on a method that DOES exist on
-                           # str -- would silently pass a naive probe
-    "{rule!r}",            # conversion
-    "{rule:>10}",          # format spec
-    "{0}",                 # positional, not the named "rule" field
-    "",                    # empty -- would silently no-op via `x or default`
-                           # in pipeline.py instead of erasing the secret
-    chr(0x85),             # U+0085 NEL -- >= 0x20 so the plain control-char
-                           # check wouldn't catch it, but str.splitlines()
-                           # treats it as a line break and would corrupt a
-                           # JSON/JSONL write mid-redaction
-    chr(0x2028),           # U+2028 LINE SEPARATOR -- same class of bug
-    chr(0x2029),           # U+2029 PARAGRAPH SEPARATOR -- same class of bug
-])
+@pytest.mark.parametrize(
+    "bad_template",
+    [
+        "../{rule}",  # path separator
+        "secrets\\{rule}",  # path separator (backslash)
+        "{unknown_field}",  # placeholder str.format() can't resolve
+        "unbalanced{",  # malformed brace
+        "{rule.foo}",  # attribute access -- naive value.format(rule="x")
+        # probing wouldn't catch this ("x" has no .foo,
+        # but a real rule id wouldn't either, and the
+        # AttributeError would go uncaught mid-parse)
+        "{rule.upper}",  # attribute access on a method that DOES exist on
+        # str -- would silently pass a naive probe
+        "{rule!r}",  # conversion
+        "{rule:>10}",  # format spec
+        "{0}",  # positional, not the named "rule" field
+        "",  # empty -- would silently no-op via `x or default`
+        # in pipeline.py instead of erasing the secret
+        chr(0x85),  # U+0085 NEL -- >= 0x20 so the plain control-char
+        # check wouldn't catch it, but str.splitlines()
+        # treats it as a line break and would corrupt a
+        # JSON/JSONL write mid-redaction
+        chr(0x2028),  # U+2028 LINE SEPARATOR -- same class of bug
+        chr(0x2029),  # U+2029 PARAGRAPH SEPARATOR -- same class of bug
+    ],
+)
 def test_fix_verb_rejects_broken_redact_template(tmp_path, monkeypatch, bad_template):
     _no_claude(monkeypatch)
     root = _seed_root(tmp_path)
     session = root / "session.jsonl"
     original_content = session.read_text(encoding="utf-8")
     try:
-        main([
-            "fix", "--root", str(root), "--force", "--allow-production",
-            "--redact-with", bad_template,
-        ])
+        main(
+            [
+                "fix",
+                "--root",
+                str(root),
+                "--force",
+                "--allow-production",
+                "--redact-with",
+                bad_template,
+            ]
+        )
         raised = False
     except SystemExit as e:
         raised = True
@@ -333,14 +357,9 @@ def test_undo_restore_failure_exits_2(tmp_path, monkeypatch, capsys):
     bak.write_text(original_content, encoding="utf-8")
 
     # Patch os.replace to always raise OSError.
-    import agentsweep.pipeline as _pipeline
-
-    real_os_replace = _pipeline.os.replace if hasattr(_pipeline, "os") else None
 
     # Patch within the undo function's imported os module.
     import os as _os_mod
-
-    original_replace = _os_mod.replace
 
     def _fail_replace(src, dst):
         raise OSError("simulated permission denied")

@@ -8,6 +8,7 @@ These tests pin the fix: the current schema is actually scanned, the legacy
 schema still works, and an unrecognised schema raises loudly instead of
 silently returning clean.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,14 +42,17 @@ def _make_current_schema_db(root: Path) -> Path:
             "session_id TEXT, data TEXT)"
         )
         con.execute(
-            "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, "
-            "data TEXT)"
+            "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)"
         )
         con.execute("CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT)")
         con.execute(
             "INSERT INTO part VALUES (?,?,?,?)",
-            ("prt_1", "msg_1", "ses_1",
-             json.dumps({"type": "text", "text": f"my key is {SECRET} btw"})),
+            (
+                "prt_1",
+                "msg_1",
+                "ses_1",
+                json.dumps({"type": "text", "text": f"my key is {SECRET} btw"}),
+            ),
         )
         con.execute(
             "INSERT INTO message VALUES (?,?,?)",
@@ -127,8 +131,7 @@ def test_whitelist_intersects_with_real_columns(tmp_path: Path) -> None:
         pairs = OpenCodeSource(root=db.parent)._sqlite_text_columns(con)
     finally:
         con.close()
-    assert set(pairs) == {("part", "data"), ("message", "data"),
-                          ("session", "title")}
+    assert set(pairs) == {("part", "data"), ("message", "data"), ("session", "title")}
 
 
 def test_schema_drift_raises_instead_of_clean(tmp_path: Path) -> None:

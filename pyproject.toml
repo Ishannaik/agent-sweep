@@ -49,7 +49,7 @@ dev = [
     "mypy>=1.10",
     "pytest-cov>=5.0",
     "jsonschema>=4.0",  # spec-compliance validation for SARIF output (tests only)
-    "ruff>=0.8",       # lint + format + import sort + unused-import/var (F401/F841) + complexity (C901)
+    "ruff>=0.16.2",    # lint + format; project policy is configured below
     "vulture>=2.16",   # module-level dead code (unused funcs/classes Ruff's F-rules miss)
     "bandit>=1.7",     # Python SAST — fitting for a secrets-redaction tool
     "pip-audit>=2.7",  # dependency CVE scanning (SCA)
@@ -104,6 +104,25 @@ fail_under = 74
 # add minutes to every CI leg). --benchmark-disable makes each benched function
 # run once; scripts/benchmark_compare.sh passes --benchmark-only to actually time.
 addopts = "--benchmark-disable"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+# Keep Ruff's built-in exclusions while skipping vendored static data.
+extend-exclude = ["src/agentsweep/bip39_words.py"]
+
+[tool.ruff.lint]
+# Explicit selection prevents user-level configuration or Ruff default changes
+# from silently changing the project's lint policy.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.format]
+# Preserve scanner-sensitive mappings, generated rules, and split fixtures.
+exclude = [
+    "scripts/rules_drift.py",
+    "src/agentsweep/scanner.py",
+    "tests/test_ported_rules.py",
+]
 
 [tool.bandit]
 # CI already scopes the scan to src/ (bandit -r src/); this excludes tests/

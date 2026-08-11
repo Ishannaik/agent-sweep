@@ -12,6 +12,7 @@ originals — plaintext secrets. Two gaps closed here:
    backups for a source (all roots, all backup globs), prompting on a
    terminal and refusing without --yes everywhere else.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,8 +43,10 @@ def _ns(**kwargs) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="POSIX permission bits are not meaningful on Windows")
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits are not meaningful on Windows",
+)
 def test_backup_is_created_owner_only(tmp_path: Path, monkeypatch) -> None:
     target = tmp_path / "session.jsonl"
     target.write_text('{"a": "secret"}\n', encoding="utf-8")

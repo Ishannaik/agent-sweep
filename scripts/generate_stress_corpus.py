@@ -62,10 +62,31 @@ def _payload(profile: str, length: int, file_index: int, record_index: int) -> s
         "ghp_" + "x" * 35 + " AKIA" + "A" * 15 + " near-miss log entry\n"
     )
     ascii_candidates = (
-        "AKIA" + "A" * 15 + "|ASIA" + "A" * 15 + "|ghp_" + "x" * 35
-        + "|gho_" + "x" * 35 + "|ghs_" + "x" * 35 + "|hf_" + "x" * 33
-        + "|npm_" + "x" * 35 + "|xoxb-" + "x" * 9 + "|xoxp-" + "x" * 9
-        + "|AIza" + "x" * 34 + "|GOCSPX-" + "x" * 27 + "|SK" + "a" * 31 + "|"
+        "AKIA"
+        + "A" * 15
+        + "|ASIA"
+        + "A" * 15
+        + "|ghp_"
+        + "x" * 35
+        + "|gho_"
+        + "x" * 35
+        + "|ghs_"
+        + "x" * 35
+        + "|hf_"
+        + "x" * 33
+        + "|npm_"
+        + "x" * 35
+        + "|xoxb-"
+        + "x" * 9
+        + "|xoxp-"
+        + "x" * 9
+        + "|AIza"
+        + "x" * 34
+        + "|GOCSPX-"
+        + "x" * 27
+        + "|SK"
+        + "a" * 31
+        + "|"
     )
     hits = (
         "aws=AKIAIOSFODNN7EXAMPLE "
@@ -142,12 +163,21 @@ def _expected_findings(root: Path) -> tuple[int, str, int, Counter[str]]:
             strings += 1
             for finding in scan_text(value):
                 row = [
-                    relative, line, keypath, finding.rule, finding.display,
-                    finding.value, finding.masked, finding.span[0], finding.span[1],
+                    relative,
+                    line,
+                    keypath,
+                    finding.rule,
+                    finding.display,
+                    finding.value,
+                    finding.masked,
+                    finding.span[0],
+                    finding.span[1],
                 ]
                 if not first:
                     digest.update(b",")
-                digest.update(json.dumps(row, ensure_ascii=False, separators=(",", ":")).encode())
+                digest.update(
+                    json.dumps(row, ensure_ascii=False, separators=(",", ":")).encode()
+                )
                 first = False
                 findings += 1
                 per_rule[finding.rule] += 1
@@ -165,11 +195,15 @@ def _compatibility_counts(per_rule: Counter[str]) -> tuple[int, int, bool]:
         for rule_id, _display, pattern in build_rule_registry(_RAW_RULES, mode="auto")
     }
     # Function-based detectors such as BIP-39 are outside the regex registry.
-    compatible = sum(count for rule_id, count in per_rule.items() if backend.get(rule_id) == "re2")
+    compatible = sum(
+        count for rule_id, count in per_rule.items() if backend.get(rule_id) == "re2"
+    )
     return compatible, sum(per_rule.values()) - compatible, RE2_AVAILABLE
 
 
-def _write_corpus(output: Path, profile: str, target_bytes: int, seed: int, files: int) -> dict[str, object]:
+def _write_corpus(
+    output: Path, profile: str, target_bytes: int, seed: int, files: int
+) -> dict[str, object]:
     rng = random.Random(seed)
     record_size = _record_size(profile)
     output.mkdir(parents=True, exist_ok=True)
@@ -178,11 +212,15 @@ def _write_corpus(output: Path, profile: str, target_bytes: int, seed: int, file
     for file_index in range(files):
         if written >= target_bytes:
             break
-        group = f"source-{file_index % 4:02}" if profile == "multi_source" else "sessions"
+        group = (
+            f"source-{file_index % 4:02}" if profile == "multi_source" else "sessions"
+        )
         path = output / group / f"session-{file_index:04}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="\n") as handle:
-            file_target = max(record_size, math.ceil((target_bytes - written) / (files - file_index)))
+            file_target = max(
+                record_size, math.ceil((target_bytes - written) / (files - file_index))
+            )
             if profile == "skewed_files" and file_index % 16 == 0:
                 file_target *= 8
             file_written = 0
@@ -204,7 +242,9 @@ def _write_corpus(output: Path, profile: str, target_bytes: int, seed: int, file
 
     corpus_hash = _corpus_hash(output)
     expected_findings, finding_hash, strings, per_rule = _expected_findings(output)
-    compatible_findings, fallback_findings, re2_available = _compatibility_counts(per_rule)
+    compatible_findings, fallback_findings, re2_available = _compatibility_counts(
+        per_rule
+    )
     manifest = {
         "generator_version": _GENERATOR_VERSION,
         "name": profile,
@@ -234,7 +274,9 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--size-mib", type=float, default=32.0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--files", type=int, help="override deterministic profile file count")
+    parser.add_argument(
+        "--files", type=int, help="override deterministic profile file count"
+    )
     args = parser.parse_args()
     if args.size_mib <= 0:
         parser.error("--size-mib must be positive")

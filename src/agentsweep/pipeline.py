@@ -3,6 +3,7 @@
 Owns all run orchestration and the --json/exit-code contracts. cli.py
 parses flags and hands the parsed namespace to run(); ui owns rendering.
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -45,8 +46,12 @@ def _opt(args, name: str, default=None):
     return getattr(args, name, default)
 
 
-def run(args, *, _findings_out: list | None = None,
-        _force_recoverable_out: list | None = None) -> int:
+def run(
+    args,
+    *,
+    _findings_out: list | None = None,
+    _force_recoverable_out: list | None = None,
+) -> int:
     """Execute one scan (and optional redact) run. Exit codes:
     0 clean · 1 findings (scan-only) · 2 gate-blocked, write error, or bad path.
 
@@ -60,8 +65,11 @@ def run(args, *, _findings_out: list | None = None,
 
     as_sarif = _opt(args, "format") == "sarif"
     if as_sarif and getattr(args, "stats", False):
-        print("error: --stats is not supported in SARIF mode; "
-              "omit --stats or use --json instead", file=sys.stderr)
+        print(
+            "error: --stats is not supported in SARIF mode; "
+            "omit --stats or use --json instead",
+            file=sys.stderr,
+        )
         return 2
     # Both machine formats share every no-banner/no-styling branch below; they
     # differ only in what an empty result set looks like on stdout.
@@ -95,7 +103,8 @@ def run(args, *, _findings_out: list | None = None,
             ui.warn_line(
                 f"{source.display_name} is an experimental source — its history "
                 f"path/format is inferred from research and not yet verified "
-                f"against a real install, so it may find nothing")
+                f"against a real install, so it may find nothing"
+            )
 
     if not machine:
         files: list[Path] = []
@@ -114,19 +123,27 @@ def run(args, *, _findings_out: list | None = None,
         if machine:
             if args.json and stats_flag:
                 empty_stats = _stats_payload({}, source_key=source.name)
-                _emit_json_payload(
-                    {"findings": [], "stats": empty_stats}, output, 0)
+                _emit_json_payload({"findings": [], "stats": empty_stats}, output, 0)
             else:
                 _print_empty_machine_output()
         else:
-            ui.stage(1, "warn", "DISCOVER", source.name,
-                     f"no history files under {source.root}", err=True)
+            ui.stage(
+                1,
+                "warn",
+                "DISCOVER",
+                source.name,
+                f"no history files under {source.root}",
+                err=True,
+            )
             if stats_flag:
                 _show_stats(_stats_payload({}, source_key=source.name))
         return 0
 
-    ignores = (ignore_mod.IgnoreSet() if _opt(args, "no_ignore")
-               else ignore_mod.load([source.root, Path.cwd()]))
+    ignores = (
+        ignore_mod.IgnoreSet()
+        if _opt(args, "no_ignore")
+        else ignore_mod.load([source.root, Path.cwd()])
+    )
 
     exclude_rules = set(_opt(args, "exclude_rule", set()))
     only_rules = _opt(args, "only_rule", None)
@@ -141,12 +158,14 @@ def run(args, *, _findings_out: list | None = None,
             only_rules=only_rules,
         )
         if truncated:
-            print(f"warning: {len(truncated)} file(s) exceeded the scan budget "
-                  f"and were truncated", file=sys.stderr)
+            print(
+                f"warning: {len(truncated)} file(s) exceeded the scan budget "
+                f"and were truncated",
+                file=sys.stderr,
+            )
         _warn_leftover_backups(source, as_json=True)
         if as_sarif:
-            return _emit_sarif(_json_payload(found_by_file, source),
-                               output, suppressed)
+            return _emit_sarif(_json_payload(found_by_file, source), output, suppressed)
         return _output_json(
             found_by_file,
             source,
@@ -170,12 +189,20 @@ def run(args, *, _findings_out: list | None = None,
         )
     elapsed = time.perf_counter() - t0
 
-    ui.stage(2, "ok", "SCAN", f"{len(files)} file(s)",
-             f"{strings_scanned} string(s)", f"{elapsed:.1f}s")
+    ui.stage(
+        2,
+        "ok",
+        "SCAN",
+        f"{len(files)} file(s)",
+        f"{strings_scanned} string(s)",
+        f"{elapsed:.1f}s",
+    )
     if truncated:
-        ui.warn_line(f"{len(truncated)} file(s) exceeded the "
-                     f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were "
-                     f"truncated (likely cache blobs, not conversation text)")
+        ui.warn_line(
+            f"{len(truncated)} file(s) exceeded the "
+            f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were "
+            f"truncated (likely cache blobs, not conversation text)"
+        )
 
     if suppressed:
         ui.warn_line(f"{suppressed} finding(s) suppressed by .agentsweepignore")
@@ -185,8 +212,10 @@ def run(args, *, _findings_out: list | None = None,
         if getattr(args, "stats", False):
             empty_stats = _stats_payload(found_by_file, source_key=source.name)
             if output is not None:
-                _write_text(output, json.dumps(
-                    {"findings": [], "stats": empty_stats}, indent=2) + "\n")
+                _write_text(
+                    output,
+                    json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
+                )
                 print(f"0 finding(s) written to {output}", file=sys.stderr)
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
@@ -196,16 +225,25 @@ def run(args, *, _findings_out: list | None = None,
         return 0
 
     total = sum(len(v) for v in found_by_file.values())
-    ui.stage(3, "fail", "FINDINGS", f"{total} secret(s) in {len(found_by_file)} file(s)")
-    stats_payload = (_stats_payload(found_by_file, source_key=source.name)
-                     if getattr(args, "stats", False) else None)
+    ui.stage(
+        3, "fail", "FINDINGS", f"{total} secret(s) in {len(found_by_file)} file(s)"
+    )
+    stats_payload = (
+        _stats_payload(found_by_file, source_key=source.name)
+        if getattr(args, "stats", False)
+        else None
+    )
     _show_findings(found_by_file, source, output, stats=stats_payload)
     if stats_payload is not None:
         _show_stats(stats_payload)
 
     if not args.fix:
-        ui.stage(4, "skip", "REDACT",
-                 "skipped — run with --fix to redact in place (.bak backups)")
+        ui.stage(
+            4,
+            "skip",
+            "REDACT",
+            "skipped — run with --fix to redact in place (.bak backups)",
+        )
         ui.stage(5, "warn", "ROTATE", "these keys are still live")
         ui.rotation_panel(_rotation_items(found_by_file))
         _warn_leftover_backups(source, as_json=False)
@@ -243,8 +281,9 @@ def _render_redact_result(rows, errors: int, found_by_file: dict) -> int:
     exit code: 0 if every write succeeded, else 2.
     """
     ok_count = sum(1 for status, _, _ in rows if status == "ok")
-    already = sum(1 for status, _, note in rows
-                  if status == "skip" and "already redacted" in note)
+    already = sum(
+        1 for status, _, note in rows if status == "skip" and "already redacted" in note
+    )
     redacted = ok_count + already  # this pass plus any prior pass
     if errors == 0 and ok_count:
         ui.stage(4, "ok", "REDACT", f"{ok_count}/{len(rows)} file(s) rewritten")
@@ -265,8 +304,13 @@ def _render_redact_result(rows, errors: int, found_by_file: dict) -> int:
     return 0 if errors == 0 else 2
 
 
-def redact_findings(args, source: Source, found_by_file: dict, *,
-                    _force_recoverable_out: list | None = None) -> int:
+def redact_findings(
+    args,
+    source: Source,
+    found_by_file: dict,
+    *,
+    _force_recoverable_out: list | None = None,
+) -> int:
     """Apply REDACT + ROTATE using pre-computed findings; skip DISCOVER + SCAN.
 
     Called from offer_redaction() when the first scan cached its results via
@@ -309,13 +353,15 @@ def _source_rows() -> list[dict]:
             detected = src.is_detected()
         except Exception:
             root, detected = None, False
-        rows.append({
-            "source": key,
-            "display": getattr(cls, "display_name", key),
-            "experimental": bool(getattr(cls, "experimental", False)),
-            "root": str(root) if root is not None else "",
-            "detected": detected,
-        })
+        rows.append(
+            {
+                "source": key,
+                "display": getattr(cls, "display_name", key),
+                "experimental": bool(getattr(cls, "experimental", False)),
+                "root": str(root) if root is not None else "",
+                "detected": detected,
+            }
+        )
     return rows
 
 
@@ -357,8 +403,11 @@ def run_all(args) -> int:
     output: Path | None = _opt(args, "output")
     as_sarif = _opt(args, "format") == "sarif"
     if as_sarif and _opt(args, "stats", False):
-        print("error: --stats is not supported in SARIF mode; "
-              "omit --stats or use --json instead", file=sys.stderr)
+        print(
+            "error: --stats is not supported in SARIF mode; "
+            "omit --stats or use --json instead",
+            file=sys.stderr,
+        )
         return 2
     as_json = bool(_opt(args, "json", False)) or as_sarif
     report = getattr(args, "report", False)
@@ -382,15 +431,18 @@ def run_all(args) -> int:
             experimental.append(getattr(src, "display_name", key))
 
     if not selected:
-        msg = ("no agent history roots found on this machine"
-               if detected_only else "no sources available to scan")
+        msg = (
+            "no agent history roots found on this machine"
+            if detected_only
+            else "no sources available to scan"
+        )
         print(msg, file=sys.stderr)
         stats_flag = _opt(args, "stats", False)
         if as_json:
             if stats_flag:
                 _emit_json_payload(
-                    {"findings": [], "stats": _stats_payload_multi([])},
-                    output, 0)
+                    {"findings": [], "stats": _stats_payload_multi([])}, output, 0
+                )
             else:
                 print("[]")
         else:
@@ -476,8 +528,7 @@ def run_all(args) -> int:
 
     # Rebuild in the original selection order so output is deterministic.
     discovered: list[tuple[str, Source, list[Path]]] = [
-        discovered_by_index[i]
-        for i in sorted(discovered_by_index)
+        discovered_by_index[i] for i in sorted(discovered_by_index)
     ]
 
     total_files = sum(len(f) for _, _, f in discovered)
@@ -488,13 +539,19 @@ def run_all(args) -> int:
         if as_json:
             if stats_flag:
                 _emit_json_payload(
-                    {"findings": [], "stats": _stats_payload_multi([])},
-                    output, 0)
+                    {"findings": [], "stats": _stats_payload_multi([])}, output, 0
+                )
             else:
                 print("[]")
         else:
-            ui.stage(1, "warn", "DISCOVER", f"{len(selected)} source(s)",
-                     "no history files", err=True)
+            ui.stage(
+                1,
+                "warn",
+                "DISCOVER",
+                f"{len(selected)} source(s)",
+                "no history files",
+                err=True,
+            )
             ui.stage(2, "skip", "SCAN", "nothing to scan")
             ui.stage(3, "ok", "FINDINGS", "no secrets found")
             if stats_flag:
@@ -505,8 +562,13 @@ def run_all(args) -> int:
         return 0
 
     if not as_json:
-        ui.stage(1, "ok", "DISCOVER", f"{len(discovered)} source(s)",
-                 f"{total_files} file(s)")
+        ui.stage(
+            1,
+            "ok",
+            "DISCOVER",
+            f"{len(discovered)} source(s)",
+            f"{total_files} file(s)",
+        )
 
     # Phase 2: scan all sources concurrently.  Each source is independent
     # (separate root, separate files, separate ignore set) so there is no
@@ -527,8 +589,7 @@ def run_all(args) -> int:
     # table output is deterministic regardless of completion order.
 
     per_source_by_index: dict[
-        int,
-        tuple[str, Source, list[Path], dict, int, int, list[Path]]
+        int, tuple[str, Source, list[Path], dict, int, int, list[Path]]
     ] = {}
     total_strings = 0
     total_suppressed = 0
@@ -538,12 +599,14 @@ def run_all(args) -> int:
     if as_json:
         scan_workers = min(_SOURCE_WORKERS_CAP, len(discovered))
         with ThreadPoolExecutor(max_workers=scan_workers) as scan_pool:
+
             def _scan_json_source(
                 key: str, source: Source, files: list[Path]
             ) -> tuple[str, Source, list[Path], dict, int, int, list[Path]]:
                 """Run a full source scan; safe to call from a thread."""
                 ignores = (
-                    ignore_mod.IgnoreSet() if no_ignore
+                    ignore_mod.IgnoreSet()
+                    if no_ignore
                     else ignore_mod.load([source.root, Path.cwd()])
                 )
                 found_by_file, strings_scanned, suppressed, truncated = _scan(
@@ -554,8 +617,13 @@ def run_all(args) -> int:
                     only_rules=only_rules,
                 )
                 return (
-                    key, source, files, found_by_file,
-                    strings_scanned, suppressed, truncated
+                    key,
+                    source,
+                    files,
+                    found_by_file,
+                    strings_scanned,
+                    suppressed,
+                    truncated,
                 )
 
             scan_futures = {
@@ -569,6 +637,7 @@ def run_all(args) -> int:
         progress_lock = threading.Lock()
 
         with ui.scan_progress(total_files) as progress:
+
             def _scan_tty_source(
                 key: str, source: Source, files: list[Path]
             ) -> tuple[str, Source, list[Path], dict, int, int, list[Path]]:
@@ -579,7 +648,8 @@ def run_all(args) -> int:
                 is never updated from two threads at the same time.
                 """
                 ignores = (
-                    ignore_mod.IgnoreSet() if no_ignore
+                    ignore_mod.IgnoreSet()
+                    if no_ignore
                     else ignore_mod.load([source.root, Path.cwd()])
                 )
 
@@ -610,8 +680,13 @@ def run_all(args) -> int:
                     only_rules=only_rules,
                 )
                 return (
-                    key, source, files, found_by_file,
-                    strings_scanned, suppressed, truncated
+                    key,
+                    source,
+                    files,
+                    found_by_file,
+                    strings_scanned,
+                    suppressed,
+                    truncated,
                 )
 
             scan_workers = min(_SOURCE_WORKERS_CAP, len(discovered))
@@ -649,11 +724,12 @@ def run_all(args) -> int:
                 f"and were truncated",
                 file=sys.stderr,
             )
-        _warn_leftover_backups_multi([s for _k, s, *_ in per_source],
-                                     as_json=True)
+        _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=True)
         if as_sarif:
             return _emit_sarif(payload, output, total_suppressed)
-        stats = _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
+        stats = (
+            _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
+        )
         if report:
             result: JsonObject = {
                 "findings": payload,
@@ -676,20 +752,22 @@ def run_all(args) -> int:
                 total_suppressed,
             )
         return _emit_json_payload(payload, output, total_suppressed)
-    
-   
 
-    ui.stage(2, "ok", "SCAN", f"{total_files} file(s)",
-             f"{total_strings} string(s)", f"{elapsed:.1f}s")
+    ui.stage(
+        2,
+        "ok",
+        "SCAN",
+        f"{total_files} file(s)",
+        f"{total_strings} string(s)",
+        f"{elapsed:.1f}s",
+    )
     if total_truncated:
         ui.warn_line(
             f"{len(total_truncated)} file(s) exceeded the "
             f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were truncated"
         )
     if total_suppressed:
-        ui.warn_line(
-            f"{total_suppressed} finding(s) suppressed by .agentsweepignore"
-        )
+        ui.warn_line(f"{total_suppressed} finding(s) suppressed by .agentsweepignore")
 
     dirty = [(k, s, fbf) for k, s, _files, fbf, _sc, _sup, _tr in per_source if fbf]
     if not dirty:
@@ -697,20 +775,20 @@ def run_all(args) -> int:
         if getattr(args, "stats", False):
             empty_stats = _stats_payload_multi(per_source)
             if output is not None:
-                _write_text(output, json.dumps(
-                    {"findings": [], "stats": empty_stats}, indent=2) + "\n")
+                _write_text(
+                    output,
+                    json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
+                )
                 print(f"0 finding(s) written to {output}", file=sys.stderr)
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
-        _warn_leftover_backups_multi([s for _k, s, *_ in per_source],
-                                     as_json=False)
+        _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=False)
         ui.contribute_line()
         return 0
 
     grand = sum(len(items) for _k, _s, fbf in dirty for items in fbf.values())
-    ui.stage(3, "fail", "FINDINGS",
-             f"{grand} secret(s) across {len(dirty)} source(s)")
+    ui.stage(3, "fail", "FINDINGS", f"{grand} secret(s) across {len(dirty)} source(s)")
 
     # Display tables per source without writing the fixed overflow report
     # path (that would clobber across sources). One aggregated report after.
@@ -745,7 +823,9 @@ def run_all(args) -> int:
     # Single overflow destination: -o JSON if given, else one text report
     # that includes every source (never per-source clobber of DEFAULT_REPORT).
     needs_overflow = on_tty and (any_source_capped or grand > MAX_TABLE_ROWS)
-    stats_payload = _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
+    stats_payload = (
+        _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
+    )
     if output is not None:
         output_payload: JsonPayload = combined_payload
         if stats_payload is not None:
@@ -758,9 +838,7 @@ def run_all(args) -> int:
     elif needs_overflow:
         report = Path.cwd() / DEFAULT_REPORT_NAME
         _write_text(report, _text_report_multi(combined_payload))
-        ui.warn_line(
-            f"full multi-source findings ({grand}) written to {report}"
-        )
+        ui.warn_line(f"full multi-source findings ({grand}) written to {report}")
 
     if stats_payload is not None:
         _show_stats(stats_payload)
@@ -769,9 +847,13 @@ def run_all(args) -> int:
         return _fix_all_sources(args, dirty)
 
     dirty_names = ", ".join(k for k, _s, _f in dirty)
-    ui.stage(4, "skip", "REDACT",
-             f"skipped — run with --fix to redact in place (.bak backups)  "
-             f"(dirty: {dirty_names})")
+    ui.stage(
+        4,
+        "skip",
+        "REDACT",
+        f"skipped — run with --fix to redact in place (.bak backups)  "
+        f"(dirty: {dirty_names})",
+    )
     ui.stage(5, "warn", "ROTATE", "these keys are still live")
     # Flatten across sources — do not merge by Path (collisions across roots).
     ui.rotation_panel(_rotation_items_multi(dirty))
@@ -796,8 +878,11 @@ def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:
 
     Returns 0 only if every source redacted cleanly, else 2.
     """
-    interactive = (sys.stdin.isatty() and ui.console.is_terminal
-                   if hasattr(sys.stdin, "isatty") else False)
+    interactive = (
+        sys.stdin.isatty() and ui.console.is_terminal
+        if hasattr(sys.stdin, "isatty")
+        else False
+    )
 
     total = len(dirty)
     redacted: list[str] = []
@@ -847,9 +932,13 @@ def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:
             redacted.append(key)
 
     if unresolved:
-        ui.stage(4, "warn", "REDACT",
-                 f"{len(redacted)}/{total} source(s) redacted",
-                 f"unresolved: {', '.join(unresolved)}")
+        ui.stage(
+            4,
+            "warn",
+            "REDACT",
+            f"{len(redacted)}/{total} source(s) redacted",
+            f"unresolved: {', '.join(unresolved)}",
+        )
     else:
         ui.stage(4, "ok", "REDACT", f"{len(redacted)}/{total} source(s) redacted")
 
@@ -886,6 +975,7 @@ def _scan(
     progress object is supplied. (A multiprocessing path was evaluated and
     dropped — on Windows the spawn + per-worker regex recompile cost gave
     ~1.1x and risked a re-import fork bomb; see docs/PERF.md.)"""
+
     def _on_file(f: Path) -> None:
         if progress is not None:
             progress.advance(ui.rel(f, source.root))
@@ -1052,11 +1142,9 @@ def _table_rows(found_by_file: dict) -> list[tuple[str, str, Path, int]]:
 
 
 def _rotation_items(found_by_file: dict) -> list[tuple[str, str]]:
-    rules = sorted({
-        finding.rule
-        for items in found_by_file.values()
-        for _, _, _, finding in items
-    })
+    rules = sorted(
+        {finding.rule for items in found_by_file.values() for _, _, _, finding in items}
+    )
     return [
         (rule, ROTATION_GUIDANCE.get(rule, "rotate via the issuing provider"))
         for rule in rules
@@ -1067,16 +1155,19 @@ def _rotation_items_multi(
     dirty: list[tuple[str, Source, dict]],
 ) -> list[tuple[str, str]]:
     """Union of rotation guidance across sources (Path-merge-safe)."""
-    rules = sorted({
-        finding.rule
-        for _key, _source, fbf in dirty
-        for items in fbf.values()
-        for _, _, _, finding in items
-    })
+    rules = sorted(
+        {
+            finding.rule
+            for _key, _source, fbf in dirty
+            for items in fbf.values()
+            for _, _, _, finding in items
+        }
+    )
     return [
         (rule, ROTATION_GUIDANCE.get(rule, "rotate via the issuing provider"))
         for rule in rules
     ]
+
 
 def _group_findings(found_by_file: dict) -> dict:
     """Group findings by masked secret for blast-radius reporting."""
@@ -1095,33 +1186,39 @@ def _group_findings(found_by_file: dict) -> dict:
                     "locations": [],
                 }
 
-            groups[key]["locations"].append({
-                "file": str(path),
-                "line": line_num,
-            })
+            groups[key]["locations"].append(
+                {
+                    "file": str(path),
+                    "line": line_num,
+                }
+            )
 
     return groups
+
 
 def _json_payload(found_by_file: dict, source: Source) -> JsonList:
     payload: JsonList = []
     for path, items in found_by_file.items():
         relpath = ui.rel(path, source.root)
         for line_num, keypath, _val, finding in items:
-            payload.append({
-                "source": source.name,
-                "fingerprint": ignore_mod.fingerprint(relpath, line_num, finding.rule),
-                "file": str(path),
-                "line": line_num,
-                "keypath": keypath,
-                "rule": finding.rule,
-                "display": finding.display,
-                "masked": finding.masked,
-            })
+            payload.append(
+                {
+                    "source": source.name,
+                    "fingerprint": ignore_mod.fingerprint(
+                        relpath, line_num, finding.rule
+                    ),
+                    "file": str(path),
+                    "line": line_num,
+                    "keypath": keypath,
+                    "rule": finding.rule,
+                    "display": finding.display,
+                    "masked": finding.masked,
+                }
+            )
     return payload
 
 
-def _stats_payload(found_by_file: dict,
-                   source_key: str | None = None) -> JsonObject:
+def _stats_payload(found_by_file: dict, source_key: str | None = None) -> JsonObject:
     by_rule: Counter[str] = Counter()
     total = 0
     for items in found_by_file.values():
@@ -1136,7 +1233,7 @@ def _stats_payload(found_by_file: dict,
 
 
 def _stats_payload_multi(
-    per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]]
+    per_source: list[tuple[str, Source, list[Path], dict, int, int, list[Path]]],
 ) -> JsonObject:
     by_rule: Counter[str] = Counter()
     by_source: Counter[str] = Counter()
@@ -1178,19 +1275,22 @@ SARIF_SCHEMA = (
 SARIF_VERSION = "2.1.0"
 _PROJECT_URL = "https://github.com/Ishannaik/agent-sweep"
 
+
 def _blast_radius_payload(found_by_file: dict) -> list[dict]:
     groups = _group_findings(found_by_file)
     report = []
 
     for group in groups.values():
-        report.append({
-            "provider": group["display"],
-            "rule": group["rule"],
-            "masked": group["masked"],
-            "occurrences": len(group["locations"]),
-            "locations": group["locations"],
-            "rotation": ROTATION_GUIDANCE.get(group["rule"]),
-        })
+        report.append(
+            {
+                "provider": group["display"],
+                "rule": group["rule"],
+                "masked": group["masked"],
+                "occurrences": len(group["locations"]),
+                "locations": group["locations"],
+                "rotation": ROTATION_GUIDANCE.get(group["rule"]),
+            }
+        )
 
     return report
 
@@ -1225,41 +1325,49 @@ def _sarif_document(payload: list[dict]) -> dict:
     index_of = {rule_id: i for i, rule_id in enumerate(rule_ids)}
     results: list[dict] = []
     for f in payload:
-        results.append({
-            "ruleId": f["rule"],
-            "ruleIndex": index_of[f["rule"]],
-            "level": "error",
-            "message": {
-                "text": (f"{f['display']} found in {f['source']} history: "
-                         f"{f['masked']}"),
-            },
-            "locations": [{
-                "physicalLocation": {
-                    "artifactLocation": {
-                        "uri": Path(f["file"]).resolve().as_uri(),
-                    },
-                    "region": {"startLine": max(1, int(f["line"]))},
+        results.append(
+            {
+                "ruleId": f["rule"],
+                "ruleIndex": index_of[f["rule"]],
+                "level": "error",
+                "message": {
+                    "text": (
+                        f"{f['display']} found in {f['source']} history: {f['masked']}"
+                    ),
                 },
-            }],
-        })
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {
+                                "uri": Path(f["file"]).resolve().as_uri(),
+                            },
+                            "region": {"startLine": max(1, int(f["line"]))},
+                        },
+                    }
+                ],
+            }
+        )
 
     return {
         "$schema": SARIF_SCHEMA,
         "version": SARIF_VERSION,
-        "runs": [{
-            "tool": {"driver": {
-                "name": "agentsweep",
-                "version": __version__,
-                "informationUri": _PROJECT_URL,
-                "rules": rules,
-            }},
-            "results": results,
-        }],
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "agentsweep",
+                        "version": __version__,
+                        "informationUri": _PROJECT_URL,
+                        "rules": rules,
+                    }
+                },
+                "results": results,
+            }
+        ],
     }
 
 
-def _emit_sarif(payload: list[dict], output: Path | None,
-                suppressed: int) -> int:
+def _emit_sarif(payload: list[dict], output: Path | None, suppressed: int) -> int:
     """Emit a SARIF report to `output` or stdout.
 
     Machine-clean like the JSON path — no banner, no styling — and the exit
@@ -1279,11 +1387,14 @@ def _emit_sarif(payload: list[dict], output: Path | None,
     return code
 
 
-def _emit_json_payload(payload: JsonPayload, output: Path | None,
-                       suppressed: int) -> int:
+def _emit_json_payload(
+    payload: JsonPayload, output: Path | None, suppressed: int
+) -> int:
     """Shared JSON emission for single- and multi-source scans."""
 
-    findings: JsonList = cast(JsonList, payload["findings"]) if isinstance(payload, dict) else payload
+    findings: JsonList = (
+        cast(JsonList, payload["findings"]) if isinstance(payload, dict) else payload
+    )
     count = len(findings)
     code = 0 if count == 0 else 1
 
@@ -1292,10 +1403,7 @@ def _emit_json_payload(payload: JsonPayload, output: Path | None,
         print(f"{count} finding(s) written to {output}", file=sys.stderr)
         return code
 
-    flood = (
-        count > JSON_FLOOD_LIMIT
-        and getattr(sys.stdout, "isatty", lambda: False)()
-    )
+    flood = count > JSON_FLOOD_LIMIT and getattr(sys.stdout, "isatty", lambda: False)()
 
     if flood:
         target = Path.cwd() / DEFAULT_JSON_NAME
@@ -1314,6 +1422,7 @@ def _emit_json_payload(payload: JsonPayload, output: Path | None,
 
     return code
 
+
 def _output_json(
     found_by_file: dict,
     source: Source,
@@ -1325,7 +1434,9 @@ def _output_json(
     """Emit JSON output, optionally including a blast-radius report."""
 
     findings = _json_payload(found_by_file, source)
-    stats_payload = _stats_payload(found_by_file, source_key=source.name) if stats else None
+    stats_payload = (
+        _stats_payload(found_by_file, source_key=source.name) if stats else None
+    )
 
     if report:
         payload: JsonObject = {
@@ -1353,8 +1464,13 @@ def _output_json(
     return _emit_json_payload(findings, output, suppressed)
 
 
-def _show_findings(found_by_file: dict, source: Source,
-                   output: Path | None, *, stats: JsonObject | None = None) -> None:
+def _show_findings(
+    found_by_file: dict,
+    source: Source,
+    output: Path | None,
+    *,
+    stats: JsonObject | None = None,
+) -> None:
     """Human findings table — capped on a real terminal so a huge scan can't
     bury the screen; the full set always goes to a report file in that case
     (or to -o if given)."""
@@ -1370,16 +1486,16 @@ def _show_findings(found_by_file: dict, source: Source,
                 "findings": findings,
                 "stats": stats,
             }
-        _write_text(output, json.dumps(output_payload,
-                                       indent=2) + "\n")
+        _write_text(output, json.dumps(output_payload, indent=2) + "\n")
 
     if capped:
         ui.findings_table(rows[:MAX_TABLE_ROWS], source.root)
         report = output if output is not None else Path.cwd() / DEFAULT_REPORT_NAME
         if output is None:
             _write_text(report, _text_report(found_by_file, source))
-        ui.warn_line(f"…and {len(rows) - MAX_TABLE_ROWS} more — full list "
-                     f"written to {report}")
+        ui.warn_line(
+            f"…and {len(rows) - MAX_TABLE_ROWS} more — full list written to {report}"
+        )
     else:
         ui.findings_table(rows, source.root)
         if output is not None:
@@ -1419,13 +1535,22 @@ def _write_text(path: Path, text: str) -> None:
 # Backup patterns undo restores: JSONL transcripts, whole-file JSON and
 # markdown histories, plus the SQLite stores (Cursor/Windsurf *.vscdb,
 # OpenCode opencode.db, Hermes/Goose *.db).
-_BACKUP_GLOBS = ("*.jsonl.bak", "*.json.bak", "*.md.bak",
-                 "*.vscdb.bak", "*.db.bak",
-                 # SQLite WAL sidecars, retired with their database by
-                 # safe_write. undo restores them; purge deletes them.
-                 "*.db-wal.bak", "*.db-shm.bak",
-                 "*.vscdb-wal.bak", "*.vscdb-shm.bak",
-                 "*.sqlite.bak", "*.sqlite-wal.bak", "*.sqlite-shm.bak")
+_BACKUP_GLOBS = (
+    "*.jsonl.bak",
+    "*.json.bak",
+    "*.md.bak",
+    "*.vscdb.bak",
+    "*.db.bak",
+    # SQLite WAL sidecars, retired with their database by
+    # safe_write. undo restores them; purge deletes them.
+    "*.db-wal.bak",
+    "*.db-shm.bak",
+    "*.vscdb-wal.bak",
+    "*.vscdb-shm.bak",
+    "*.sqlite.bak",
+    "*.sqlite-wal.bak",
+    "*.sqlite-shm.bak",
+)
 
 
 def _leftover_backups(source: Source) -> list[Path]:
@@ -1435,9 +1560,15 @@ def _leftover_backups(source: Source) -> list[Path]:
     it before replacing the file, and only `purge` deletes it. Same discovery
     undo/purge use, so scan flags exactly what they would act on.
     """
-    return sorted({p for root in source.roots() if root.exists()
-                   for pat in _BACKUP_GLOBS
-                   for p in root.rglob(pat)})
+    return sorted(
+        {
+            p
+            for root in source.roots()
+            if root.exists()
+            for pat in _BACKUP_GLOBS
+            for p in root.rglob(pat)
+        }
+    )
 
 
 def _warn_leftover_backups(source: Source, as_json: bool) -> None:
@@ -1465,9 +1596,11 @@ def _warn_leftover_backups_multi(sources: list[Source], as_json: bool) -> None:
 def _emit_backup_warning(count: int, as_json: bool) -> None:
     if not count:
         return
-    msg = (f"{count} leftover .bak backup(s) still contain plaintext secrets "
-           f"— run `agentsweep purge` after rotating, or `agentsweep undo` to "
-           f"restore them")
+    msg = (
+        f"{count} leftover .bak backup(s) still contain plaintext secrets "
+        f"— run `agentsweep purge` after rotating, or `agentsweep undo` to "
+        f"restore them"
+    )
     if as_json:
         print(f"warning: {msg}", file=sys.stderr)
     else:
@@ -1486,20 +1619,25 @@ def undo(args) -> int:
     if not roots:
         print(f"No history root at {source.root}", file=sys.stderr)
         return 0
-    backups = sorted({p for root in roots
-                      for pat in _BACKUP_GLOBS
-                      for p in root.rglob(pat)})
+    backups = sorted(
+        {p for root in roots for pat in _BACKUP_GLOBS for p in root.rglob(pat)}
+    )
     if not backups:
         print(f"No .bak backups found under {source.root}", file=sys.stderr)
         return 0
 
-    interactive = (sys.stdin.isatty() and ui.console.is_terminal
-                   if hasattr(sys.stdin, "isatty") else False)
+    interactive = (
+        sys.stdin.isatty() and ui.console.is_terminal
+        if hasattr(sys.stdin, "isatty")
+        else False
+    )
     if interactive:
         print(f"  {len(backups)} backup(s) found under {source.root}")
         try:
-            if input("  restore them over the redacted files? [y/N]: "
-                     ).strip().lower() != "y":
+            if (
+                input("  restore them over the redacted files? [y/N]: ").strip().lower()
+                != "y"
+            ):
                 ui.warn_line("cancelled — backups kept as-is")
                 return 0
         except (EOFError, KeyboardInterrupt):
@@ -1536,26 +1674,33 @@ def purge(args) -> int:
     if not roots:
         print(f"No history root at {source.root}", file=sys.stderr)
         return 0
-    backups = sorted({p for root in roots
-                      for pat in _BACKUP_GLOBS
-                      for p in root.rglob(pat)})
+    backups = sorted(
+        {p for root in roots for pat in _BACKUP_GLOBS for p in root.rglob(pat)}
+    )
     if not backups:
         print(f"No .bak backups found under {source.root}", file=sys.stderr)
         return 0
 
     if not getattr(args, "yes", False):
-        interactive = (sys.stdin.isatty() and ui.console.is_terminal
-                       if hasattr(sys.stdin, "isatty") else False)
+        interactive = (
+            sys.stdin.isatty() and ui.console.is_terminal
+            if hasattr(sys.stdin, "isatty")
+            else False
+        )
         if not interactive:
-            print("purge permanently deletes the pre-redaction originals; "
-                  "re-run with --yes to confirm.", file=sys.stderr)
+            print(
+                "purge permanently deletes the pre-redaction originals; "
+                "re-run with --yes to confirm.",
+                file=sys.stderr,
+            )
             return 2
         print(f"  {len(backups)} backup(s) found under {source.root}")
-        print("  they hold the PRE-redaction originals — deleting them is "
-              "permanent and `undo` will no longer work")
+        print(
+            "  they hold the PRE-redaction originals — deleting them is "
+            "permanent and `undo` will no longer work"
+        )
         try:
-            if input("  delete them permanently? [y/N]: "
-                     ).strip().lower() != "y":
+            if input("  delete them permanently? [y/N]: ").strip().lower() != "y":
                 ui.warn_line("cancelled — backups kept as-is")
                 return 0
         except (EOFError, KeyboardInterrupt):
@@ -1604,15 +1749,18 @@ def _redact_all(
         redactions = _build_redactions(items, template)
         try:
             new_content = source.apply_redactions(path, redactions)
-            record = safe_write(path, new_content, backup=backup,
-                                fmt=source.content_format(path),
-                                sidecars=source.sidecars(path))
+            record = safe_write(
+                path,
+                new_content,
+                backup=backup,
+                fmt=source.content_format(path),
+                sidecars=source.sidecars(path),
+            )
             if record.unchanged:
                 # File was already in the redacted state — calm skip, not a fail.
                 rows.append(("skip", display, "already redacted (no change)"))
             else:
-                note = (f".bak: {record.backup.name}" if record.backup
-                        else "no backup")
+                note = f".bak: {record.backup.name}" if record.backup else "no backup"
                 rows.append(("ok", display, note))
         except SafetyError as e:
             rows.append(("fail", display, str(e)))
@@ -1624,8 +1772,9 @@ def _redact_all(
     return rows, errors, recoverable
 
 
-def _preflight_gates(source: Source, source_cls: type[Source],
-                     args) -> tuple[int | None, bool]:
+def _preflight_gates(
+    source: Source, source_cls: type[Source], args
+) -> tuple[int | None, bool]:
     """Check the --fix gates. Returns (exit_code_or_None, force_recoverable).
 
     force_recoverable is True only when the block is the active-session
@@ -1634,24 +1783,30 @@ def _preflight_gates(source: Source, source_cls: type[Source],
     """
     if is_production_root(source, source_cls) and not args.allow_production:
         ui.stage(4, "fail", "REDACT", "blocked by safety gate")
-        ui.gate_panel("alpha safety gate", [
-            "Refusing to --fix the default production root:",
-            f"  {source.root}",
-            "",
-            "agentsweep is in alpha. To proceed, either:",
-            "  1. copy history elsewhere and pass --root <that path>, OR",
-            "  2. re-run with --allow-production (explicit opt-in).",
-        ])
+        ui.gate_panel(
+            "alpha safety gate",
+            [
+                "Refusing to --fix the default production root:",
+                f"  {source.root}",
+                "",
+                "agentsweep is in alpha. To proceed, either:",
+                "  1. copy history elsewhere and pass --root <that path>, OR",
+                "  2. re-run with --allow-production (explicit opt-in).",
+            ],
+        )
         return 2, False
 
     running, marker = is_agent_running(source.process_markers)
     if running and not args.force:
         ui.stage(4, "fail", "REDACT", "blocked by safety gate")
-        ui.gate_panel("active session gate", [
-            f"{source.display_name} appears to be running (marker: {marker!r}).",
-            f"Close all {source.display_name} sessions before --fix,",
-            "or pass --force to proceed anyway.",
-        ])
+        ui.gate_panel(
+            "active session gate",
+            [
+                f"{source.display_name} appears to be running (marker: {marker!r}).",
+                f"Close all {source.display_name} sessions before --fix,",
+                "or pass --force to proceed anyway.",
+            ],
+        )
         return 2, True
     if running and args.force:
         ui.warn_line(

@@ -1,4 +1,5 @@
-﻿"""Seed-phrase detector: BIP-39 checksum + Electrum HMAC validation."""
+"""Seed-phrase detector: BIP-39 checksum + Electrum HMAC validation."""
+
 from __future__ import annotations
 
 import sys
@@ -23,8 +24,9 @@ def _electrum_seed() -> str:
     base = ["abandon"] * 11
     for w in mnemonic.WORDS:
         words = base + [w]
-        if (mnemonic._electrum_version_ok(words)
-                and not mnemonic._bip39_checksum_ok(words)):
+        if mnemonic._electrum_version_ok(words) and not mnemonic._bip39_checksum_ok(
+            words
+        ):
             return " ".join(words)
     raise AssertionError("no electrum-tagged phrase found in 2048 candidates")
 
@@ -38,7 +40,9 @@ def test_valid_12_word_vector_detected():
 
 def test_ascii_lowercase_fast_path_matches_default():
     text = f"BACKUP: {VALID_12.upper()}"
-    assert mnemonic.detect_mnemonics(text) == mnemonic.detect_mnemonics(text, text.lower())
+    assert mnemonic.detect_mnemonics(text) == mnemonic.detect_mnemonics(
+        text, text.lower()
+    )
 
 
 def test_valid_24_word_vector_detected_as_one_finding():
@@ -48,8 +52,7 @@ def test_valid_24_word_vector_detected_as_one_finding():
 
 
 def test_invalid_checksum_not_detected():
-    assert not [f for f in scan_text(INVALID_12)
-                if f.rule == "bip39-mnemonic"]
+    assert not [f for f in scan_text(INVALID_12) if f.rule == "bip39-mnemonic"]
 
 
 def test_electrum_seed_detected():
@@ -59,8 +62,10 @@ def test_electrum_seed_detected():
 
 
 def test_natural_english_not_detected():
-    prose = ("I think we should all just try to manage our time better and "
-             "wonder how other people seem to act on every little thing")
+    prose = (
+        "I think we should all just try to manage our time better and "
+        "wonder how other people seem to act on every little thing"
+    )
     assert not [f for f in scan_text(prose) if f.rule == "bip39-mnemonic"]
 
 
@@ -90,16 +95,20 @@ def test_redaction_end_to_end(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    monkeypatch.setattr(pipeline, "is_agent_running",
-                        lambda markers: (False, ""))
+    monkeypatch.setattr(pipeline, "is_agent_running", lambda markers: (False, ""))
 
     root = tmp_path / "history"
     root.mkdir()
     session = root / "s.jsonl"
     session.write_text(
-        json.dumps({"message": {"content": [
-            {"type": "text", "text": f"backup: {VALID_12} ok?"}
-        ]}}) + "\n",
+        json.dumps(
+            {
+                "message": {
+                    "content": [{"type": "text", "text": f"backup: {VALID_12} ok?"}]
+                }
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
 

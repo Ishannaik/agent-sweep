@@ -4,6 +4,7 @@ The five-phase animation paints every frame explicitly (Live with
 auto_refresh off) — the default refresh thread samples at 60Hz and drops
 frames queued faster than 16.7ms, which made earlier versions look static.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -83,8 +84,14 @@ def _status(label: str, tick: int) -> Text:
     return t
 
 
-def _frame_noise(lines: list[str], width: int, density: float, pool: str,
-                 rng: random.Random, footer: Text) -> Group:
+def _frame_noise(
+    lines: list[str],
+    width: int,
+    density: float,
+    pool: str,
+    rng: random.Random,
+    footer: Text,
+) -> Group:
     """Phase 1: the marque materializes out of churning glyph static."""
     rows: list[Text] = []
     for line in lines:
@@ -103,9 +110,16 @@ def _frame_noise(lines: list[str], width: int, density: float, pool: str,
     return _compose(rows, footer)
 
 
-def _frame_sweep(lines: list[str], styles: list[str], width: int, beam: int,
-                 bar: str, pool: str, rng: random.Random,
-                 footer: Text) -> Group:
+def _frame_sweep(
+    lines: list[str],
+    styles: list[str],
+    width: int,
+    beam: int,
+    bar: str,
+    pool: str,
+    rng: random.Random,
+    footer: Text,
+) -> Group:
     """Phase 2: a white scanline wipes across; glyphs behind it flicker
     through a hot decode zone before locking into the gradient letters;
     ahead of it the phase-1 static keeps churning."""
@@ -121,8 +135,9 @@ def _frame_sweep(lines: list[str], styles: list[str], width: int, beam: int,
                     t.append(" ")
                 elif beam - c <= 1:
                     t.append(rng.choice(pool), style="bold yellow")  # hot edge
-                elif beam - c < _DECODE_ZONE and \
-                        rng.random() > (beam - c) / _DECODE_ZONE:
+                elif (
+                    beam - c < _DECODE_ZONE and rng.random() > (beam - c) / _DECODE_ZONE
+                ):
                     t.append(rng.choice(pool), style=f"bold {color}")
                 else:
                     t.append(ch, style=style)
@@ -134,8 +149,7 @@ def _frame_sweep(lines: list[str], styles: list[str], width: int, beam: int,
     return _compose(rows, footer)
 
 
-def _frame_glint(lines: list[str], styles: list[str], g: int,
-                 footer: Text) -> Group:
+def _frame_glint(lines: list[str], styles: list[str], g: int, footer: Text) -> Group:
     """Phase 3: a slanted white-hot glint with yellow bloom races over the
     finished letters, one row of lag per line for a diagonal streak."""
     rows: list[Text] = []
@@ -155,8 +169,9 @@ def _frame_glint(lines: list[str], styles: list[str], g: int,
     return _compose(rows, footer)
 
 
-def _frame_shimmer(lines: list[str], shift: int, sparkle: bool,
-                   rng: random.Random, footer: Text) -> Group:
+def _frame_shimmer(
+    lines: list[str], shift: int, sparkle: bool, rng: random.Random, footer: Text
+) -> Group:
     """Phase 4: the fire gradient rolls through the letters, with white
     sparkle pops on the final pass, then settles into place."""
     rows: list[Text] = []
@@ -206,6 +221,7 @@ def _animate_banner(lines: list[str], styles: list[str], tagline: str) -> None:
     pool = _noise_pool()
     rng = random.Random()  # nosec B311 # visual noise timing for a cinematic banner, not security-sensitive
     with Live(console=console, auto_refresh=False, transient=False) as live:
+
         def frame(renderable: Group, hold: float) -> None:
             live.update(renderable, refresh=True)
             time.sleep(hold)
@@ -214,13 +230,13 @@ def _animate_banner(lines: list[str], styles: list[str], tagline: str) -> None:
             # Phase 1 — signal acquisition: static materializes (~0.4s).
             for i in range(12):
                 f = _status("intercepting agent history stream", i // 4)
-                frame(_frame_noise(lines, width, (i + 1) / 12, pool, rng, f),
-                      0.028)
+                frame(_frame_noise(lines, width, (i + 1) / 12, pool, rng, f), 0.028)
             # Phase 2 — decode sweep, 1 column per frame (~1.1s).
             for beam in range(0, width + _DECODE_ZONE + 2):
                 f = _status("sweeping for exposed secrets", beam // 8)
-                frame(_frame_sweep(lines, styles, width, beam, bar, pool,
-                                   rng, f), 0.013)
+                frame(
+                    _frame_sweep(lines, styles, width, beam, bar, pool, rng, f), 0.013
+                )
             # Phase 3 — diagonal glint streak (~0.3s).
             f = _status("signal locked", 0)
             for g in range(0, width + len(lines) + 6, 3):
@@ -231,18 +247,26 @@ def _animate_banner(lines: list[str], styles: list[str], tagline: str) -> None:
             # Phase 5 — tagline decodes itself under a block cursor (~0.6s).
             for i in range(0, len(tagline) + 2, 2):
                 shown = min(i, len(tagline))
-                head = "".join(rng.choice(pool)
-                               for _ in range(min(2, len(tagline) - shown)))
-                frame(_banner_frame(lines, styles, width, tagline,
-                                    tag_chars=shown, tag_noise=head,
-                                    cursor=True), 0.015)
+                head = "".join(
+                    rng.choice(pool) for _ in range(min(2, len(tagline) - shown))
+                )
+                frame(
+                    _banner_frame(
+                        lines,
+                        styles,
+                        width,
+                        tagline,
+                        tag_chars=shown,
+                        tag_noise=head,
+                        cursor=True,
+                    ),
+                    0.015,
+                )
             for blink in (False, True, False):
-                frame(_banner_frame(lines, styles, width, tagline,
-                                    cursor=blink), 0.07)
+                frame(_banner_frame(lines, styles, width, tagline, cursor=blink), 0.07)
         finally:
             # Always settle on the finished banner — including on Ctrl-C.
-            live.update(_banner_frame(lines, styles, width, tagline),
-                        refresh=True)
+            live.update(_banner_frame(lines, styles, width, tagline), refresh=True)
 
 
 def big_banner(version: str) -> None:

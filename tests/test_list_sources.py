@@ -10,6 +10,7 @@ Covers:
   (e) human (non-JSON) output renders without crashing and exits 0
   (f) list-sources exits before any scan — no findings/pipeline output leaks
 """
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,7 @@ def _isolate_home(tmp_path, monkeypatch):
 # (a) / (b) JSON output shape
 # ===========================================================================
 
+
 def test_list_sources_json_lists_every_source(capsys):
     code = main(["list-sources", "--json"])
     assert code == 0
@@ -67,6 +69,7 @@ def test_list_sources_json_entry_schema(capsys):
 # (c) --detected filters to a subset
 # ===========================================================================
 
+
 def test_detected_flag_is_subset_of_all(capsys):
     main(["list-sources", "--json"])
     full = json.loads(capsys.readouterr().out)
@@ -84,6 +87,7 @@ def test_detected_flag_is_subset_of_all(capsys):
 # ===========================================================================
 # (d) detection tracks the on-disk root
 # ===========================================================================
+
 
 def test_detection_reflects_root_existence(_isolate_home, capsys):
     def _claude_row():
@@ -103,6 +107,7 @@ def test_detection_reflects_root_existence(_isolate_home, capsys):
 # (e) human output renders and exits 0
 # ===========================================================================
 
+
 def test_list_sources_human_output_exits_0(capsys):
     code = main(["list-sources"])
     out = capsys.readouterr().out
@@ -121,6 +126,7 @@ def test_list_sources_human_detected_only_exits_0(_isolate_home, capsys):
 # ===========================================================================
 # (f) list-sources never scans
 # ===========================================================================
+
 
 def test_list_sources_does_not_scan(capsys):
     """No 'FINDINGS' / 'SCAN' pipeline stages should appear — it lists only."""

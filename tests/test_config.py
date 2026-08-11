@@ -7,6 +7,7 @@ Covers:
     --format/--no-ignore, with CLI flags always winning
   - malformed config never crashes parsing
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,9 @@ def _isolated_cwd(tmp_path, monkeypatch):
     return workdir
 
 
-def _write_project_config(workdir: Path, text: str, filename: str = "agentsweep.toml") -> Path:
+def _write_project_config(
+    workdir: Path, text: str, filename: str = "agentsweep.toml"
+) -> Path:
     path = workdir / filename
     path.write_text(text, encoding="utf-8")
     return path
@@ -63,7 +66,9 @@ class TestLoadConfig:
         assert config_mod.load_config() == {"source": "codex"}
 
     def test_agentsweeprc_alt_filename(self, _isolated_cwd):
-        _write_project_config(_isolated_cwd, 'no_color = true\n', filename=".agentsweeprc")
+        _write_project_config(
+            _isolated_cwd, "no_color = true\n", filename=".agentsweeprc"
+        )
         assert config_mod.load_config() == {"no_color": True}
 
     def test_project_file_wins_over_user_file(self, _isolated_cwd, _isolated_home):

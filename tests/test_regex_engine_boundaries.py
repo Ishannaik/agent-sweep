@@ -73,7 +73,9 @@ def test_mixed_backend_overlap_and_mnemonic_parity() -> None:
 @pytest.mark.skipif(not RE2_INSTALLED, reason="requires optional google-re2 extra")
 def test_boundary_guard_keeps_re2_from_overmatching_unicode_words() -> None:
     auto = run_text_scan(["中" + AWS + "中"], mode="auto", include_inventory=True)
-    aws = next(entry for entry in auto["inventory"] if entry["rule_id"] == "aws-access-key")
+    aws = next(
+        entry for entry in auto["inventory"] if entry["rule_id"] == "aws-access-key"
+    )
 
     assert aws["selected_backend"] == "re2"
     assert aws["semantic_guard"] is True

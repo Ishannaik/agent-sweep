@@ -1,4 +1,5 @@
 """Pipeline report widgets: stage lines, findings table, panels, menu."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,8 +11,14 @@ from rich.table import Table
 from rich.text import Text
 
 from .console import (
-    STAGE_STYLE, TOTAL_STAGES, _box, _encodes, _icons, _safe,
-    console, err_console,
+    STAGE_STYLE,
+    TOTAL_STAGES,
+    _box,
+    _encodes,
+    _icons,
+    _safe,
+    console,
+    err_console,
 )
 
 
@@ -44,23 +51,33 @@ def menu_options() -> None:
     grid.add_column(style="dim")
     grid.add_row("[1]", "Scan all sources", "all 29 agents in parallel")
     grid.add_row("[2]", "Scan custom folder", "point at any directory")
-    grid.add_row("[3]", "Redact secrets", "run agentsweep fix (with typed REDACT confirmation)")
+    grid.add_row(
+        "[3]", "Redact secrets", "run agentsweep fix (with typed REDACT confirmation)"
+    )
     grid.add_row("[4]", "Undo last redaction", "restores .bak backups")
     grid.add_row("[5]", "Findings as JSON", "machine-readable")
     grid.add_row("[6]", "Check for updates", "")
     star = "★" if _encodes(console, "★") else "*"
-    grid.add_row("[7]", "Star / contribute",
-                 f"{star} open the repo - add your agent, file issues, PRs")
+    grid.add_row(
+        "[7]",
+        "Star / contribute",
+        f"{star} open the repo - add your agent, file issues, PRs",
+    )
     grid.add_row("[8]", "Quit", "")
-    console.print(Padding(Panel(
-        grid,
-        title="MENU",
-        title_align="left",
-        border_style="red",
-        box=_box(console, box.HEAVY),
-        padding=(1, 2),
-        expand=False,
-    ), (0, 0, 0, 2)))
+    console.print(
+        Padding(
+            Panel(
+                grid,
+                title="MENU",
+                title_align="left",
+                border_style="red",
+                box=_box(console, box.HEAVY),
+                padding=(1, 2),
+                expand=False,
+            ),
+            (0, 0, 0, 2),
+        )
+    )
 
 
 def findings_table(rows: list[tuple[str, str, Path, int]], root: Path) -> None:
@@ -125,8 +142,10 @@ def sources_table(rows: list[dict]) -> None:
         )
     console.print(Padding(table, (0, 0, 0, 2)))
     detected = sum(1 for r in rows if r.get("detected"))
-    warn_line(f"{detected} of {len(rows)} source(s) have history on this "
-              f"machine — scan one with:  agentsweep scan --source <SOURCE>")
+    warn_line(
+        f"{detected} of {len(rows)} source(s) have history on this "
+        f"machine — scan one with:  agentsweep scan --source <SOURCE>"
+    )
 
 
 def rel(path: Path, root: Path) -> str:
@@ -163,20 +182,28 @@ def rotation_panel(items: list[tuple[str, str]]) -> None:
         grid.add_row("", Text(_safe(console, rule), style="bold red"))
         grid.add_row("  ", Text(_safe(console, guidance)))
     grid.add_row("", "")
-    grid.add_row("", Text(
-        "Redaction removes the secret from local history,\n"
-        "but the key still works until you rotate it.",
-        style="dim",
-    ))
-    console.print(Padding(Panel(
-        grid,
-        title=f"{ic['warn']} ACTION REQUIRED — rotate these secrets now",
-        title_align="left",
-        border_style="bold red",
-        box=_box(console, box.DOUBLE),
-        padding=(0, 1),
-        expand=False,
-    ), (0, 0, 0, 8)))
+    grid.add_row(
+        "",
+        Text(
+            "Redaction removes the secret from local history,\n"
+            "but the key still works until you rotate it.",
+            style="dim",
+        ),
+    )
+    console.print(
+        Padding(
+            Panel(
+                grid,
+                title=f"{ic['warn']} ACTION REQUIRED — rotate these secrets now",
+                title_align="left",
+                border_style="bold red",
+                box=_box(console, box.DOUBLE),
+                padding=(0, 1),
+                expand=False,
+            ),
+            (0, 0, 0, 8),
+        )
+    )
 
 
 def gate_panel(title: str, lines: list[str]) -> None:
@@ -192,21 +219,28 @@ def gate_panel(title: str, lines: list[str]) -> None:
             err_console.print(Text(_safe(err_console, line)), soft_wrap=True)
         return
     body = Text("\n".join(_safe(err_console, line) for line in lines))
-    err_console.print(Padding(Panel(
-        body,
-        title=f"{ic['warn']} {title}",
-        title_align="left",
-        border_style="bold yellow",
-        box=_box(err_console, box.DOUBLE),
-        padding=(0, 1),
-        expand=False,
-    ), (0, 0, 0, 2)))
+    err_console.print(
+        Padding(
+            Panel(
+                body,
+                title=f"{ic['warn']} {title}",
+                title_align="left",
+                border_style="bold yellow",
+                box=_box(err_console, box.DOUBLE),
+                padding=(0, 1),
+                expand=False,
+            ),
+            (0, 0, 0, 2),
+        )
+    )
 
 
 def warn_line(message: str) -> None:
     ic = _icons(err_console)
-    err_console.print(Text(f"  {ic['warn']} {_safe(err_console, message)}",
-                           style="yellow"), soft_wrap=True)
+    err_console.print(
+        Text(f"  {ic['warn']} {_safe(err_console, message)}", style="yellow"),
+        soft_wrap=True,
+    )
 
 
 def contribute_line() -> None:
@@ -216,6 +250,7 @@ def contribute_line() -> None:
     machine output stays clean.
     """
     from .. import __repo__
+
     star = "★" if _encodes(console, "★") else "*"
     t = Text("  ")
     t.append(f"{star} ", style="bold yellow")

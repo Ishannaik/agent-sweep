@@ -1,4 +1,5 @@
 """VS Code-based SQLite sources: _VSCodeSqliteSource, Cursor, Windsurf."""
+
 from __future__ import annotations
 
 import json

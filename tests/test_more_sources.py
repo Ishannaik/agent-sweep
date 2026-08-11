@@ -9,6 +9,7 @@ one per storage family:
 
 Plus a sanity check that every new source is registered with a distinct root.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,8 +63,9 @@ def test_generic_sqlite_round_trip(tmp_path: Path) -> None:
     db = root / "warp.sqlite"
     con = sqlite3.connect(db)
     con.execute("CREATE TABLE agent_conversations (role TEXT, content TEXT)")
-    con.execute("INSERT INTO agent_conversations VALUES (?, ?)",
-                ("user", f"my key is {SECRET}"))
+    con.execute(
+        "INSERT INTO agent_conversations VALUES (?, ?)", ("user", f"my key is {SECRET}")
+    )
     con.commit()
     con.close()
     source = WarpSource(root=root)
@@ -85,8 +87,10 @@ def test_vscode_fork_sqlite_round_trip(tmp_path: Path) -> None:
     db = ws / "state.vscdb"
     con = sqlite3.connect(db)
     con.execute("CREATE TABLE ItemTable (key TEXT, value TEXT)")
-    con.execute("INSERT INTO ItemTable VALUES (?, ?)",
-                ("chat", json.dumps({"messages": [{"text": f"use {SECRET}"}]})))
+    con.execute(
+        "INSERT INTO ItemTable VALUES (?, ?)",
+        ("chat", json.dumps({"messages": [{"text": f"use {SECRET}"}]})),
+    )
     con.commit()
     con.close()
     source = TraeSource(root=root)
@@ -103,8 +107,10 @@ def test_codebuff_whole_file_json(tmp_path: Path) -> None:
     chat = root / "projects" / "proj" / "chats" / "c1"
     chat.mkdir(parents=True)
     f = chat / "chat-messages.json"
-    f.write_text(json.dumps([{"role": "user", "content": f"key {SECRET}"}], indent=2),
-                 encoding="utf-8")
+    f.write_text(
+        json.dumps([{"role": "user", "content": f"key {SECRET}"}], indent=2),
+        encoding="utf-8",
+    )
     source = CodebuffSource(root=root)
     assert f in source.files()
     _ok(source, f)
@@ -117,8 +123,10 @@ def test_plandex_whole_file_json(tmp_path: Path) -> None:
     conv = root / "orgs" / "o1" / "plans" / "p1" / "conversation"
     conv.mkdir(parents=True)
     f = conv / "msg1.json"
-    f.write_text(json.dumps({"role": "assistant", "message": f"token {SECRET}"}),
-                 encoding="utf-8")
+    f.write_text(
+        json.dumps({"role": "assistant", "message": f"token {SECRET}"}),
+        encoding="utf-8",
+    )
     source = PlandexSource(root=root)
     assert f in source.files()
     _ok(source, f)
@@ -130,8 +138,10 @@ def test_qwen_checkpoint_json(tmp_path: Path) -> None:
     d = root / "tmp" / "deadbeef"
     d.mkdir(parents=True)
     f = d / "checkpoint-main.json"
-    f.write_text(json.dumps([{"role": "user", "parts": [{"text": f"k {SECRET}"}]}]),
-                 encoding="utf-8")
+    f.write_text(
+        json.dumps([{"role": "user", "parts": [{"text": f"k {SECRET}"}]}]),
+        encoding="utf-8",
+    )
     source = QwenCodeSource(root=root)
     assert f in source.files()
     _ok(source, f)
@@ -143,9 +153,12 @@ def test_pearai_cline_fork(tmp_path: Path) -> None:
     task = root / "tasks" / "t1"
     task.mkdir(parents=True)
     f = task / "api_conversation_history.json"
-    f.write_text(json.dumps([{"role": "user",
-                              "content": [{"type": "text", "text": f"s {SECRET}"}]}]),
-                 encoding="utf-8")
+    f.write_text(
+        json.dumps(
+            [{"role": "user", "content": [{"type": "text", "text": f"s {SECRET}"}]}]
+        ),
+        encoding="utf-8",
+    )
     source = PearAiSource(root=root)
     assert f in source.files()
     _ok(source, f)
@@ -157,8 +170,9 @@ def test_junie_jsonl(tmp_path: Path) -> None:
     sess = root / "sessions"
     sess.mkdir(parents=True)
     f = sess / "s1.jsonl"
-    f.write_text(json.dumps({"role": "user", "text": f"key {SECRET}"}) + "\n",
-                 encoding="utf-8")
+    f.write_text(
+        json.dumps({"role": "user", "text": f"key {SECRET}"}) + "\n", encoding="utf-8"
+    )
     source = JunieSource(root=root)
     assert f in source.files()
     _ok(source, f)
@@ -183,11 +197,11 @@ def test_jetbrains_ai_xml_plaintext(tmp_path: Path) -> None:
     ws.mkdir(parents=True)
     f = ws / "deadbeef.xml"
     original = (
-        '<application>\n'
+        "<application>\n"
         '  <component name="ChatSessionStateTemp">\n'
-        f'    <message>use {SECRET} for aws</message>\n'
-        '  </component>\n'
-        '</application>\n'
+        f"    <message>use {SECRET} for aws</message>\n"
+        "  </component>\n"
+        "</application>\n"
     )
     f.write_text(original, encoding="utf-8")
     source = JetBrainsAiSource(root=root)
@@ -201,8 +215,19 @@ def test_jetbrains_ai_xml_plaintext(tmp_path: Path) -> None:
 
 def test_all_new_sources_registered_with_distinct_roots() -> None:
     expected = {
-        "warp", "grok-cli", "kiro-cli", "zed", "codebuff", "plandex",
-        "qwen-code", "pearai", "trae", "void", "junie", "mentat", "jetbrains-ai",
+        "warp",
+        "grok-cli",
+        "kiro-cli",
+        "zed",
+        "codebuff",
+        "plandex",
+        "qwen-code",
+        "pearai",
+        "trae",
+        "void",
+        "junie",
+        "mentat",
+        "jetbrains-ai",
     }
     assert expected <= set(SOURCES)
     # default_root resolves for every registered source without raising,
@@ -219,8 +244,19 @@ def test_all_new_sources_registered_with_distinct_roots() -> None:
 
 def test_new_sources_flagged_experimental() -> None:
     experimental = {
-        "warp", "grok-cli", "kiro-cli", "zed", "codebuff", "plandex",
-        "qwen-code", "pearai", "trae", "void", "junie", "mentat", "jetbrains-ai",
+        "warp",
+        "grok-cli",
+        "kiro-cli",
+        "zed",
+        "codebuff",
+        "plandex",
+        "qwen-code",
+        "pearai",
+        "trae",
+        "void",
+        "junie",
+        "mentat",
+        "jetbrains-ai",
     }
     for slug in experimental:
         assert SOURCES[slug].experimental, f"{slug} should be experimental"

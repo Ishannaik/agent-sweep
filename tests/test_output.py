@@ -9,6 +9,7 @@ Covers:
       report file written
   (e) capsys (non-tty): --json no -o → full JSON printed to stdout (unchanged contract)
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from agentsweep import pipeline, ui  # noqa: E402
+from agentsweep import pipeline  # noqa: E402
 from agentsweep.cli import main  # noqa: E402
 from rich.console import Console  # noqa: E402
 
@@ -67,6 +68,7 @@ def _many_findings_root(tmp_path: Path, n: int) -> Path:
 
 
 # ------------------------------------------------------------------ (a)
+
 
 def test_root_file_is_rejected_without_false_clean(tmp_path, capsys):
     """A file passed as --root must fail instead of reporting a clean scan."""
@@ -127,7 +129,7 @@ def test_json_output_legacy_flag_form(tmp_path, capsys):
     out_file = tmp_path / "out.json"
 
     code = main(["--root", str(root), "--json", "-o", str(out_file)])
-    captured = capsys.readouterr()
+    capsys.readouterr()
 
     assert code == 1
     assert out_file.exists()
@@ -137,13 +139,14 @@ def test_json_output_legacy_flag_form(tmp_path, capsys):
 
 # ------------------------------------------------------------------ (b)
 
+
 def test_human_mode_output_flag_writes_json(tmp_path, capsys):
     """scan -o FILE (human/table mode) writes findings JSON to FILE."""
     root = _mkroot(tmp_path)
     out_file = tmp_path / "report.json"
 
     code = main(["scan", "--root", str(root), "-o", str(out_file)])
-    captured = capsys.readouterr()
+    capsys.readouterr()
 
     assert code == 1
     assert out_file.exists()
@@ -182,6 +185,7 @@ def test_human_mode_output_flag_mentions_file(tmp_path, capsys):
 
 # ------------------------------------------------------------------ (c)
 
+
 def test_json_antiflood_writes_default_file_not_stdout(tmp_path, monkeypatch, capsys):
     """Anti-flood: >30 findings + isatty→True, no -o → writes agentsweep-findings.json,
     stdout is NOT the JSON dump, stderr has summary, exit 1."""
@@ -218,7 +222,9 @@ def test_json_antiflood_writes_default_file_not_stdout(tmp_path, monkeypatch, ca
     )
 
     # stderr must have a summary mentioning the filename
-    assert pipeline.DEFAULT_JSON_NAME in captured.err or "findings" in captured.err.lower()
+    assert (
+        pipeline.DEFAULT_JSON_NAME in captured.err or "findings" in captured.err.lower()
+    )
 
     # The written file should be valid JSON with 35 findings
     payload = json.loads(default_file.read_text(encoding="utf-8"))
@@ -246,6 +252,7 @@ def test_json_antiflood_not_triggered_when_non_tty(tmp_path, monkeypatch, capsys
 
 # ------------------------------------------------------------------ (d)
 
+
 def test_human_antiflood_caps_table_and_writes_report(tmp_path, monkeypatch, capsys):
     """Human anti-flood: >40 findings + console.is_terminal→True → table capped,
     report file written."""
@@ -254,7 +261,9 @@ def test_human_antiflood_caps_table_and_writes_report(tmp_path, monkeypatch, cap
     monkeypatch.chdir(tmp_path)
 
     # is_terminal is a read-only property on rich.Console; patch it on the class.
-    with patch.object(Console, "is_terminal", new_callable=lambda: property(lambda self: True)):
+    with patch.object(
+        Console, "is_terminal", new_callable=lambda: property(lambda self: True)
+    ):
         code = main(["scan", "--root", str(root)])
         captured = capsys.readouterr()
 
@@ -277,7 +286,9 @@ def test_human_antiflood_not_triggered_below_limit(tmp_path, monkeypatch, capsys
     monkeypatch.chdir(tmp_path)
 
     # is_terminal is a read-only property; patch it on the class.
-    with patch.object(Console, "is_terminal", new_callable=lambda: property(lambda self: True)):
+    with patch.object(
+        Console, "is_terminal", new_callable=lambda: property(lambda self: True)
+    ):
         code = main(["scan", "--root", str(root)])
 
     assert code == 1
@@ -288,6 +299,7 @@ def test_human_antiflood_not_triggered_below_limit(tmp_path, monkeypatch, capsys
 
 
 # ------------------------------------------------------------------ (e)
+
 
 def test_json_no_output_flag_prints_to_stdout_when_non_tty(tmp_path, capsys):
     """Under capsys (non-tty), --json with no -o still prints full JSON to stdout."""
@@ -330,7 +342,9 @@ def test_json_output_file_fingerprint_format(tmp_path, capsys):
         fp = item["fingerprint"]
         # fingerprint format: "<relpath>:<line>:<rule>"
         parts = fp.rsplit(":", 2)
-        assert len(parts) == 3, f"fingerprint should have 3 colon-separated parts: {fp!r}"
+        assert len(parts) == 3, (
+            f"fingerprint should have 3 colon-separated parts: {fp!r}"
+        )
         _relpath, line_str, rule = parts
         assert line_str.isdigit(), f"fingerprint line should be a digit: {fp!r}"
         assert rule == item["rule"], f"fingerprint rule should match item rule: {fp!r}"
@@ -339,24 +353,51 @@ def test_json_output_file_fingerprint_format(tmp_path, capsys):
 # ------------------------------------------------------------------ edge cases
 def test_group_findings_groups_same_masked_secret():
     found_by_file = {
-      "a.json": [
-    (10, None, None, type("F", (), {
-        "rule": "openai",
-        "display": "OpenAI",
-        "masked": "sk-****1234",
-    })()),
-    (15, None, None, type("F", (), {
-        "rule": "openai",
-        "display": "OpenAI",
-        "masked": "sk-****1234",
-    })()),
-],
+        "a.json": [
+            (
+                10,
+                None,
+                None,
+                type(
+                    "F",
+                    (),
+                    {
+                        "rule": "openai",
+                        "display": "OpenAI",
+                        "masked": "sk-****1234",
+                    },
+                )(),
+            ),
+            (
+                15,
+                None,
+                None,
+                type(
+                    "F",
+                    (),
+                    {
+                        "rule": "openai",
+                        "display": "OpenAI",
+                        "masked": "sk-****1234",
+                    },
+                )(),
+            ),
+        ],
         "b.json": [
-            (20, None, None, type("F", (), {
-                "rule": "openai",
-                "display": "OpenAI",
-                "masked": "sk-****1234",
-            })())
+            (
+                20,
+                None,
+                None,
+                type(
+                    "F",
+                    (),
+                    {
+                        "rule": "openai",
+                        "display": "OpenAI",
+                        "masked": "sk-****1234",
+                    },
+                )(),
+            )
         ],
     }
 
@@ -368,6 +409,7 @@ def test_group_findings_groups_same_masked_secret():
 
     assert group["rule"] == "openai"
     assert len(group["locations"]) == 3
+
 
 def test_blast_radius_payload_never_contains_plaintext_secret():
     raw_secret = "sk-live-super-secret-value"
@@ -398,7 +440,6 @@ def test_blast_radius_payload_never_contains_plaintext_secret():
     assert raw_secret not in blob
     assert "sk-****1234" in blob
     assert report[0]["occurrences"] == 3
-
 
 
 def test_output_file_parent_does_not_exist_does_not_crash(tmp_path, capsys):
@@ -507,10 +548,19 @@ def test_report_rejects_fix(tmp_path):
     root.mkdir()
     (root / "s.jsonl").write_text('{"msg":"x"}\n', encoding="utf-8")
     try:
-        main(["fix", "--root", str(root), "--report", "--force", "--allow-production", "--no-backup"])
+        main(
+            [
+                "fix",
+                "--root",
+                str(root),
+                "--report",
+                "--force",
+                "--allow-production",
+                "--no-backup",
+            ]
+        )
         raised = False
     except SystemExit as e:
         raised = True
         assert e.code == 2
     assert raised
-

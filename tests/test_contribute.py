@@ -1,4 +1,5 @@
 """The in-app contribution nudges: contribute_line + the Star/contribute action."""
+
 from __future__ import annotations
 
 import sys
@@ -19,7 +20,7 @@ def test_contribute_line_shows_repo_url(capsys):
 
 def test_action_menu_has_star_action():
     assert "star" in _ACTION_KEYS
-    assert _ACTION_KEYS[-1] == "quit"          # quit stays last
+    assert _ACTION_KEYS[-1] == "quit"  # quit stays last
     assert len(_ACTION_ROWS) == len(_ACTION_KEYS)  # rows/keys stay aligned
 
 

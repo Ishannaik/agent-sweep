@@ -8,6 +8,7 @@
 Each test detects a synthetic secret end-to-end and confirms redaction removes
 it while keeping the file valid and backing it up.
 """
+
 from __future__ import annotations
 
 import json
@@ -47,8 +48,12 @@ def _cline_task(root: Path) -> Path:
     f = task / "api_conversation_history.json"
     f.write_text(
         json.dumps(
-            [{"role": "user",
-              "content": [{"type": "text", "text": f"use {SECRET} for s3"}]}],
+            [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": f"use {SECRET} for s3"}],
+                }
+            ],
             indent=2,
         ),
         encoding="utf-8",

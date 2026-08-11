@@ -5,6 +5,7 @@ not run here. Instead: validate the manifest structurally, and assert the
 exit-code contract the hook depends on (0 clean / no sources, 1 with a secret)
 directly through the CLI.
 """
+
 from __future__ import annotations
 
 import os

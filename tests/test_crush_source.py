@@ -4,6 +4,7 @@ Crush keeps no central history: each project it runs in gets its own
 <project>/.crush/crush.db, so discovery walks from home like Aider rather than
 reading one platform path.
 """
+
 from __future__ import annotations
 
 import json
@@ -88,9 +89,14 @@ def _mk_crush_db(project: Path, *, age_seconds: int = 3700) -> Path:
         con.execute(
             "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?)",
             (
-                "m1", "s1", "user",
+                "m1",
+                "s1",
+                "user",
                 json.dumps([{"type": "text", "text": f"my key is {AWS_KEY}"}]),
-                "claude", 1, 1, 1,
+                "claude",
+                1,
+                1,
+                1,
             ),
         )
         con.execute(
@@ -172,8 +178,17 @@ def test_fix_redacts_and_db_stays_valid(tmp_path):
     project.mkdir()
     db = _mk_crush_db(project)
 
-    code = main(["fix", "--source", "crush", "--root", str(tmp_path),
-                 "--force", "--allow-production"])
+    code = main(
+        [
+            "fix",
+            "--source",
+            "crush",
+            "--root",
+            str(tmp_path),
+            "--force",
+            "--allow-production",
+        ]
+    )
     assert code == 0
 
     con = sqlite3.connect(db)
@@ -197,7 +212,19 @@ def test_undo_restores_db(tmp_path):
     db = _mk_crush_db(project)
     original = db.read_bytes()
 
-    assert main(["fix", "--source", "crush", "--root", str(tmp_path),
-                 "--force", "--allow-production"]) == 0
+    assert (
+        main(
+            [
+                "fix",
+                "--source",
+                "crush",
+                "--root",
+                str(tmp_path),
+                "--force",
+                "--allow-production",
+            ]
+        )
+        == 0
+    )
     assert main(["undo", "--source", "crush", "--root", str(tmp_path)]) == 0
     assert db.read_bytes() == original

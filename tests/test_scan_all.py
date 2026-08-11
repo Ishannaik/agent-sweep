@@ -17,6 +17,7 @@ Covers:
   (n) menu._scan_all_sources shells out via cli.main(["scan", "--all"])
   (o) -o with multi-source overflow does not write agentsweep-report.txt
 """
+
 from __future__ import annotations
 
 import json
@@ -41,10 +42,7 @@ CLAUDE_LINE = (
     '{"type":"user","message":{"content":[{"type":"text",'
     f'"text":"aws key={AWS_KEY}"}}]}}}}\n'
 )
-CODEX_LINE = (
-    '{"type":"message","role":"user","content":'
-    f'"token {GH_TOKEN}"}}\n'
-)
+CODEX_LINE = f'{{"type":"message","role":"user","content":"token {GH_TOKEN}"}}\n'
 
 
 @pytest.fixture(autouse=True)
@@ -97,6 +95,7 @@ def _scan_all_json(extra=None, capsys=None):
 # (a) empty
 # ---------------------------------------------------------------------------
 
+
 def test_scan_all_empty_home_is_clean(capsys):
     code, payload, _err = _scan_all_json(capsys=capsys)
     assert code == 0
@@ -114,6 +113,7 @@ def test_scan_all_detected_empty_is_clean(capsys):
 # (b) single seeded source
 # ---------------------------------------------------------------------------
 
+
 def test_scan_all_one_source_tags_findings(_isolate_env, capsys):
     _seed_claude(_isolate_env)
     code, payload, _err = _scan_all_json(capsys=capsys)
@@ -128,6 +128,7 @@ def test_scan_all_one_source_tags_findings(_isolate_env, capsys):
 # ---------------------------------------------------------------------------
 # (c) two sources
 # ---------------------------------------------------------------------------
+
 
 def test_scan_all_two_sources_aggregate(_isolate_env, capsys):
     _seed_claude(_isolate_env)
@@ -153,6 +154,7 @@ def test_scan_all_two_sources_aggregate(_isolate_env, capsys):
 # (d) --detected
 # ---------------------------------------------------------------------------
 
+
 def test_scan_all_detected_skips_absent_roots(_isolate_env, capsys):
     # Only claude-code root exists; codex is absent.
     _seed_claude(_isolate_env)
@@ -177,7 +179,7 @@ def test_scan_all_exclude_rule_filters_aggregated_findings(_isolate_env, capsys)
         _isolate_env,
         content=(
             '{"type":"user","message":{"content":[{"type":"text",'
-            f'"text":"key={AWS_KEY} and token {GH_TOKEN}"' + '}]}}\n'
+            f'"text":"key={AWS_KEY} and token {GH_TOKEN}"' + "}]}}\n"
         ),
     )
 
@@ -195,6 +197,7 @@ def test_scan_all_exclude_rule_filters_aggregated_findings(_isolate_env, capsys)
 # ---------------------------------------------------------------------------
 # (e) / (f) flag rejection
 # ---------------------------------------------------------------------------
+
 
 def test_scan_all_rejects_source_flag():
     with pytest.raises(SystemExit) as ei:
@@ -228,6 +231,7 @@ def test_detected_without_all_rejected():
 # (g) human mode
 # ---------------------------------------------------------------------------
 
+
 def test_scan_all_human_mode_stages(_isolate_env, capsys):
     _seed_claude(_isolate_env)
     _seed_codex(_isolate_env)
@@ -258,6 +262,7 @@ def test_scan_all_human_clean(_isolate_env, capsys):
 # (h) -o file
 # ---------------------------------------------------------------------------
 
+
 def test_scan_all_json_output_file(_isolate_env, tmp_path, capsys):
     _seed_claude(_isolate_env)
     out_file = tmp_path / "all-findings.json"
@@ -275,6 +280,7 @@ def test_scan_all_json_output_file(_isolate_env, tmp_path, capsys):
 # ---------------------------------------------------------------------------
 # (i) ignore per source
 # ---------------------------------------------------------------------------
+
 
 def test_scan_all_respects_per_source_ignore(_isolate_env, capsys):
     claude_root = _seed_claude(_isolate_env)
@@ -296,6 +302,7 @@ def test_scan_all_respects_per_source_ignore(_isolate_env, capsys):
 # ---------------------------------------------------------------------------
 # (j) single-source regression — source field present
 # ---------------------------------------------------------------------------
+
 
 def test_single_source_json_includes_source_field(tmp_path, capsys):
     root = tmp_path / "history"
@@ -319,6 +326,7 @@ def test_single_source_default_still_works(_isolate_env, capsys):
 # ---------------------------------------------------------------------------
 # (k) legacy flag form
 # ---------------------------------------------------------------------------
+
 
 def test_legacy_all_json_form(_isolate_env, capsys):
     _seed_claude(_isolate_env)
@@ -346,6 +354,7 @@ def test_scan_all_sources_order_stable(_isolate_env, capsys):
 # (l) multi-source overflow report is not clobbered
 # ---------------------------------------------------------------------------
 
+
 def _seed_many_claude(home: Path, n: int) -> None:
     root = home / ".claude" / "projects"
     root.mkdir(parents=True, exist_ok=True)
@@ -361,7 +370,10 @@ def _seed_many_codex(home: Path, n: int) -> None:
 
 
 def test_scan_all_overflow_report_includes_all_sources(
-    _isolate_env, tmp_path, monkeypatch, capsys,
+    _isolate_env,
+    tmp_path,
+    monkeypatch,
+    capsys,
 ):
     """Two large sources must not clobber agentsweep-report.txt to last-only."""
     _seed_many_claude(_isolate_env, 45)
@@ -389,7 +401,10 @@ def test_scan_all_overflow_report_includes_all_sources(
 
 
 def test_scan_all_overflow_with_dash_o_skips_default_report(
-    _isolate_env, tmp_path, monkeypatch, capsys,
+    _isolate_env,
+    tmp_path,
+    monkeypatch,
+    capsys,
 ):
     """When -o is set, full JSON goes there — no agentsweep-report.txt clobber path."""
     _seed_many_claude(_isolate_env, 45)
@@ -414,6 +429,7 @@ def test_scan_all_overflow_with_dash_o_skips_default_report(
 # (m) JSON truncation warning
 # ---------------------------------------------------------------------------
 
+
 def test_scan_all_json_emits_truncation_warning(_isolate_env, monkeypatch, capsys):
     """scan --all --json must stderr-warn when the scan budget truncates files."""
     _seed_claude(_isolate_env)
@@ -435,6 +451,7 @@ def test_scan_all_json_emits_truncation_warning(_isolate_env, monkeypatch, capsy
 # ---------------------------------------------------------------------------
 # (n) menu uses cli.main
 # ---------------------------------------------------------------------------
+
 
 def test_menu_scan_all_shells_out_to_cli_main(monkeypatch):
     """_scan_all_sources must call cli.main(['scan', '--all']), not hand-roll args."""

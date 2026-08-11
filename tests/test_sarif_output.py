@@ -152,7 +152,6 @@ def test_secret_plaintext_never_appears(tmp_path, capsys):
     assert "AKIAIO" in blob  # the masked preview is still there
 
 
-
 def test_exit_code_matches_json_path(tmp_path, capsys):
     assert _scan_sarif(_seed(tmp_path, AWS_KEY), capsys)["_exit"] == 1
 

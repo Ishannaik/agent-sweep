@@ -64,12 +64,18 @@ class Source(ABC):
 4. Add a synthetic (non-live-looking) fixture value to `FIXTURES` in `tests/test_ported_rules.py` — split across adjacent string literals so the file itself never contains a contiguous secret-shaped token (GitHub push protection will flag it otherwise).
 5. Run the suite; `test_ported_rules.py` enforces that every rule has both a fixture and rotation guidance.
 
-## Running tests
+## Running checks
+
+Run the same checks CI runs, in this order:
 
 ```
 pip install -e ".[dev]"
-pytest -v
+python -m ruff check src tests scripts
+python -m ruff format --check src tests scripts
+python -m pytest -v
 ```
+
+`ruff check` reports lint failures; `ruff format --check` reports formatting drift without rewriting files. Run `python -m ruff format src tests scripts` to apply the formatting it wants.
 
 The test suite is fully hermetic — it never touches `~/.claude/` or any real history directory. Every test uses `tmp_path`. If you add a test that reaches outside `tmp_path`, the PR will be rejected.
 

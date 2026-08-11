@@ -8,6 +8,7 @@
 - SafetyError.force_recoverable marks only the active-session (mtime) gate, so
   callers can avoid offering --force for failures it can't fix.
 """
+
 from __future__ import annotations
 
 import sys

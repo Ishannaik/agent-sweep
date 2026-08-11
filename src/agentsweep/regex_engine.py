@@ -42,9 +42,7 @@ def requested_engine_mode() -> EngineMode:
     """Read the internal test/benchmark engine switch once at import time."""
     mode = os.environ.get(_ENGINE_ENV, "auto").lower()
     if mode not in {"auto", "stdlib"}:
-        raise ValueError(
-            f"{_ENGINE_ENV} must be 'auto' or 'stdlib', got {mode!r}"
-        )
+        raise ValueError(f"{_ENGINE_ENV} must be 'auto' or 'stdlib', got {mode!r}")
     return mode  # type: ignore[return-value]  # checked against the literal set
 
 
@@ -93,7 +91,9 @@ def _guard_details(pattern: str) -> tuple[bool, bool, str | None]:
     unicode_guard, boundary_guard = _escaped_semantics(pattern)
     reasons = []
     if unicode_guard:
-        reasons.append("RE2 ASCII character classes differ from Python re Unicode semantics")
+        reasons.append(
+            "RE2 ASCII character classes differ from Python re Unicode semantics"
+        )
     if _INLINE_IGNORECASE.search(pattern):
         unicode_guard = True
         reasons.append("RE2 and Python re Unicode case-folding may differ")
@@ -127,7 +127,9 @@ class RulePattern:
         if self.unicode_guard and encoded is None:
             return self._stdlib_pattern.finditer(text)
         if not self.semantic_guard:
-            source = encoded if self.backend_name == "re2" and encoded is not None else text
+            source = (
+                encoded if self.backend_name == "re2" and encoded is not None else text
+            )
             return self._bounded_re2_finditer(source, text)
         if encoded is not None:
             # On ASCII, RE2 and Python agree on word boundaries, and byte
@@ -152,7 +154,9 @@ class RulePattern:
         return self._stdlib_pattern.finditer(text)
 
     def _verified_finditer(
-        self, text: str, encoded: bytes | None,
+        self,
+        text: str,
+        encoded: bytes | None,
     ) -> Iterator[re.Match[str]]:
         """Filter RE2's ASCII ``\\b`` candidates with Python's exact boundary.
 
@@ -198,13 +202,29 @@ def _compile_rule(
     text = stdlib_pattern.pattern
     if mode == "stdlib":
         return RulePattern(
-            rule_id, text, "stdlib", "forced by AGENTSWEEP_REGEX_ENGINE=stdlib",
-            "not-attempted", False, False, None, stdlib_pattern, stdlib_pattern,
+            rule_id,
+            text,
+            "stdlib",
+            "forced by AGENTSWEEP_REGEX_ENGINE=stdlib",
+            "not-attempted",
+            False,
+            False,
+            None,
+            stdlib_pattern,
+            stdlib_pattern,
         )
     if _re2 is None:
         return RulePattern(
-            rule_id, text, "stdlib", "google-re2 is not installed",
-            "unavailable", False, False, None, stdlib_pattern, stdlib_pattern,
+            rule_id,
+            text,
+            "stdlib",
+            "google-re2 is not installed",
+            "unavailable",
+            False,
+            False,
+            None,
+            stdlib_pattern,
+            stdlib_pattern,
         )
 
     if options is None:  # pragma: no cover - supplied by build_rule_registry
@@ -213,19 +233,36 @@ def _compile_rule(
         compiled = _re2.compile(text, options=options)
     except _re2.error as exc:
         return RulePattern(
-            rule_id, text, "stdlib", f"RE2 compile error: {exc}",
-            "error", False, False, None, stdlib_pattern, stdlib_pattern,
+            rule_id,
+            text,
+            "stdlib",
+            f"RE2 compile error: {exc}",
+            "error",
+            False,
+            False,
+            None,
+            stdlib_pattern,
+            stdlib_pattern,
         )
 
     unicode_guard, semantic_guard, guard_reason = _guard_details(text)
     return RulePattern(
-        rule_id, text, "re2", None, "success", semantic_guard, unicode_guard,
-        guard_reason, compiled, stdlib_pattern,
+        rule_id,
+        text,
+        "re2",
+        None,
+        "success",
+        semantic_guard,
+        unicode_guard,
+        guard_reason,
+        compiled,
+        stdlib_pattern,
     )
 
 
 def build_rule_registry(
-    raw_rules: Iterable[RawRule], mode: EngineMode | None = None,
+    raw_rules: Iterable[RawRule],
+    mode: EngineMode | None = None,
 ) -> list[tuple[str, str, RulePattern]]:
     """Select every backend once, before the scanner's hot path starts."""
     selected_mode = requested_engine_mode() if mode is None else mode
@@ -257,7 +294,9 @@ def inventory(rules: Iterable[tuple[str, str, RulePattern]]) -> list[dict[str, o
     ]
 
 
-def summary(rules: Iterable[tuple[str, str, RulePattern]], requested: EngineMode) -> dict[str, object]:
+def summary(
+    rules: Iterable[tuple[str, str, RulePattern]], requested: EngineMode
+) -> dict[str, object]:
     """Return stable aggregate engine metadata without scanning any text."""
     entries = list(rules)
     re2_count = sum(pattern.backend_name == "re2" for _, _, pattern in entries)
@@ -269,7 +308,8 @@ def summary(rules: Iterable[tuple[str, str, RulePattern]], requested: EngineMode
         "re2_rule_count": re2_count,
         "stdlib_rule_count": len(entries) - re2_count,
         "fallback_rules": [
-            rule_id for rule_id, _display, pattern in entries
+            rule_id
+            for rule_id, _display, pattern in entries
             if pattern.backend_name == "stdlib"
         ],
         "short_input_fallback_chars": RE2_MIN_INPUT_CHARS,

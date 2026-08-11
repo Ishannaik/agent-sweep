@@ -4,6 +4,7 @@ After `fix` writes `<path>.bak` and before `purge` deletes it, the secret is
 still on disk. A scan of the redacted files finds nothing, so without this
 warning the user reads an all-clear over a live secret.
 """
+
 from __future__ import annotations
 
 import json
@@ -76,15 +77,15 @@ def test_warns_on_stderr_in_json_mode(tmp_path, capsys):
     code = main(["scan", "--source", "claude-code", "--root", str(root), "--json"])
     captured = capsys.readouterr()
     assert code == 0
-    assert json.loads(captured.out) == []      # stdout stays parseable
-    assert _WARN in captured.err               # warning goes to stderr
+    assert json.loads(captured.out) == []  # stdout stays parseable
+    assert _WARN in captured.err  # warning goes to stderr
 
 
 def test_no_warning_without_bak(tmp_path, capsys):
     root = _mk_root(tmp_path, clean=False, bak=False)
     code = main(["scan", "--source", "claude-code", "--root", str(root)])
     captured = capsys.readouterr()
-    assert code == 1          # the live secret is still found
+    assert code == 1  # the live secret is still found
     assert _WARN not in (captured.out + captured.err)
 
 

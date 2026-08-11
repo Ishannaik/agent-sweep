@@ -8,6 +8,7 @@ Import as `from agentsweep import ui` and use `ui.stage(...)` etc.; the
 submodule split (console/banner/widgets/progress/shutdown) is an internal
 detail re-exported here.
 """
+
 from .console import (  # noqa: F401
     STAGE_STYLE,
     TOTAL_STAGES,

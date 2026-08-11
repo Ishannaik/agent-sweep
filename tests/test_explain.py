@@ -5,6 +5,7 @@ Covers a known regex-backed rule id, a known function-based detector id
 --list, the unknown-id error path, and the argparse usage-error path when
 neither a rule_id nor --list is given.
 """
+
 from __future__ import annotations
 
 import sys

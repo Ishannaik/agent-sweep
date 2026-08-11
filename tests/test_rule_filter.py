@@ -15,7 +15,7 @@ AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
 GH_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
 _SECRET_LINE = (
     '{"type":"user","message":{"content":[{"type":"text",'
-    f'"text":"key={AWS_KEY} and token {GH_TOKEN}"' + '}]}}\n'
+    f'"text":"key={AWS_KEY} and token {GH_TOKEN}"' + "}]}}\n"
 )
 
 
