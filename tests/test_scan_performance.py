@@ -81,7 +81,7 @@ def test_prefilter_literals_are_truly_present_in_fixtures():
 
 def test_prefilter_covers_anchored_and_context_rules():
     # Anchored-prefix rules are now gated on their literal anchor too, so a
-    # giant non-secret string skips ~all 189 regexes via cheap substring
+    # giant non-secret string skips ~all 205 regexes via cheap substring
     # checks instead of full regex passes.
     assert _PREFILTER.get("aws-access-key") == ("akia",)
     assert _PREFILTER.get("github-pat") == ("ghp_",)
@@ -93,7 +93,7 @@ def test_prefilter_covers_anchored_and_context_rules():
         "bintray",
         "xray",
     }
-    # Most of the 189 rules now have an anchor; the few without one (short or
+    # Most of the 205 rules now have an anchor; the few without one (short or
     # non-literal leads) simply always run — still correct.
     assert len(_PREFILTER) > 150
 

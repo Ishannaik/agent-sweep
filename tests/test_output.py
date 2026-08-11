@@ -68,6 +68,19 @@ def _many_findings_root(tmp_path: Path, n: int) -> Path:
 
 # ------------------------------------------------------------------ (a)
 
+def test_root_file_is_rejected_without_false_clean(tmp_path, capsys):
+    """A file passed as --root must fail instead of reporting a clean scan."""
+    root_file = tmp_path / "history.jsonl"
+    root_file.write_text(FIXTURE_LINE, encoding="utf-8")
+
+    code = main(["scan", "--root", str(root_file), "--json"])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "must be a directory" in captured.err
+    assert json.loads(captured.out) == []
+
+
 def test_json_output_to_file_writes_valid_json(tmp_path, capsys):
     """scan --json -o FILE → valid JSON written to FILE with fingerprint/rule/masked."""
     root = _mkroot(tmp_path)

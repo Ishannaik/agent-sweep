@@ -61,6 +61,40 @@ jobs:
       - name: Run mypy
         run: python -m mypy src/
 
+  re2:
+    name: Optional RE2 mixed engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: Install the optional mixed engine
+        run: pip install -e ".[dev,fast]"
+
+      - name: Run mixed-engine contracts
+        env:
+          AGENTSWEEP_REGEX_ENGINE: auto
+        run: >-
+          python -m pytest
+          tests/test_regex_engine_parity.py
+          tests/test_regex_engine_boundaries.py
+          tests/test_regex_engine_concurrency.py
+          tests/test_regex_engine_packaging.py
+          tests/test_benchmark_harness.py -q
+
+      - name: Generate a live compatibility audit
+        env:
+          AGENTSWEEP_REGEX_ENGINE: auto
+        run: >-
+          python scripts/audit_re2_compatibility.py
+          --json /tmp/re2_compatibility.json
+
   security:
     name: Bandit SAST
     runs-on: ubuntu-latest

@@ -55,7 +55,7 @@ def _valid(words: list[str]) -> bool:
     return _bip39_checksum_ok(words) or _electrum_version_ok(words)
 
 
-def detect_mnemonics(text: str):
+def detect_mnemonics(text: str, ascii_lowered: str | None = None):
     """Yield scanner.Finding objects for validated seed phrases in `text`."""
     # Cheap reject before tokenizing: a 12-word phrase needs at least 11
     # word separators. A big tokenless blob (base64, minified JS, a long
@@ -67,13 +67,21 @@ def detect_mnemonics(text: str):
 
     from .scanner import Finding  # late import: scanner imports this module
 
+    # The scanner already lowercases ASCII text for its regex prefilter. Reuse
+    # that same-length text here instead of allocating one lowercase word per
+    # token. Non-ASCII stays on the original path so source spans are exact.
+    token_text = ascii_lowered if ascii_lowered is not None else text
+    already_lowered = ascii_lowered is not None
+
     # Group word tokens into runs where every word is on the wordlist and
     # words are separated only by short whitespace/punctuation gaps.
     runs: list[list[tuple[str, int, int]]] = []
     current: list[tuple[str, int, int]] = []
     last_end = None
-    for m in _TOKEN.finditer(text):
-        word = m.group().lower()
+    for m in _TOKEN.finditer(token_text):
+        word = m.group()
+        if not already_lowered:
+            word = word.lower()
         gap_ok = (last_end is None
                   or (m.start() - last_end <= _MAX_GAP
                       and _GAP.match(text, last_end, m.start())))

@@ -29,6 +29,14 @@ is_claude_code_running  # src/agentsweep/preflight.py
 PREFILTER_BACKEND  # src/agentsweep/scanner.py
 DETECTOR_IDS  # src/agentsweep/scanner.py
 
+# Engine metadata is an intentionally importable inspection surface for the
+# audit command and test subprocesses; their dynamic imports are outside src/.
+ENGINE_INVENTORY  # src/agentsweep/scanner.py
+EFFECTIVE_ENGINE_MODE  # src/agentsweep/scanner.py
+
+# google-re2 reads this option in its native extension when compiling patterns.
+_.log_errors  # src/agentsweep/regex_engine.py
+
 # _LockedProgress in run_all() names its method receiver self_inner (to avoid
 # confusion in the nested class); the param is required by the method signature
 # but the body forwards to the enclosing progress + lock, so it is never read.
