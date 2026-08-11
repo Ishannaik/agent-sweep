@@ -17,6 +17,15 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 - **Single-pass Aho-Corasick anchors.** `pyahocorasick` collapses per-string
   prefilter checks into one O(n) pass (substring fallback if the wheel is
   absent). See `scanner.py:_triggered_indices`.
+- **Optional mixed RE2 engine.** `pip install 'agentsweep[fast]'` enables
+  `google-re2` for the rules it can compile; the current registry selects 144
+  RE2 rules and keeps 58 Python-`re` fallbacks with explicit audit reasons.
+  Missing wheels leave the default install fully functional on stdlib. Python
+  `re` remains the semantic oracle for non-ASCII Unicode-sensitive rules, for
+  short strings, and for a rule with more than four matches, where the RE2
+  Python wrapper is measurably slower. The backend selection itself is static
+  at import time. See [RE2 compatibility](RE2_COMPATIBILITY.md) and
+  [benchmark results](RE2_BENCHMARK_RESULTS.md).
 - **Aider discovery prune.** Default Aider scans no longer `rglob` the
   entire home tree. Junk dirs (`node_modules`, `.git`, `AppData`, ...) are
   skipped and depth is capped. See `sources._core._iter_aider_histories`.
@@ -46,6 +55,6 @@ multi-MB embedded transcripts), so per-byte and per-string costs both matter.
 
 ## Open levers (under research)
 
-
-- **Native multi-pattern engines** (`google-re2`, `hyperscan`) — large
-  speedups but a portability/packaging cost (Windows wheels?).
+- **Hyperscan and other native multi-pattern engines.** They may offer more
+  speed, but add a larger portability and packaging burden than the optional
+  RE2 path.

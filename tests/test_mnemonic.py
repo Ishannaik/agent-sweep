@@ -36,6 +36,11 @@ def test_valid_12_word_vector_detected():
     assert "abandon" in findings[0].masked and "about" in findings[0].masked
 
 
+def test_ascii_lowercase_fast_path_matches_default():
+    text = f"BACKUP: {VALID_12.upper()}"
+    assert mnemonic.detect_mnemonics(text) == mnemonic.detect_mnemonics(text, text.lower())
+
+
 def test_valid_24_word_vector_detected_as_one_finding():
     findings = scan_text(VALID_24)
     assert [f.rule for f in findings] == ["bip39-mnemonic"]

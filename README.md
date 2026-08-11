@@ -104,6 +104,24 @@ uv tool upgrade agentsweep      # update
 uvx agentsweep@latest           # or run once without installing
 ```
 
+### Optional native acceleration
+
+The default install is portable and uses Python's built-in `re` engine. On
+platforms with a `google-re2` wheel, install the optional `fast` extra to use
+the mixed engine:
+
+```bash
+uv tool install 'agentsweep[fast]'
+# or, in a virtual environment:
+pip install 'agentsweep[fast]'
+```
+
+This is an acceleration only: unsupported patterns, non-ASCII semantic edge
+cases, short strings, and extremely dense matches retain the exact Python
+`re` path. If the optional wheel is unavailable, AgentSweep remains fully
+functional. See [performance notes](docs/PERF.md) and the
+[compatibility audit](docs/RE2_COMPATIBILITY.md).
+
 **pipx:**
 ```bash
 pipx install agentsweep
