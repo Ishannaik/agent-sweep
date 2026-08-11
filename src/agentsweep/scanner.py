@@ -52,7 +52,9 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ("pinecone-api-key", "Pinecone API key",
         # Legacy project keys use the distinctive pcsk_ prefix. Their body is
         # URL-safe alphanumeric text with an optional label separator.
-        re.compile(r"\bpcsk_[A-Za-z0-9_]{64,128}\b")),
+        re.compile(
+            r"(?<![A-Za-z0-9_-])pcsk_[A-Za-z0-9_]{64,128}(?![A-Za-z0-9_-])"
+        )),
     ("anthropic", "Anthropic API key",
         re.compile(r"\bsk-ant-(?:api|sid)[0-9]*-[A-Za-z0-9_-]{32,}\b")),
     ("google-api", "Google API key",

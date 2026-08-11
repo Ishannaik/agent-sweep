@@ -22,6 +22,7 @@ def _core_fixtures() -> dict[str, str]:
         "stripe-live": "sk_live_" + "a" * 24,
         "stripe-test": "sk_test_" + "a" * 24,
         "openai": "sk-proj-" + "a" * 40,
+        "pinecone-api-key": "pc" "sk_" + "a" * 104,
         "anthropic": "sk-ant-api03-" + "a" * 32,
         "google-api": "AIza" + "a" * 35,
         "google-oauth-client-secret": "GOCSPX-" + "a" * 28,

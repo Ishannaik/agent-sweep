@@ -30,7 +30,7 @@
 
 > **Experimental sources** (Warp, Crush, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe: a wrong path finds nothing. They may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
 
-**205 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
+**206 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
 
 **Alpha:** every destructive step is gated, backed up, and reversible with one command
 
@@ -73,7 +73,7 @@ agentsweep runs a fixed 5-stage pipeline. `scan` stops after stage 3; `fix` cont
 
 ```mermaid
 flowchart LR
-    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n205 regex rules + BIP-39")
+    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n206 regex rules + BIP-39")
     B --> C{"secrets\nfound?"}
     C -- "none" --> D("✅ CLEAN\nexit 0")
     C -- "found" --> E("📋 FINDINGS\nshow report\nexit 1")
@@ -446,7 +446,7 @@ agentsweep purge --yes                 # non-interactive (scripts / CI)
 
 ## What's detected
 
-205 high-confidence patterns, **plus a checksum-validated crypto seed-phrase detector**. It confirms BIP-39 mnemonics (12/15/18/21/24 words, the wallet format behind BTC, ETH, SOL, BNB, ADA, DOGE, LTC, DOT, AVAX and most major chains) and Electrum seeds cryptographically (BIP-39 checksum or Electrum version tag), so English prose that happens to use wallet words won't trigger a false positive.
+206 high-confidence patterns, **plus a checksum-validated crypto seed-phrase detector**. It confirms BIP-39 mnemonics (12/15/18/21/24 words, the wallet format behind BTC, ETH, SOL, BNB, ADA, DOGE, LTC, DOT, AVAX and most major chains) and Electrum seeds cryptographically (BIP-39 checksum or Electrum version tag), so English prose that happens to use wallet words won't trigger a false positive.
 
 The patterns: AWS access keys, GitHub tokens (PAT/OAuth/App/fine-grained), Stripe live/test, OpenAI, Anthropic, Google API, Slack bot/user/webhook, Hugging Face, Supabase sensitive tokens, JWT, PEM private keys, DB URLs with embedded passwords, and npm/PyPI/SendGrid/Twilio tokens. On top of those sit 187 rules mapped to the [gitleaks](https://github.com/gitleaks/gitleaks) pack covering GitLab, Grafana, HashiCorp Vault/Terraform, DigitalOcean, Shopify, PlanetScale, Databricks, Atlassian, Azure AD, 1Password, Sentry, New Relic, Mailgun, Datadog, Twilio, Twitter/X, Twitch, Yandex, JFrog, Snyk, Mailchimp, curl credentials on the command line, and many more. The patterns run high-precision: false positives are rare, and provider-context rules are keyword-gated so large pastes stay fast.
 
@@ -544,7 +544,7 @@ They solve different problems and compose well together. agentsweep covers the s
 | **Redacts in place** | ✅ structure-preserving, atomic, reversible (`undo`) | ❌ detection only | ❌ detection only |
 | **Rotation guidance** | ✅ per-provider revocation links | ❌ | ❌ |
 | **Verifies live keys** | ❌ | ❌ | ✅ (network) |
-| **Rules** | 205 (187 mapped to gitleaks rules) | ~150 | 800+ verified |
+| **Rules** | 206 (187 mapped to gitleaks rules) | ~150 | 800+ verified |
 | **Runs fully offline** | ✅ zero network calls | ✅ | ⚠️ verification needs network |
 
 Scan your codebase and CI with gitleaks or trufflehog, then scan the agent-history surface they don't touch with agentsweep. Running both is the intent: they overlap and cover each other's blind spots.
