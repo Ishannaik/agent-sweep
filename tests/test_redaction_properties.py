@@ -16,6 +16,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
+from string import ascii_uppercase
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -29,7 +30,11 @@ SECRET = "AKIAIOSFODNN7EXAMPLE"  # AWS's documented synthetic example key ID.
 MARKER = "[REDACTED:aws-access-key]"
 
 _TEXT = st.text(
-    alphabet=st.characters(blacklist_categories=("Cs",)),
+    # Excluding ASCII uppercase makes the planted AWS IDs the only values that
+    # can match the aws-access-key rule, so marker-count equality is exact.
+    alphabet=st.characters(
+        blacklist_categories=("Cs",), blacklist_characters=ascii_uppercase
+    ),
     max_size=64,
 ).filter(lambda value: SECRET not in value and "[REDACTED:" not in value)
 
@@ -212,7 +217,7 @@ def test_fix_removes_plaintext_from_every_text_column(
     result = _exercise(payload, tmp_path)
     assert SECRET.encode() not in result.redacted
     assert all(SECRET not in value for value in result.text_values)
-    assert sum(value.count(MARKER) for value in result.text_values) >= (
+    assert sum(value.count(MARKER) for value in result.text_values) == (
         result.expected_markers
     )
 
