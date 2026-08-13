@@ -44,6 +44,7 @@ fast = [
 # wheel (only `dependencies` above are) — install with `pip install -e .[dev]`
 # or `uv sync --extra dev`.
 dev = [
+    "hypothesis>=6.0",
     "pytest>=7.0",
     "pytest-benchmark>=4.0",  # perf-regression guard
     "mypy>=1.10",
