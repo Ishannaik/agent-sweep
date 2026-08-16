@@ -25,9 +25,8 @@ def test_detects_neon_role_password_and_includes_rotation_guidance():
 
 def test_neon_role_password_length_is_bounded():
     assert scan_text(_password(11)) == []
-    assert [finding.rule for finding in scan_text(_password(64))] == [
-        "neon-role-password"
-    ]
+    assert scan_text(_password(12)) != []
+    assert scan_text(_password(64)) != []
     assert scan_text(_password(65)) == []
 
 

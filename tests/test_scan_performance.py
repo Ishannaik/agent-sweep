@@ -86,6 +86,7 @@ def test_prefilter_covers_anchored_and_context_rules():
     assert _PREFILTER.get("aws-access-key") == ("akia",)
     assert _PREFILTER.get("github-pat") == ("ghp_",)
     assert _PREFILTER.get("pinecone-api-key") == ("pcsk_",)
+    assert _PREFILTER.get("tavily-api-key") == ("tvly-",)
     assert _PREFILTER.get("gitlab-pat") == ("glpat-",)
     # Context rules keep their any-of provider keywords.
     assert set(_PREFILTER["jfrog-api-key"]) == {
