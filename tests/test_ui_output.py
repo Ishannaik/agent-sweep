@@ -275,6 +275,28 @@ def test_root_not_found_json_keeps_stdout_parseable(tmp_path, capsys):
     assert "Path not found" in captured.err
 
 
+def test_root_file_exits_2(tmp_path, capsys):
+    root_file = tmp_path / "history.jsonl"
+    root_file.write_text(FIXTURE_LINE, encoding="utf-8")
+    code = main(["--root", str(root_file)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "must be a directory" in captured.err
+    assert str(root_file) in captured.err
+
+
+def test_root_file_json_keeps_stdout_parseable(tmp_path, capsys):
+    root_file = tmp_path / "afile.txt"
+    root_file.write_text("x\n", encoding="utf-8")
+    code = main(["--root", str(root_file), "--json"])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert json.loads(captured.out) == []
+    assert "must be a directory" in captured.err
+
+
 # --------------------------------------------------------------- no color
 
 

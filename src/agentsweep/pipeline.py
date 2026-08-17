@@ -93,6 +93,10 @@ def run(
 
     if args.root is not None and not source.root.is_dir():
         print(f"--root must be a directory, not a file: {source.root}", file=sys.stderr)
+        print(
+            "(pass the directory that contains your agent history, e.g. ~/.claude)",
+            file=sys.stderr,
+        )
         if machine:
             _print_empty_machine_output()
         return 2
