@@ -44,6 +44,14 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile(r"\b(?:sk|rk)_live_[A-Za-z0-9]{24,}\b")),
     ("stripe-test", "Stripe test secret key",
         re.compile(r"\b(?:sk|rk)_test_[A-Za-z0-9]{24,}\b")),
+    ("stripe-webhook-secret", "Stripe webhook signing secret",
+        # Stripe documents the whsec_ prefix and a 32-character example;
+        # its CLI treats the body as base64 with optional padding. Keep the
+        # range bounded while covering both Dashboard and CLI variants.
+        re.compile(
+            r"(?<![A-Za-z0-9_+/-])whsec_[A-Za-z0-9+/]{32,64}={0,2}"
+            r"(?![A-Za-z0-9_+/=-])"
+        )),
     ("openai", "OpenAI API key",
         # (?!ant-) / (?!or-v1-) keep this broad rule from shadowing Anthropic
         # and OpenRouter keys, which would otherwise tie on span and win the
@@ -657,6 +665,7 @@ _PREFILTER: dict[str, tuple[str, ...]] = {
 _PREFILTER.update({
     "stripe-live":         ("sk_live_", "rk_live_"),
     "stripe-test":         ("sk_test_", "rk_test_"),
+    "stripe-webhook-secret": ("whsec_",),
     "pinecone-api-key":    ("pcsk_",),
     "supabase-access-token": ("sbp_",),
     "supabase-secret-key":   ("sb_secret_",),
@@ -782,6 +791,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "github-fine-grained": "Revoke: https://github.com/settings/tokens?type=beta",
     "stripe-live": "Roll: https://dashboard.stripe.com/apikeys",
     "stripe-test": "Roll: https://dashboard.stripe.com/test/apikeys",
+    "stripe-webhook-secret": "Roll: https://dashboard.stripe.com/webhooks (select the endpoint, then roll its signing secret)",
     "openai": "Revoke: https://platform.openai.com/api-keys",
     "anthropic": "Revoke: https://console.anthropic.com/settings/keys",
     "google-api": "Rotate: https://console.cloud.google.com/apis/credentials",
