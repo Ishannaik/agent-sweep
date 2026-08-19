@@ -84,6 +84,19 @@ def test_stripe_webhook_secret_accepts_path_and_label_delimiters(context: str):
     assert findings[0].value == secret
 
 
+@pytest.mark.parametrize("body_length", [32, 33, 64])
+@pytest.mark.parametrize("padding", ["", "=="])
+def test_stripe_webhook_secret_keeps_terminal_slash_out_of_url_path(
+    body_length: int,
+    padding: str,
+):
+    secret = _PREFIX + "A" * (body_length - 1) + "/" + padding
+    findings = scan_text(f"https://example.test/hooks/{secret}/events")
+
+    assert [finding.rule for finding in findings] == ["stripe-webhook-secret"]
+    assert findings[0].value == secret
+
+
 @pytest.mark.parametrize(
     "context",
     [
