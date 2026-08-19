@@ -112,6 +112,24 @@ def test_stripe_webhook_secret_keeps_internal_slash_and_excludes_url_path(
 
 
 @pytest.mark.parametrize(
+    "body", ["A" * 40 + "/" + "B" * 23, "A" * 40 + "//" + "B" * 22]
+)
+@pytest.mark.parametrize("padding", ["", "=="])
+@pytest.mark.parametrize("path", ["/events", "/events/more"])
+def test_stripe_webhook_secret_keeps_late_slashes_in_max_length_body(
+    body: str,
+    padding: str,
+    path: str,
+):
+    assert len(body) == 64
+    secret = _PREFIX + body + padding
+    findings = scan_text(f"https://example.test/hooks/{secret}{path}")
+
+    assert [finding.rule for finding in findings] == ["stripe-webhook-secret"]
+    assert findings[0].value == secret
+
+
+@pytest.mark.parametrize(
     "context",
     [
         'STRIPE_WEBHOOK_SECRET="{secret}"',
