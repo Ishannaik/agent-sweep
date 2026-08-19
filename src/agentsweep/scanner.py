@@ -49,12 +49,14 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         # its CLI treats the body as base64 with optional padding. Keep the
         # range bounded while covering both Dashboard and CLI variants. A raw
         # slash can also delimit a URL path, so match that context separately
-        # without consuming the next path segment. The greedy URL branch keeps
-        # internal or terminal body slashes, then backtracks to the following
-        # path delimiter; the generic branch covers non-path contexts.
+        # without consuming the next path segment. Prefer the first legal path
+        # boundary so later segments stay outside the finding; try the adjacent
+        # `//` form first to retain a body-terminal slash. The generic branch
+        # covers non-path contexts.
         re.compile(
             r"(?<![A-Za-z0-9_+])whsec_(?:"
-            r"[A-Za-z0-9+/]{32,64}={0,2}(?=/)"
+            r"[A-Za-z0-9+/]{31,63}?/={0,2}(?=/)"
+            r"|[A-Za-z0-9+/]{32,64}?={0,2}(?=/)"
             r"|[A-Za-z0-9+/]{32,64}={0,2}(?![A-Za-z0-9_+/=])"
             r")"
         )),

@@ -74,6 +74,7 @@ def test_stripe_webhook_secret_rejects_word_like_embedding(embedded: str):
         "-{secret}",
         "{secret}-label",
         "https://example.test/hooks/{secret}/events",
+        "https://example.test/hooks/{secret}/events/more",
     ],
 )
 def test_stripe_webhook_secret_accepts_path_and_label_delimiters(context: str):
@@ -86,20 +87,25 @@ def test_stripe_webhook_secret_accepts_path_and_label_delimiters(context: str):
 
 @pytest.mark.parametrize("body_length", [32, 33, 64])
 @pytest.mark.parametrize("padding", ["", "=="])
+@pytest.mark.parametrize("path", ["/events", "/events/more"])
 def test_stripe_webhook_secret_keeps_terminal_slash_out_of_url_path(
     body_length: int,
     padding: str,
+    path: str,
 ):
     secret = _PREFIX + "A" * (body_length - 1) + "/" + padding
-    findings = scan_text(f"https://example.test/hooks/{secret}/events")
+    findings = scan_text(f"https://example.test/hooks/{secret}{path}")
 
     assert [finding.rule for finding in findings] == ["stripe-webhook-secret"]
     assert findings[0].value == secret
 
 
-def test_stripe_webhook_secret_keeps_internal_slash_and_excludes_url_path():
+@pytest.mark.parametrize("path", ["/events", "/events/more"])
+def test_stripe_webhook_secret_keeps_internal_slash_and_excludes_url_path(
+    path: str,
+):
     secret = _PREFIX + "A" * 20 + "/" + "B" * 20
-    findings = scan_text(f"https://example.test/hooks/{secret}/events")
+    findings = scan_text(f"https://example.test/hooks/{secret}{path}")
 
     assert [finding.rule for finding in findings] == ["stripe-webhook-secret"]
     assert findings[0].value == secret
