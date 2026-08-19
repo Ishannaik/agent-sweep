@@ -48,7 +48,7 @@ def test_stripe_webhook_secret_accepts_base64_body_and_padding():
     assert _rules(secret) == ["stripe-webhook-secret"]
 
 
-@pytest.mark.parametrize("suffix", ["===", "=A", "_", "-"])
+@pytest.mark.parametrize("suffix", ["===", "=A", "_"])
 def test_stripe_webhook_secret_rejects_invalid_suffixes(suffix: str):
     assert scan_text(_secret(32) + suffix) == []
 
@@ -57,15 +57,31 @@ def test_stripe_webhook_secret_rejects_invalid_suffixes(suffix: str):
     "embedded",
     [
         "z" + _secret(),
-        "/" + _secret(),
-        "-" + _secret(),
+        "_" + _secret(),
         _secret(64) + "z",
-        _secret(64) + "/",
-        _secret(64) + "-",
+        _secret(64) + "+",
+        _secret(64) + "_",
     ],
 )
-def test_stripe_webhook_secret_rejects_embedded_tokens(embedded: str):
+def test_stripe_webhook_secret_rejects_word_like_embedding(embedded: str):
     assert scan_text(embedded) == []
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        "/{secret}",
+        "-{secret}",
+        "{secret}-label",
+        "https://example.test/hooks/{secret}/events",
+    ],
+)
+def test_stripe_webhook_secret_accepts_path_and_label_delimiters(context: str):
+    secret = _secret()
+    findings = scan_text(context.format(secret=secret))
+
+    assert [finding.rule for finding in findings] == ["stripe-webhook-secret"]
+    assert findings[0].value == secret
 
 
 @pytest.mark.parametrize(

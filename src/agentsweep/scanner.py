@@ -47,10 +47,15 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ("stripe-webhook-secret", "Stripe webhook signing secret",
         # Stripe documents the whsec_ prefix and a 32-character example;
         # its CLI treats the body as base64 with optional padding. Keep the
-        # range bounded while covering both Dashboard and CLI variants.
+        # range bounded while covering both Dashboard and CLI variants. A raw
+        # slash can also delimit a URL path, so match that context separately
+        # without consuming the next path segment; the generic branch retains
+        # slash as a valid base64 body character.
         re.compile(
-            r"(?<![A-Za-z0-9_+/-])whsec_[A-Za-z0-9+/]{32,64}={0,2}"
-            r"(?![A-Za-z0-9_+/=-])"
+            r"(?<![A-Za-z0-9_+])whsec_(?:"
+            r"[A-Za-z0-9+]{32,64}={0,2}(?=/)"
+            r"|[A-Za-z0-9+/]{32,64}={0,2}(?![A-Za-z0-9_+/=])"
+            r")"
         )),
     ("openai", "OpenAI API key",
         # (?!ant-) / (?!or-v1-) keep this broad rule from shadowing Anthropic
