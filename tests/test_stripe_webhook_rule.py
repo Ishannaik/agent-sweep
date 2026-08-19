@@ -97,6 +97,14 @@ def test_stripe_webhook_secret_keeps_terminal_slash_out_of_url_path(
     assert findings[0].value == secret
 
 
+def test_stripe_webhook_secret_keeps_internal_slash_and_excludes_url_path():
+    secret = _PREFIX + "A" * 20 + "/" + "B" * 20
+    findings = scan_text(f"https://example.test/hooks/{secret}/events")
+
+    assert [finding.rule for finding in findings] == ["stripe-webhook-secret"]
+    assert findings[0].value == secret
+
+
 @pytest.mark.parametrize(
     "context",
     [
