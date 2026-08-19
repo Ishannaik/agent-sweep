@@ -283,6 +283,7 @@ def test_root_file_exits_2(tmp_path, capsys):
 
     assert code == 2
     assert "must be a directory" in captured.err
+    assert "contains your agent history" in captured.err
     assert str(root_file) in captured.err
 
 
