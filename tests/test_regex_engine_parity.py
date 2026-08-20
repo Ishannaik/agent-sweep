@@ -40,6 +40,7 @@ def _core_fixtures() -> dict[str, str]:
             "-----BEGIN PRIVATE KEY-----\nsynthetic-body\n-----END PRIVATE KEY-----"
         ),
         "db-url-with-password": "postgresql://user:password@example.test/db",
+        "neon-role-password": "npg" "_" + "a" * 12,
         "npm-token": "npm_" + "a" * 36,
         "pypi-token": "pypi-AgEIcHlwaS5vcmc" + "a" * 50,
         "sendgrid": "SG." + "a" * 22 + "." + "b" * 43,
