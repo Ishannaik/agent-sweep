@@ -17,5 +17,7 @@ secret:
       match: "AKIAIOSFODNN7EXAMPLE"
     - name: "Fake GitHub PAT fixture"
       match: "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+    - name: "Cloudflare account API token prefix anchor (detection-rule literal, not a real secret)"
+      match: "cfat_"
     - name: "Neon role-password prefix anchor (detection-rule literal, not a real secret)"
       match: "npg_"
