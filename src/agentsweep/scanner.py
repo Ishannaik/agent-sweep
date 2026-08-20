@@ -86,6 +86,11 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ("db-url-with-password", "Database URL with password",
         re.compile(r"\b(?:postgres|postgresql|mysql|mongodb(?:\+srv)?|redis|amqp)://"
                    r"[^:/\s]+:[^@\s'\"]+@[^\s'\"/]+")),
+    ("neon-role-password", "Neon role password",
+        # Neon generates role passwords as npg_ followed by a fixed 12-char
+        # alphanumeric body; they often appear bare (env vars, chat text)
+        # rather than inside a full postgres:// URL.
+        re.compile(r"(?<![A-Za-z0-9_-])npg_[A-Za-z0-9]{12}(?![A-Za-z0-9_-])")),
     ("npm-token", "npm access token",
         re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("pypi-token", "PyPI upload token",
@@ -660,6 +665,7 @@ _PREFILTER.update({
     "pinecone-api-key":    ("pcsk_",),
     "supabase-access-token": ("sbp_",),
     "supabase-secret-key":   ("sb_secret_",),
+    "neon-role-password":  ("npg_",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
@@ -796,6 +802,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "jwt": "Invalidate at the issuing service; short-lived tokens may expire naturally.",
     "private-key-pem": "Regenerate the key pair and rotate any authorized_keys / cert stores that reference it.",
     "db-url-with-password": "Change the database user's password and update connection strings.",
+    "neon-role-password": "Rotate: Neon console > project > Roles (reset the role's password), or `neonctl roles reset-password`.",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",
     "sendgrid": "Rotate: https://app.sendgrid.com/settings/api_keys",
