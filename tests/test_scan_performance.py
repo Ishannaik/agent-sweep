@@ -133,6 +133,64 @@ def test_prefilter_backend_named():
     assert PREFILTER_BACKEND in ("aho-corasick", "substring")
 
 
+def test_curl_gate_is_lossless_vs_unconditional_rules():
+    """The curl-auth pairing gate must find exactly what the unconditional
+    rule loop finds: every fixture, near-miss, and adversarial shape with the
+    gate disabled must produce identical findings to scan_text's output."""
+    import agentsweep.scanner as sc
+    from test_ported_rules import FIXTURES  # type: ignore
+
+    samples = list(FIXTURES.values()) + [
+        'curl -H "Authorization: Bearer EXAMPLE111111111111"',
+        "curl --user EXAMPLEUSER1:EXAMPLEPASS1 https://example.test",
+        # curl mentions with NO auth flag anywhere — gate must skip both rules
+        "and then I ran curl with verbose mode and saved output",
+        "curl " * 40,
+        # flag far beyond the 1210-char gap from any curl token
+        "curl " + "x" * 1300 + ' --header "Authorization: Bearer EXAMPLE2222"',
+        # flag before every curl (pairing checks nearest PRECEDING curl)
+        '--header="Authorization: Bearer EXAMPLE3333333333" after curl ran',
+        # word-boundary negatives: xcurl / curlx must not open the gate
+        'xcurlx -H "Authorization: Bearer EXAMPLE4444444444"',
+        # multiline gap within bounds
+        "curl\n--user 'EXAMPLEUSER2:EXAMPLEPASS2'",
+        "",
+    ]
+
+    def fp(text):
+        return sorted((f.rule, f.span) for f in sc.scan_text(text))
+
+    orig = sc._CURL_FLAGS
+    try:
+        gated = [fp(s) for s in samples]
+        sc._CURL_FLAGS = {}
+        ungated = [fp(s) for s in samples]
+    finally:
+        sc._CURL_FLAGS = orig
+
+    assert gated == ungated
+
+
+def test_curl_gate_skips_flagless_curl_mentions():
+    """A string that mentions curl but carries no -H/--header/-u/--user
+    literal near it must skip both expensive curl rules entirely."""
+    import agentsweep.scanner as sc
+
+    text = "curl was run 30 times here " * 20
+    assert "curl" in text.lower()
+    assert not sc._curl_gate_open(text, ("-H", "--header"))
+    assert not sc._curl_gate_open(text, ("-u", "--user"))
+
+
+def test_curl_gate_opens_on_pairable_flag():
+    import agentsweep.scanner as sc
+
+    assert sc._curl_gate_open(
+        'curl -H "Authorization: Bearer EXAMPLE5555555555"', ("-H", "--header")
+    )
+    assert sc._curl_gate_open("curl --user u:p", ("-u", "--user"))
+
+
 def test_prefilter_does_not_change_findings():
     """Gating must be lossless: a string containing a context keyword still
     runs the rule exactly as before."""

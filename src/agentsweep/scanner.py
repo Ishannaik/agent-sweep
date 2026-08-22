@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -715,6 +716,55 @@ except ImportError:  # pragma: no cover - exercised only without the wheel
 # data or a serialized cache blob, not a place a secret lives — and scanning a
 # multi-MB string against ~190 rules plus the mnemonic detector costs seconds.
 # Bound per-string work so one giant value can't stall a scan.
+# ---------------------------------------------------------------------------
+# curl-auth context gate
+#
+# The two curl rules (curl-auth-header, curl-auth-user) anchor on 'curl' and
+# were measured at ~68% of total rule time on realistic agent histories: any
+# string that mentions curl a few dozen times (pasted shell logs) pays the
+# full bounded-gap backtracking scan for each mention. A match REQUIRES an
+# auth flag (-H/--header, -u/--user) to appear within the rule's maximum gap
+# after some \bcurl\b — 6 segments of ≤200 chars plus ≤5 newline joins =
+# 1210 chars — followed by quote/equals slack. Checking that pairing with
+# str.find is C-speed and lets scan_text skip both regexes on the vast
+# majority of curl-mentioning strings. Losslessness is enforced by the
+# differential fixture tests in test_scan_performance.py.
+_CURL_GAP_MAX = 1_210
+_CURL_FLAG_SLACK = 32
+_CURL_FLAGS = {
+    "curl-auth-header": ("-H", "--header"),
+    "curl-auth-user": ("-u", "--user"),
+}
+
+
+def _curl_gate_open(text: str, flags: tuple[str, ...]) -> bool:
+    """True when some flag literal sits within reach of some \\bcurl\\b.
+
+    A necessary condition for either curl rule to match. Never approves a
+    match by itself — it only decides whether the real pattern must run.
+    """
+    starts: list[int] = []
+    i = text.find("curl")
+    while i != -1:
+        before_ok = i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")
+        j = i + 4
+        after_ok = j >= len(text) or not (text[j].isalnum() or text[j] == "_")
+        if before_ok and after_ok:
+            starts.append(j)
+        i = text.find("curl", i + 1)
+    if not starts:
+        return False
+    for flag in flags:
+        p = text.find(flag)
+        while p != -1:
+            # nearest \bcurl\b ending at or before this flag occurrence
+            k = bisect.bisect_right(starts, p) - 1
+            if k >= 0 and p - starts[k] <= _CURL_GAP_MAX + _CURL_FLAG_SLACK:
+                return True
+            p = text.find(flag, p + 1)
+    return False
+
+
 _MAX_SCAN_CHARS = 1_000_000
 
 
@@ -734,9 +784,22 @@ def scan_text(text: str) -> list[Finding]:
         else None
     )
     findings: list[Finding] = []
+    triggered = sorted(_triggered_indices(lowered))
+    # One gate decision per curl rule per string, computed only when the rule
+    # actually triggers ('curl' present). Skips the expensive bounded-gap
+    # scans when no flag could possibly pair with a curl token.
+    gates: dict[str, bool] = {}
+    for i in triggered:
+        rule_id = ENGINE_RULES[i][0]
+        flags = _CURL_FLAGS.get(rule_id)
+        if flags is None or rule_id in gates:
+            continue
+        gates[rule_id] = _curl_gate_open(text, flags)
     # sorted() keeps RULES order so overlap dedupe tie-breaks are unchanged.
-    for i in sorted(_triggered_indices(lowered)):
+    for i in triggered:
         rule_id, display, pattern = ENGINE_RULES[i]
+        if rule_id in gates and not gates[rule_id]:
+            continue
         for m in pattern.finditer(text, encoded):
             val = m.group(0)
             if isinstance(val, bytes):
