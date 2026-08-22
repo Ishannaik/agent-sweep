@@ -110,7 +110,10 @@ addopts = "--benchmark-disable"
 target-version = "py311"
 line-length = 88
 # Keep Ruff's built-in exclusions while skipping vendored static data.
-extend-exclude = ["src/agentsweep/bip39_words.py"]
+# test_regex_engine_parity.py splits secret-like fixture literals across
+# adjacent strings on purpose so secret scanners do not flag synthetic
+# fixtures; formatting would merge them and trip GitGuardian.
+extend-exclude = ["src/agentsweep/bip39_words.py", "tests/test_regex_engine_parity.py"]
 
 [tool.ruff.lint]
 # Explicit selection prevents user-level configuration or Ruff default changes

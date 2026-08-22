@@ -127,3 +127,18 @@ def test_no_quadratic_blowup_on_wordy_text():
     t0 = time.perf_counter()
     scan_text(text)
     assert time.perf_counter() - t0 < 2.0
+
+
+# Regression: the cheap reject must count every separator `_GAP` accepts.
+# A tab- or period-joined phrase used to be skipped before tokenizing
+# because the old counter only looked at space/newline/comma/semicolon.
+TAB_12 = "\t".join(VALID_12.split())
+PERIOD_12 = ".".join(VALID_12.split())
+
+
+def test_tab_separated_phrase_detected():
+    assert [f.rule for f in mnemonic.detect_mnemonics(TAB_12)] == ["bip39-mnemonic"]
+
+
+def test_period_joined_phrase_detected():
+    assert [f.rule for f in mnemonic.detect_mnemonics(PERIOD_12)] == ["bip39-mnemonic"]

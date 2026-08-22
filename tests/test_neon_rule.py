@@ -1,4 +1,5 @@
 """Regression coverage for Neon role passwords (npg_ prefix)."""
+
 from __future__ import annotations
 
 import sys
@@ -10,8 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from agentsweep.scanner import ROTATION_GUIDANCE, scan_text  # noqa: E402
 
+
 def _password(body_length: int = 12) -> str:
-    return "npg" "_" + "a" * body_length
+    return "npg_" + "a" * body_length
 
 
 def test_detects_neon_role_password_and_includes_rotation_guidance():

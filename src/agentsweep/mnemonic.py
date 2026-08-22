@@ -62,8 +62,9 @@ def detect_mnemonics(text: str, ascii_lowered: str | None = None):
     # Cheap reject before tokenizing: a 12-word phrase needs at least 11
     # word separators. A big tokenless blob (base64, minified JS, a long
     # path) has far fewer, so skip it without the per-token regex scan.
-    # Lossless: any string holding 12 separated words has >= 11 separators.
-    if (text.count(" ") + text.count("\n") + text.count(",") + text.count(";")) < 11:
+    # Lossless because the counted set is exactly `_GAP`'s separator class:
+    # any string holding 12 gap-separated words has >= 11 of these chars.
+    if sum(text.count(c) for c in " \t\r\n,.;") < 11:
         return []
 
     from .scanner import Finding  # late import: scanner imports this module
