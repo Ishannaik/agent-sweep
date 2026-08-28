@@ -498,6 +498,38 @@ def test_scan_json_warns_on_unparseable_lines_stderr_only(tmp_path, capsys):
     assert "bad.jsonl" in captured.err
 
 
+def test_json_write_failure_no_false_written_claim(tmp_path, capsys):
+    """A failed -o write must not be followed by a "written to" success claim.
+
+    _write_text already reports "Could not write …"; printing a success note
+    afterwards tells the user a report exists on disk when it does not.
+    """
+    root = _mkroot(tmp_path)
+    bad_out = tmp_path / "no_such_dir" / "findings.json"
+
+    code = main(["scan", "--root", str(root), "--json", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 1
+    assert "Could not write" in captured.err
+    assert "written to" not in captured.err
+    assert not bad_out.exists()
+
+
+def test_human_write_failure_no_false_written_claim(tmp_path, capsys):
+    """scan -o FILE (human mode) must not claim findings were written on a failed write."""
+    root = _mkroot(tmp_path)
+    bad_out = tmp_path / "no_such_dir" / "report.json"
+
+    code = main(["scan", "--root", str(root), "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 1
+    assert "Could not write" in captured.err
+    assert "written to" not in (captured.out + captured.err)
+    assert not bad_out.exists()
+
+
 def test_no_ignore_flag_skips_ignore_file(tmp_path, capsys):
     """--no-ignore means .agentsweepignore is not loaded (no suppression)."""
     # Use a file with only the AWS key so a single ignore rule covers everything.
