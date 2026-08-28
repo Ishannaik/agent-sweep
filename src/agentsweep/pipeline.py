@@ -167,6 +167,7 @@ def run(
                 f"and were truncated",
                 file=sys.stderr,
             )
+        _warn_unscannable([source], machine=True)
         _warn_leftover_backups(source, as_json=True)
         if as_sarif:
             return _emit_sarif(_json_payload(found_by_file, source), output, suppressed)
@@ -207,6 +208,7 @@ def run(
             f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were "
             f"truncated (likely cache blobs, not conversation text)"
         )
+    _warn_unscannable([source], machine=False)
 
     if suppressed:
         ui.warn_line(f"{suppressed} finding(s) suppressed by .agentsweepignore")
@@ -728,6 +730,10 @@ def run_all(args) -> int:
                 f"and were truncated",
                 file=sys.stderr,
             )
+        _warn_unscannable(
+            [s for _k, s, *_ in per_source],
+            machine=True,
+        )
         _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=True)
         if as_sarif:
             return _emit_sarif(payload, output, total_suppressed)
@@ -770,6 +776,7 @@ def run_all(args) -> int:
             f"{len(total_truncated)} file(s) exceeded the "
             f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were truncated"
         )
+    _warn_unscannable([s for _k, s, *_ in per_source], machine=False)
     if total_suppressed:
         ui.warn_line(f"{total_suppressed} finding(s) suppressed by .agentsweepignore")
 
@@ -1008,6 +1015,37 @@ def _scan(
 # block Ctrl-C. Stop scanning a file once its text crosses this budget and flag
 # it as truncated so the cap is reported, never silent.
 _MAX_FILE_SCAN_CHARS = 50_000_000
+
+
+def _warn_unscannable(sources: list[Source], *, machine: bool) -> None:
+    """Report history content the scanner never saw (#196) — never silent.
+
+    Sources that skip unparseable lines or unreadable files during
+    iter_strings accumulate the account; this turns it into one stderr line
+    per source with skips so a clean report can't hide unscanned bytes.
+    """
+    for source in sources:
+        unparseable: dict[Path, int] = getattr(source, "unscannable_lines", None) or {}
+        unreadable: list[Path] = getattr(source, "unreadable_files", None) or []
+        if not unparseable and not unreadable:
+            continue
+        parts: list[str] = []
+        if unparseable:
+            parts.append(
+                f"{sum(unparseable.values())} unparseable line(s) "
+                f"in {len(unparseable)} file(s)"
+            )
+        if unreadable:
+            parts.append(f"{len(unreadable)} unreadable file(s)")
+        example = next(iter(unparseable)) if unparseable else unreadable[0]
+        msg = (
+            f"warning: {' and '.join(parts)} under {source.root} "
+            f"were not scanned (e.g. {example.name}); secrets there would be missed"
+        )
+        if machine:
+            print(msg, file=sys.stderr)
+        else:
+            ui.warn_line(msg)
 
 
 def _scan_file(
