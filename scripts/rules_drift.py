@@ -71,6 +71,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     "private-key-pem": "private-key",
     "db-url-with-password": None,  # no generic DB-URL rule upstream
     "neon-role-password": None,  # no gitleaks equivalent
+    "tavily-api-key": None,  # no gitleaks equivalent
     "npm-token": "npm-access-token",
     "pypi-token": "pypi-upload-token",
     "sendgrid": "sendgrid-api-token",
