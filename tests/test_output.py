@@ -459,6 +459,45 @@ def test_output_file_parent_does_not_exist_does_not_crash(tmp_path, capsys):
     assert "Traceback" not in captured.err
 
 
+def test_scan_warns_on_unparseable_lines_human_mode(tmp_path, capsys):
+    """A malformed JSONL line must surface a not-scanned warning (#196)."""
+    root = tmp_path / "history"
+    root.mkdir()
+    (root / "good.jsonl").write_text(FIXTURE_LINE, encoding="utf-8")
+    (root / "bad.jsonl").write_text(
+        '{"broken line with pasted ' + GH_TOKEN + " no closing brace\n",
+        encoding="utf-8",
+    )
+
+    code = main(["scan", "--root", str(root)])
+    captured = capsys.readouterr()
+
+    assert code == 1  # the good file still has findings
+    combined = captured.out + captured.err
+    assert "not scanned" in combined
+    assert "bad.jsonl" in combined
+
+
+def test_scan_json_warns_on_unparseable_lines_stderr_only(tmp_path, capsys):
+    """Machine mode: the not-scanned warning goes to stderr; stdout stays a
+    valid JSON array (machine-clean contract unchanged)."""
+    root = tmp_path / "history"
+    root.mkdir()
+    (root / "bad.jsonl").write_text(
+        '{"broken line with pasted ' + GH_TOKEN + " no closing brace\n",
+        encoding="utf-8",
+    )
+
+    code = main(["scan", "--root", str(root), "--json"])
+    captured = capsys.readouterr()
+
+    assert code == 0  # nothing scannable found — but the skip must be visible
+    payload = json.loads(captured.out)
+    assert payload == []
+    assert "not scanned" in captured.err
+    assert "bad.jsonl" in captured.err
+
+
 def test_no_ignore_flag_skips_ignore_file(tmp_path, capsys):
     """--no-ignore means .agentsweepignore is not loaded (no suppression)."""
     # Use a file with only the AWS key so a single ignore rule covers everything.
