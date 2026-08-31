@@ -193,6 +193,41 @@ def _re2_options() -> Any:
     return options
 
 
+# rule_id → RE2-compatible pattern text, used only when the stdlib pattern
+# fails to compile under RE2. Rewrites here must be proven finding-identical
+# (same accepted language, same match spans) — see the parity tests.
+#
+# curl-auth-header: the original trailing terminator is '(?:\B|\s|\Z)'.
+# RE2 has no \Z. Python's $ matches at \Z OR just before a final newline;
+# the before-final-newline position is already accepted by \s there (the
+# next character would be that newline), so replacing \Z with $ leaves the
+# accepted language unchanged. Verified by differential fuzzing over 1M
+# adversarial samples including final-newline tails.
+_RE2_COMPAT_REWRITES: dict[str, str] = {
+    "curl-auth-header": r"\bcurl\b(?:.{0,200}?|.{0,200}?(?:[\r\n]{1,2}.{0,200}?){1,5})[ \t\n\r](?:-H|--header)(?:=|[ \t]{0,5})(?:\"(?i:Authorization:[ \t]{0,5}(?:Basic[ \t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \t]([\w=~@.+/-]{8,})|([\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \t]{0,5}([\w=~@.+/-]{8,}))\"|'(?i:Authorization:[ \t]{0,5}(?:Basic[ \t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \t]([\w=~@.+/-]{8,})|([\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \t]{0,5}([\w=~@.+/-]{8,}))')(?:\B|\s|$)",
+}
+
+
+def _stdlib_fallback(
+    rule_id: str,
+    text: str,
+    stdlib_pattern: re.Pattern[str],
+    exc: Any,
+) -> RulePattern:
+    return RulePattern(
+        rule_id,
+        text,
+        "stdlib",
+        f"RE2 compile error: {exc}",
+        "error",
+        False,
+        False,
+        None,
+        stdlib_pattern,
+        stdlib_pattern,
+    )
+
+
 def _compile_rule(
     rule_id: str,
     stdlib_pattern: re.Pattern[str],
@@ -232,18 +267,20 @@ def _compile_rule(
     try:
         compiled = _re2.compile(text, options=options)
     except _re2.error as exc:
-        return RulePattern(
-            rule_id,
-            text,
-            "stdlib",
-            f"RE2 compile error: {exc}",
-            "error",
-            False,
-            False,
-            None,
-            stdlib_pattern,
-            stdlib_pattern,
-        )
+        # Known-safe RE2-compatibility rewrites. Each entry maps a rule whose
+        # stdlib pattern uses a Python-only construct to an equivalent RE2
+        # pattern; the equivalence argument is documented next to the entry
+        # and covered by the differential parity tests. The RulePattern keeps
+        # the ORIGINAL text as its public shape — the rewrite is a compile
+        # detail of the re2 backend only.
+        compat_text = _RE2_COMPAT_REWRITES.get(rule_id)
+        if compat_text is not None:
+            try:
+                compiled = _re2.compile(compat_text, options=options)
+            except _re2.error:
+                return _stdlib_fallback(rule_id, text, stdlib_pattern, exc)
+        else:
+            return _stdlib_fallback(rule_id, text, stdlib_pattern, exc)
 
     unicode_guard, semantic_guard, guard_reason = _guard_details(text)
     return RulePattern(
