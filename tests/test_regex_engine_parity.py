@@ -21,6 +21,7 @@ def _core_fixtures() -> dict[str, str]:
         "github-fine-grained": "github_pat_" + "a" * 82,
         "stripe-live": "sk_live_" + "a" * 24,
         "stripe-test": "sk_test_" + "a" * 24,
+        "stripe-webhook-secret": "wh" + "sec_" + "a" * 40,
         "openai": "sk-proj-" + "a" * 40,
         "pinecone-api-key": "pcsk_" + "a" * 104,
         "anthropic": "sk-ant-api03-" + "a" * 32,
