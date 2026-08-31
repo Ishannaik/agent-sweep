@@ -23,7 +23,7 @@ def _core_fixtures() -> dict[str, str]:
         "stripe-test": "sk_test_" + "a" * 24,
         "stripe-webhook-secret": "wh" + "sec_" + "a" * 40,
         "openai": "sk-proj-" + "a" * 40,
-        "pinecone-api-key": "pc" "sk_" + "a" * 104,
+        "pinecone-api-key": "pcsk_" + "a" * 104,
         "anthropic": "sk-ant-api03-" + "a" * 32,
         "google-api": "AIza" + "a" * 35,
         "google-oauth-client-secret": "GOCSPX-" + "a" * 28,
@@ -41,6 +41,7 @@ def _core_fixtures() -> dict[str, str]:
             "-----BEGIN PRIVATE KEY-----\nsynthetic-body\n-----END PRIVATE KEY-----"
         ),
         "db-url-with-password": "postgresql://user:password@example.test/db",
+        "neon-role-password": "npg_" + "a" * 12,
         "npm-token": "npm_" + "a" * 36,
         "pypi-token": "pypi-AgEIcHlwaS5vcmc" + "a" * 50,
         "sendgrid": "SG." + "a" * 22 + "." + "b" * 43,

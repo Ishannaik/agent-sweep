@@ -104,6 +104,13 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ("db-url-with-password", "Database URL with password",
         re.compile(r"\b(?:postgres|postgresql|mysql|mongodb(?:\+srv)?|redis|amqp)://"
                    r"[^:/\s]+:[^@\s'\"]+@[^\s'\"/]+")),
+    ("neon-role-password", "Neon role password",
+        re.compile(r"(?<![A-Za-z0-9_-])npg_[A-Za-z0-9]{12,64}(?![A-Za-z0-9_-])")),
+    ("tavily-api-key", "Tavily API key",
+        # Dashboard API keys are tvly- followed by exactly 40 alphanumeric
+        # body chars; the quantifier is bounded so short/near-miss strings
+        # (tvly-dev-… enterprise keys included) stay silent.
+        re.compile(r"(?<![A-Za-z0-9_-])tvly-[A-Za-z0-9]{40}(?![A-Za-z0-9_-])")),
     ("npm-token", "npm access token",
         re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("pypi-token", "PyPI upload token",
@@ -679,6 +686,8 @@ _PREFILTER.update({
     "pinecone-api-key":    ("pcsk_",),
     "supabase-access-token": ("sbp_",),
     "supabase-secret-key":   ("sb_secret_",),
+    "neon-role-password":  ("npg" "_",),
+    "tavily-api-key":      ("tvly" "-",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
@@ -816,6 +825,8 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "jwt": "Invalidate at the issuing service; short-lived tokens may expire naturally.",
     "private-key-pem": "Regenerate the key pair and rotate any authorized_keys / cert stores that reference it.",
     "db-url-with-password": "Change the database user's password and update connection strings.",
+    "neon-role-password": "Rotate: Neon console > project > Roles (reset the role's password), or POST /projects/{project_id}/branches/{branch_id}/roles/{role_name}/reset_password via the Neon API.",
+    "tavily-api-key": "Revoke: Tavily dashboard > API Keys (click regenerate on the exposed key): https://app.tavily.com/home",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",
     "sendgrid": "Rotate: https://app.sendgrid.com/settings/api_keys",
