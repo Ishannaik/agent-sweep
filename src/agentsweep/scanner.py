@@ -112,6 +112,8 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         # body chars; the quantifier is bounded so short/near-miss strings
         # (tvly-dev-… enterprise keys included) stay silent.
         re.compile(r"(?<![A-Za-z0-9_-])tvly-[A-Za-z0-9]{40}(?![A-Za-z0-9_-])")),
+    ("vercel-api-token", "Vercel API Access Token",
+        re.compile(r"\bvcp_[A-Za-z0-9]{24}\b")),
     ("npm-token", "npm access token",
         re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("pypi-token", "PyPI upload token",
@@ -890,6 +892,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "db-url-with-password": "Change the database user's password and update connection strings.",
     "neon-role-password": "Rotate: Neon console > project > Roles (reset the role's password), or POST /projects/{project_id}/branches/{branch_id}/roles/{role_name}/reset_password via the Neon API.",
     "tavily-api-key": "Revoke: Tavily dashboard > API Keys (click regenerate on the exposed key): https://app.tavily.com/home",
+    "vercel-api-token": "Revoke and rotate at https://vercel.com/account/tokens.",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",
     "sendgrid": "Rotate: https://app.sendgrid.com/settings/api_keys",

@@ -200,6 +200,10 @@ FIXTURES: dict[str, str] = {
     'squarespace-access-token': 'squarespace_token = "a1b2c3d4-a1b2' '-c3d4-a1b2-c3d4a1b2c3d4"',
     'supabase-secret-key': 'sb_secret_a1a1a1a1a1' 'a1a1a1a1a1a1_b2b2b2b2',
     'tavily-api-key': 'tvly-' + 'a1b2c3' * 6 + 'a1b2',
+    "vercel-api-token": (
+        "vcp_"
+        "abcdEFGH1234ijklMNOP5678"
+    ),
     'travisci-access-token': 'travis_api_token = "a1b2c3d4e' '5f6a1b2c3d4e5"',
     'twitch-api-token': 'twitch_api_token = "a1b2c3d4e5f6a1b' '2c3d4e5f6a1b2c3"',
     'twitter-access-secret': 'twitter_access_secret = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4' 'e5f6a1b2c3d4e"',
