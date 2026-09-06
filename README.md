@@ -26,9 +26,11 @@
 
 ---
 
-**31 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Crush · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
+**32 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Crush · Grok Build · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
 
 > **Experimental sources** (Warp, Crush, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe: a wrong path finds nothing. They may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
+>
+> **Grok Build (xAI)** is verified against a real Windows install: JSONL transcripts at `~/.grok/sessions/<cwd>/<session-id>/` (`chat_history.jsonl`, `updates.jsonl`, `events.jsonl`; `$GROK_HOME` override). **Grok CLI** remains experimental — it is [superagent-ai/grok-cli](https://github.com/superagent-ai/grok-cli) SQLite (`~/.grok/grok.db`), a different product. They share `~/.grok` but scan different files; `auth.json` is never opened.
 
 **207 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
 
@@ -263,6 +265,8 @@ agentsweep scan --source cursor               # Cursor history
 agentsweep scan --source windsurf             # Windsurf history
 agentsweep scan --source aider                # per-repo .aider.chat.history.md under $HOME
 agentsweep scan --source crush                # per-project .crush/crush.db under $HOME
+agentsweep scan --source grok-build           # xAI Grok Build ~/.grok/sessions/ (or $GROK_HOME)
+agentsweep scan --source grok-cli             # superagent-ai Grok CLI ~/.grok/grok.db (experimental)
 agentsweep scan --source cline                # Cline history
 agentsweep scan --source gemini-cli           # Gemini CLI history
 agentsweep scan --source continue-vscode      # Continue (VS Code) history
@@ -285,7 +289,7 @@ so you know which `--source` values are worth scanning. It reads nothing and
 writes nothing.
 
 ```bash
-agentsweep list-sources             # all 31 sources + which are on disk
+agentsweep list-sources             # all 32 sources + which are on disk
 agentsweep list-sources --detected  # only the ones found on this machine
 agentsweep list-sources --json      # machine-readable (for scripts/CI)
 ```
@@ -540,7 +544,7 @@ They solve different problems and compose well together. agentsweep covers the s
 
 | | agentsweep | gitleaks | trufflehog |
 |---|---|---|---|
-| **Primary target** | AI agent history (`~/.claude/`, `~/.codex/`, Cursor, 31 agents) | git repos & commits | git repos, filesystems, cloud, CI |
+| **Primary target** | AI agent history (`~/.claude/`, `~/.codex/`, Cursor, 32 agents) | git repos & commits | git repos, filesystems, cloud, CI |
 | **Redacts in place** | ✅ structure-preserving, atomic, reversible (`undo`) | ❌ detection only | ❌ detection only |
 | **Rotation guidance** | ✅ per-provider revocation links | ❌ | ❌ |
 | **Verifies live keys** | ❌ | ❌ | ✅ (network) |
@@ -578,13 +582,13 @@ work through this before assuming there are no secrets:
 ## FAQ
 
 **How do I remove secrets (API keys) from my Claude Code history?**
-Install with `uv tool install agentsweep`, run `asweep`, and the interactive menu scans `~/.claude/projects/`. When it finds secrets it offers to redact them in place (type `REDACT` to confirm). It replaces the values, preserves the JSONL structure byte-for-byte, and keeps a `.bak` backup so you can `agentsweep undo`. The same flow works for Codex, Cursor, and 27 other agents via `--source`.
+Install with `uv tool install agentsweep`, run `asweep`, and the interactive menu scans `~/.claude/projects/`. When it finds secrets it offers to redact them in place (type `REDACT` to confirm). It replaces the values, preserves the JSONL structure byte-for-byte, and keeps a `.bak` backup so you can `agentsweep undo`. The same flow works for Codex, Cursor, and 29 other agents via `--source`.
 
 **Is it safe to run on my real agent history?**
 Yes. Scanning is read-only. Redaction is gated behind a typed `REDACT` confirmation, writes atomically (temp file → fsync → `os.replace`), keeps an owner-only `.bak` backup, validates the rewritten file parses before committing, and is fully reversible with `agentsweep undo`. Nine safety invariants guard every write. See [Corruption-prevention guarantees](#corruption-prevention-guarantees).
 
 **Which AI coding agents does it support?**
-31, including Claude Code, OpenAI Codex, Cursor, Windsurf, Aider, Cline, Gemini CLI, GitHub Copilot Chat, Continue, and OpenCode. Run `agentsweep list-sources` to see the full list and which ones have history on your machine.
+32, including Claude Code, OpenAI Codex, Cursor, Windsurf, Aider, Cline, Gemini CLI, GitHub Copilot Chat, Continue, OpenCode, and Grok Build. Run `agentsweep list-sources` to see the full list and which ones have history on your machine.
 
 
 

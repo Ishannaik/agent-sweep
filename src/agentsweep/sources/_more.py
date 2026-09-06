@@ -5,7 +5,7 @@ Grouped by storage shape:
     text column of every table is scanned (Warp, Grok CLI, Kiro CLI, Zed).
   - whole-file JSON (Codebuff, Plandex) and Gemini-style checkpoints (Qwen).
   - VS Code SQLite forks (Trae, Void) and a Cline fork (PearAI).
-  - line-oriented text/JSONL (Junie, Mentat, JetBrains AI Assistant XML).
+  - line-oriented text/JSONL (Grok Build, Junie, Mentat, JetBrains AI Assistant XML).
 
 A source whose path does not exist simply yields nothing (files() == []), so an
 imperfectly-located store is a harmless no-op rather than a crash.
@@ -23,6 +23,7 @@ from typing import Iterator
 from ..preflight import (
     CODEBUFF_MARKERS,
     CRUSH_MARKERS,
+    GROK_BUILD_MARKERS,
     GROK_CLI_MARKERS,
     JETBRAINS_AI_MARKERS,
     JUNIE_MARKERS,
@@ -266,7 +267,12 @@ class WarpSource(_GenericSqliteSource):
 
 
 class GrokCliSource(_GenericSqliteSource):
-    """Grok CLI (superagent-ai/grok-cli) — ~/.grok/grok.db (messages table)."""
+    """Grok CLI (superagent-ai/grok-cli) — ~/.grok/grok.db (messages table).
+
+    Experimental: path/schema from research, not a real install. This is a
+    different product from xAI Grok Build, which stores JSONL under
+    ~/.grok/sessions/ (see GrokBuildSource). A missing grok.db is a no-op.
+    """
 
     name = "grok-cli"
     display_name = "Grok CLI"
@@ -278,6 +284,74 @@ class GrokCliSource(_GenericSqliteSource):
 
     def _db(self) -> Path:
         return self.root / "grok.db"
+
+
+_GROK_BUILD_JSONL = ("chat_history.jsonl", "updates.jsonl", "events.jsonl")
+
+
+class GrokBuildSource(Source):
+    """xAI Grok Build — JSONL transcripts under ~/.grok/sessions/.
+
+    Verified against a real Windows xAI Grok Build install (2026-09). Layout:
+
+        ~/.grok/sessions/<url-encoded-cwd>/<session-uuid>/
+            chat_history.jsonl   # primary transcript
+            updates.jsonl        # ACP session updates
+            events.jsonl         # optional
+
+    Override the home with $GROK_HOME. Shares ~/.grok with Grok CLI
+    (superagent-ai sqlite grok.db) but scans only the session JSONL files;
+    auth.json and anything outside sessions/ is never opened.
+    """
+
+    name = "grok-build"
+    display_name = "Grok Build (xAI)"
+    process_markers = GROK_BUILD_MARKERS
+    experimental = False
+
+    def __init__(self, root: Path | None = None):
+        self.root = root or self.default_root()
+
+    @classmethod
+    def default_root(cls) -> Path:
+        override = os.environ.get("GROK_HOME", "")
+        if override:
+            return Path(override)
+        return Path.home() / ".grok"
+
+    def _sessions_dir(self) -> Path:
+        return self.root / "sessions"
+
+    def _session_jsonl(self) -> Iterator[Path]:
+        d = self._sessions_dir()
+        if not d.exists():
+            return
+        for name in _GROK_BUILD_JSONL:
+            for p in d.rglob(name):
+                if p.is_file():
+                    yield p
+
+    def files(self) -> list[Path]:
+        return sorted(self._session_jsonl())
+
+    def iter_files(self) -> Iterator[Path]:
+        yield from self._session_jsonl()
+
+    def iter_strings(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
+        yield from _iter_jsonl_strings(path)
+
+    def apply_redactions(self, path: Path, redactions: list) -> str:
+        return _apply_jsonl_redactions(path, redactions)
+
+    def content_format(self, path: Path) -> str:
+        return "jsonl"
+
+    def is_detected(self) -> bool:
+        # ~/.grok exists on Grok CLI installs too (auth.json, grok.db).
+        # Detection requires the JSONL session layout, not just the home dir.
+        for _ in self._session_jsonl():
+            return True
+        return False
 
 
 class ZedSource(_GenericSqliteSource):
