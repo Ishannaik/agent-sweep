@@ -116,6 +116,15 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile(r"\bvcp_[A-Za-z0-9]{24}\b")),
     ("cloudflare-account-api-token", "Cloudflare account API token",
         re.compile(r"(?<![A-Za-z0-9_-])cfat_[A-Za-z0-9]{40}[0-9a-fA-F]{8}(?![A-Za-z0-9_-])")),
+    ("langsmith-api-key", "LangSmith API key",
+        # LangSmith's SDK anonymizer recognizes both personal (pt) and service
+        # (sk) keys as a 32+ character alphanumeric segment followed by
+        # optional alphanumeric segments. Cap every segment and the segment
+        # count so malformed input cannot make this rule open-ended.
+        re.compile(
+            r"(?<![A-Za-z0-9_-])lsv2_(?:pt|sk)_[A-Za-z0-9]{32,256}"
+            r"(?:_[A-Za-z0-9]{1,256}){0,4}(?![A-Za-z0-9_-])"
+        )),
     ("npm-token", "npm access token",
         re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("pypi-token", "PyPI upload token",
@@ -694,6 +703,7 @@ _PREFILTER.update({
     "neon-role-password":  ("npg" "_",),
     "tavily-api-key":      ("tvly" "-",),
     "cloudflare-account-api-token": ("cfat_",),
+    "langsmith-api-key": ("lsv2_",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
@@ -897,6 +907,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "tavily-api-key": "Revoke: Tavily dashboard > API Keys (click regenerate on the exposed key): https://app.tavily.com/home",
     "vercel-api-token": "Revoke and rotate at https://vercel.com/account/tokens.",
     "cloudflare-account-api-token": "Rotate: Cloudflare dashboard > Manage Account > Account API Tokens (roll or revoke the token).",
+    "langsmith-api-key": "Rotate: LangSmith Settings > API Keys (delete the exposed key and create a replacement).",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",
     "sendgrid": "Rotate: https://app.sendgrid.com/settings/api_keys",

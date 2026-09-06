@@ -32,7 +32,7 @@
 >
 > **Grok Build (xAI)** is verified against a real Windows install: JSONL transcripts at `~/.grok/sessions/<cwd>/<session-id>/` (`chat_history.jsonl`, `updates.jsonl`, `events.jsonl`; `$GROK_HOME` override). **Grok CLI** remains experimental — it is [superagent-ai/grok-cli](https://github.com/superagent-ai/grok-cli) SQLite (`~/.grok/grok.db`), a different product. They share `~/.grok` but scan different files; `auth.json` is never opened.
 
-**207 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
+**208 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, LangSmith, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
 
 **Alpha:** every destructive step is gated, backed up, and reversible with one command
 
@@ -450,9 +450,9 @@ agentsweep purge --yes                 # non-interactive (scripts / CI)
 
 ## What's detected
 
-207 high-confidence patterns, **plus a checksum-validated crypto seed-phrase detector**. It confirms BIP-39 mnemonics (12/15/18/21/24 words, the wallet format behind BTC, ETH, SOL, BNB, ADA, DOGE, LTC, DOT, AVAX and most major chains) and Electrum seeds cryptographically (BIP-39 checksum or Electrum version tag), so English prose that happens to use wallet words won't trigger a false positive.
+208 high-confidence patterns, **plus a checksum-validated crypto seed-phrase detector**. It confirms BIP-39 mnemonics (12/15/18/21/24 words, the wallet format behind BTC, ETH, SOL, BNB, ADA, DOGE, LTC, DOT, AVAX and most major chains) and Electrum seeds cryptographically (BIP-39 checksum or Electrum version tag), so English prose that happens to use wallet words won't trigger a false positive.
 
-The patterns: AWS access keys, GitHub tokens (PAT/OAuth/App/fine-grained), Stripe live/test and webhook signing secrets, OpenAI, Anthropic, Google API, Slack bot/user/webhook, Hugging Face, Supabase sensitive tokens, JWT, PEM private keys, DB URLs with embedded passwords, and npm/PyPI/SendGrid/Twilio tokens. On top of those sit 187 rules mapped to the [gitleaks](https://github.com/gitleaks/gitleaks) pack covering GitLab, Grafana, HashiCorp Vault/Terraform, DigitalOcean, Shopify, PlanetScale, Databricks, Atlassian, Azure AD, 1Password, Sentry, New Relic, Mailgun, Datadog, Twilio, Twitter/X, Twitch, Yandex, JFrog, Snyk, Mailchimp, curl credentials on the command line, and many more. The patterns run high-precision: false positives are rare, and provider-context rules are keyword-gated so large pastes stay fast.
+The patterns: AWS access keys, GitHub tokens (PAT/OAuth/App/fine-grained), Stripe live/test and webhook signing secrets, OpenAI, Anthropic, Google API, Slack bot/user/webhook, Hugging Face, LangSmith personal and service keys, Supabase sensitive tokens, JWT, PEM private keys, DB URLs with embedded passwords, and npm/PyPI/SendGrid/Twilio tokens. On top of those sit 187 rules mapped to the [gitleaks](https://github.com/gitleaks/gitleaks) pack covering GitLab, Grafana, HashiCorp Vault/Terraform, DigitalOcean, Shopify, PlanetScale, Databricks, Atlassian, Azure AD, 1Password, Sentry, New Relic, Mailgun, Datadog, Twilio, Twitter/X, Twitch, Yandex, JFrog, Snyk, Mailchimp, curl credentials on the command line, and many more. The patterns run high-precision: false positives are rare, and provider-context rules are keyword-gated so large pastes stay fast.
 
 ## `.agentsweepignore` — suppress false positives
 
