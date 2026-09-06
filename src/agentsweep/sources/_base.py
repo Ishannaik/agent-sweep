@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterator
@@ -26,6 +27,38 @@ class Source(ABC):
     def __init__(self, root: Path | None = None) -> None:
         if root is not None:
             self.root = root
+
+    def _note_unscannable(
+        self, path: Path, lines: int = 0, *, unreadable: bool = False
+    ) -> None:
+        """Record history content the scanner could not parse or read (#196).
+
+        Skipping is the right robustness call for live histories, but a skip
+        the user never hears about turns a corrupt line into a false-clean
+        report. The accumulators are created lazily because several sources
+        assign attributes directly instead of calling super().__init__(); the
+        mutation runs under a per-instance lock because duplicate profile
+        roots (e.g. a repeated CLAUDE_CONFIG_DIR entry) submit the same path
+        to several file workers, and the read-modify-write on the per-path
+        count must not lose increments.
+        """
+        # Every lazy object — both containers and the lock itself — goes
+        # through __dict__.setdefault, a single GIL-atomic operation: workers
+        # always share the objects recorded first (a check-then-create race
+        # could clobber a container, and two lock instances would guard
+        # nothing).
+        unscannable_lines: dict[Path, int] = self.__dict__.setdefault(
+            "unscannable_lines", {}
+        )
+        unreadable_files: list[Path] = self.__dict__.setdefault("unreadable_files", [])
+        lock: threading.Lock = self.__dict__.setdefault(
+            "_unscannable_lock", threading.Lock()
+        )
+        with lock:
+            if unreadable:
+                unreadable_files.append(path)
+            elif lines:
+                unscannable_lines[path] = unscannable_lines.get(path, 0) + lines
 
     @abstractmethod
     def files(self) -> list[Path]:
@@ -142,6 +175,7 @@ class JsonlSource(Source):
         try:
             raw = path.read_bytes()  # ~1.5x faster than read_text on Windows
         except OSError:
+            self._note_unscannable(path, unreadable=True)
             return
         for i, bline in enumerate(raw.splitlines(), 1):
             if not bline.strip():
@@ -149,6 +183,7 @@ class JsonlSource(Source):
             try:
                 obj = json.loads(bline)  # json.loads accepts bytes natively
             except (json.JSONDecodeError, ValueError):
+                self._note_unscannable(path, lines=1)
                 continue
             yield from _walk_json(obj, [], i)
 

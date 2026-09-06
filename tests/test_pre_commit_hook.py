@@ -38,6 +38,7 @@ def _isolate_env(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     monkeypatch.setenv("AGENTSWEEP_NO_UPDATE", "1")
+    monkeypatch.delenv("GROK_HOME", raising=False)
     return home
 
 

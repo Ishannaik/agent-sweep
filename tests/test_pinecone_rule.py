@@ -13,7 +13,7 @@ from agentsweep.scanner import ROTATION_GUIDANCE, scan_text  # noqa: E402
 
 
 def _key(body_length: int = 104) -> str:
-    return "pc" + "sk_" + "A" * body_length
+    return "pcsk_" + "A" * body_length
 
 
 def test_detects_pinecone_api_key_and_includes_rotation_guidance():

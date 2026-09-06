@@ -155,6 +155,15 @@ GROK_CLI_MARKERS: tuple[str, ...] = (
     "grok.cmd",
 )
 
+# xAI Grok Build TUI (Windows reports grok.exe). Distinct from superagent-ai's
+# grok-cli; both may appear as "grok" so the running-process gate is shared-ish.
+GROK_BUILD_MARKERS: tuple[str, ...] = (
+    "grok.exe",
+    "/grok ",
+    "grok.cmd",
+    " grok ",
+)
+
 KIRO_CLI_MARKERS: tuple[str, ...] = (
     "kiro-cli",
     "/kiro ",

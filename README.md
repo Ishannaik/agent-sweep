@@ -26,11 +26,13 @@
 
 ---
 
-**31 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Crush · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
+**32 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Crush · Grok Build · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
 
 > **Experimental sources** (Warp, Crush, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe: a wrong path finds nothing. They may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
+>
+> **Grok Build (xAI)** is verified against a real Windows install: JSONL transcripts at `~/.grok/sessions/<cwd>/<session-id>/` (`chat_history.jsonl`, `updates.jsonl`, `events.jsonl`; `$GROK_HOME` override). **Grok CLI** remains experimental — it is [superagent-ai/grok-cli](https://github.com/superagent-ai/grok-cli) SQLite (`~/.grok/grok.db`), a different product. They share `~/.grok` but scan different files; `auth.json` is never opened.
 
-**206 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
+**207 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
 
 **Alpha:** every destructive step is gated, backed up, and reversible with one command
 
@@ -73,7 +75,7 @@ agentsweep runs a fixed 5-stage pipeline. `scan` stops after stage 3; `fix` cont
 
 ```mermaid
 flowchart LR
-    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n206 regex rules + BIP-39")
+    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n207 regex rules + BIP-39")
     B --> C{"secrets\nfound?"}
     C -- "none" --> D("✅ CLEAN\nexit 0")
     C -- "found" --> E("📋 FINDINGS\nshow report\nexit 1")
@@ -263,6 +265,8 @@ agentsweep scan --source cursor               # Cursor history
 agentsweep scan --source windsurf             # Windsurf history
 agentsweep scan --source aider                # per-repo .aider.chat.history.md under $HOME
 agentsweep scan --source crush                # per-project .crush/crush.db under $HOME
+agentsweep scan --source grok-build           # xAI Grok Build ~/.grok/sessions/ (or $GROK_HOME)
+agentsweep scan --source grok-cli             # superagent-ai Grok CLI ~/.grok/grok.db (experimental)
 agentsweep scan --source cline                # Cline history
 agentsweep scan --source gemini-cli           # Gemini CLI history
 agentsweep scan --source continue-vscode      # Continue (VS Code) history
@@ -285,7 +289,7 @@ so you know which `--source` values are worth scanning. It reads nothing and
 writes nothing.
 
 ```bash
-agentsweep list-sources             # all 31 sources + which are on disk
+agentsweep list-sources             # all 32 sources + which are on disk
 agentsweep list-sources --detected  # only the ones found on this machine
 agentsweep list-sources --json      # machine-readable (for scripts/CI)
 ```
@@ -446,9 +450,9 @@ agentsweep purge --yes                 # non-interactive (scripts / CI)
 
 ## What's detected
 
-206 high-confidence patterns, **plus a checksum-validated crypto seed-phrase detector**. It confirms BIP-39 mnemonics (12/15/18/21/24 words, the wallet format behind BTC, ETH, SOL, BNB, ADA, DOGE, LTC, DOT, AVAX and most major chains) and Electrum seeds cryptographically (BIP-39 checksum or Electrum version tag), so English prose that happens to use wallet words won't trigger a false positive.
+207 high-confidence patterns, **plus a checksum-validated crypto seed-phrase detector**. It confirms BIP-39 mnemonics (12/15/18/21/24 words, the wallet format behind BTC, ETH, SOL, BNB, ADA, DOGE, LTC, DOT, AVAX and most major chains) and Electrum seeds cryptographically (BIP-39 checksum or Electrum version tag), so English prose that happens to use wallet words won't trigger a false positive.
 
-The patterns: AWS access keys, GitHub tokens (PAT/OAuth/App/fine-grained), Stripe live/test, OpenAI, Anthropic, Google API, Slack bot/user/webhook, Hugging Face, Supabase sensitive tokens, JWT, PEM private keys, DB URLs with embedded passwords, and npm/PyPI/SendGrid/Twilio tokens. On top of those sit 187 rules mapped to the [gitleaks](https://github.com/gitleaks/gitleaks) pack covering GitLab, Grafana, HashiCorp Vault/Terraform, DigitalOcean, Shopify, PlanetScale, Databricks, Atlassian, Azure AD, 1Password, Sentry, New Relic, Mailgun, Datadog, Twilio, Twitter/X, Twitch, Yandex, JFrog, Snyk, Mailchimp, curl credentials on the command line, and many more. The patterns run high-precision: false positives are rare, and provider-context rules are keyword-gated so large pastes stay fast.
+The patterns: AWS access keys, GitHub tokens (PAT/OAuth/App/fine-grained), Stripe live/test and webhook signing secrets, OpenAI, Anthropic, Google API, Slack bot/user/webhook, Hugging Face, Supabase sensitive tokens, JWT, PEM private keys, DB URLs with embedded passwords, and npm/PyPI/SendGrid/Twilio tokens. On top of those sit 187 rules mapped to the [gitleaks](https://github.com/gitleaks/gitleaks) pack covering GitLab, Grafana, HashiCorp Vault/Terraform, DigitalOcean, Shopify, PlanetScale, Databricks, Atlassian, Azure AD, 1Password, Sentry, New Relic, Mailgun, Datadog, Twilio, Twitter/X, Twitch, Yandex, JFrog, Snyk, Mailchimp, curl credentials on the command line, and many more. The patterns run high-precision: false positives are rare, and provider-context rules are keyword-gated so large pastes stay fast.
 
 ## `.agentsweepignore` — suppress false positives
 
@@ -540,11 +544,11 @@ They solve different problems and compose well together. agentsweep covers the s
 
 | | agentsweep | gitleaks | trufflehog |
 |---|---|---|---|
-| **Primary target** | AI agent history (`~/.claude/`, `~/.codex/`, Cursor, 31 agents) | git repos & commits | git repos, filesystems, cloud, CI |
+| **Primary target** | AI agent history (`~/.claude/`, `~/.codex/`, Cursor, 32 agents) | git repos & commits | git repos, filesystems, cloud, CI |
 | **Redacts in place** | ✅ structure-preserving, atomic, reversible (`undo`) | ❌ detection only | ❌ detection only |
 | **Rotation guidance** | ✅ per-provider revocation links | ❌ | ❌ |
 | **Verifies live keys** | ❌ | ❌ | ✅ (network) |
-| **Rules** | 206 (187 mapped to gitleaks rules) | ~150 | 800+ verified |
+| **Rules** | 207 (187 mapped to gitleaks rules) | ~150 | 800+ verified |
 | **Runs fully offline** | ✅ zero network calls | ✅ | ⚠️ verification needs network |
 
 Scan your codebase and CI with gitleaks or trufflehog, then scan the agent-history surface they don't touch with agentsweep. Running both is the intent: they overlap and cover each other's blind spots.
@@ -578,13 +582,13 @@ work through this before assuming there are no secrets:
 ## FAQ
 
 **How do I remove secrets (API keys) from my Claude Code history?**
-Install with `uv tool install agentsweep`, run `asweep`, and the interactive menu scans `~/.claude/projects/`. When it finds secrets it offers to redact them in place (type `REDACT` to confirm). It replaces the values, preserves the JSONL structure byte-for-byte, and keeps a `.bak` backup so you can `agentsweep undo`. The same flow works for Codex, Cursor, and 27 other agents via `--source`.
+Install with `uv tool install agentsweep`, run `asweep`, and the interactive menu scans `~/.claude/projects/`. When it finds secrets it offers to redact them in place (type `REDACT` to confirm). It replaces the values, preserves the JSONL structure byte-for-byte, and keeps a `.bak` backup so you can `agentsweep undo`. The same flow works for Codex, Cursor, and 29 other agents via `--source`.
 
 **Is it safe to run on my real agent history?**
 Yes. Scanning is read-only. Redaction is gated behind a typed `REDACT` confirmation, writes atomically (temp file → fsync → `os.replace`), keeps an owner-only `.bak` backup, validates the rewritten file parses before committing, and is fully reversible with `agentsweep undo`. Nine safety invariants guard every write. See [Corruption-prevention guarantees](#corruption-prevention-guarantees).
 
 **Which AI coding agents does it support?**
-31, including Claude Code, OpenAI Codex, Cursor, Windsurf, Aider, Cline, Gemini CLI, GitHub Copilot Chat, Continue, and OpenCode. Run `agentsweep list-sources` to see the full list and which ones have history on your machine.
+32, including Claude Code, OpenAI Codex, Cursor, Windsurf, Aider, Cline, Gemini CLI, GitHub Copilot Chat, Continue, OpenCode, and Grok Build. Run `agentsweep list-sources` to see the full list and which ones have history on your machine.
 
 
 

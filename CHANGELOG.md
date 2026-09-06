@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Add a verified Grok Build (xAI) JSONL source (`grok-build`) for `~/.grok/sessions/` transcripts (`chat_history.jsonl`, `updates.jsonl`, `events.jsonl`; honors `$GROK_HOME`). Distinct from experimental Grok CLI (`grok-cli` / superagent-ai sqlite `grok.db`); they share `~/.grok` but scan different files, and `auth.json` is never opened.
 - Add a `list-sources` command with machine-readable and detected-source output.
 - Add multi-source `scan --all` and guided `fix --all`, including `--detected`.
 - Add Datasette `llm` and Crush history sources, and honor `CLAUDE_CONFIG_DIR` for Claude profile roots.
@@ -37,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Keep Grok Build JSONL discovery inside the physical `sessions/` tree so a session-file symlink cannot read or rewrite `auth.json`.
 - Prevent SQLite WAL/SHM sidecars from retaining or replaying plaintext after redaction, and include sidecar backups in undo and purge.
 - Warn that leftover `.bak` files may still retain plaintext secrets.
 - Quote dynamic SQLite identifiers throughout scanning and redaction.

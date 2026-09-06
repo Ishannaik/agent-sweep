@@ -167,6 +167,7 @@ def run(
                 f"and were truncated",
                 file=sys.stderr,
             )
+        _warn_unscannable([source], machine=True)
         _warn_leftover_backups(source, as_json=True)
         if as_sarif:
             return _emit_sarif(_json_payload(found_by_file, source), output, suppressed)
@@ -207,6 +208,7 @@ def run(
             f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were "
             f"truncated (likely cache blobs, not conversation text)"
         )
+    _warn_unscannable([source], machine=False)
 
     if suppressed:
         ui.warn_line(f"{suppressed} finding(s) suppressed by .agentsweepignore")
@@ -216,11 +218,11 @@ def run(
         if getattr(args, "stats", False):
             empty_stats = _stats_payload(found_by_file, source_key=source.name)
             if output is not None:
-                _write_text(
+                if _write_text(
                     output,
                     json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
-                )
-                print(f"0 finding(s) written to {output}", file=sys.stderr)
+                ):
+                    print(f"0 finding(s) written to {output}", file=sys.stderr)
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
@@ -728,6 +730,10 @@ def run_all(args) -> int:
                 f"and were truncated",
                 file=sys.stderr,
             )
+        _warn_unscannable(
+            [s for _k, s, *_ in per_source],
+            machine=True,
+        )
         _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=True)
         if as_sarif:
             return _emit_sarif(payload, output, total_suppressed)
@@ -770,6 +776,7 @@ def run_all(args) -> int:
             f"{len(total_truncated)} file(s) exceeded the "
             f"{_MAX_FILE_SCAN_CHARS // 1_000_000}MB scan budget and were truncated"
         )
+    _warn_unscannable([s for _k, s, *_ in per_source], machine=False)
     if total_suppressed:
         ui.warn_line(f"{total_suppressed} finding(s) suppressed by .agentsweepignore")
 
@@ -779,11 +786,11 @@ def run_all(args) -> int:
         if getattr(args, "stats", False):
             empty_stats = _stats_payload_multi(per_source)
             if output is not None:
-                _write_text(
+                if _write_text(
                     output,
                     json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
-                )
-                print(f"0 finding(s) written to {output}", file=sys.stderr)
+                ):
+                    print(f"0 finding(s) written to {output}", file=sys.stderr)
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
@@ -837,12 +844,12 @@ def run_all(args) -> int:
                 "findings": combined_payload,
                 "stats": stats_payload,
             }
-        _write_text(output, json.dumps(output_payload, indent=2) + "\n")
-        ui.warn_line(f"{len(combined_payload)} finding(s) also written to {output}")
+        if _write_text(output, json.dumps(output_payload, indent=2) + "\n"):
+            ui.warn_line(f"{len(combined_payload)} finding(s) also written to {output}")
     elif needs_overflow:
         report = Path.cwd() / DEFAULT_REPORT_NAME
-        _write_text(report, _text_report_multi(combined_payload))
-        ui.warn_line(f"full multi-source findings ({grand}) written to {report}")
+        if _write_text(report, _text_report_multi(combined_payload)):
+            ui.warn_line(f"full multi-source findings ({grand}) written to {report}")
 
     if stats_payload is not None:
         _show_stats(stats_payload)
@@ -1008,6 +1015,37 @@ def _scan(
 # block Ctrl-C. Stop scanning a file once its text crosses this budget and flag
 # it as truncated so the cap is reported, never silent.
 _MAX_FILE_SCAN_CHARS = 50_000_000
+
+
+def _warn_unscannable(sources: list[Source], *, machine: bool) -> None:
+    """Report history content the scanner never saw (#196) — never silent.
+
+    Sources that skip unparseable lines or unreadable files during
+    iter_strings accumulate the account; this turns it into one stderr line
+    per source with skips so a clean report can't hide unscanned bytes.
+    """
+    for source in sources:
+        unparseable: dict[Path, int] = getattr(source, "unscannable_lines", None) or {}
+        unreadable: list[Path] = getattr(source, "unreadable_files", None) or []
+        if not unparseable and not unreadable:
+            continue
+        parts: list[str] = []
+        if unparseable:
+            parts.append(
+                f"{sum(unparseable.values())} unparseable line(s) "
+                f"in {len(unparseable)} file(s)"
+            )
+        if unreadable:
+            parts.append(f"{len(unreadable)} unreadable file(s)")
+        example = next(iter(unparseable)) if unparseable else unreadable[0]
+        msg = (
+            f"warning: {' and '.join(parts)} under {source.root} "
+            f"were not scanned (e.g. {example.name}); secrets there would be missed"
+        )
+        if machine:
+            print(msg, file=sys.stderr)
+        else:
+            ui.warn_line(msg)
 
 
 def _scan_file(
@@ -1381,8 +1419,8 @@ def _emit_sarif(payload: list[dict], output: Path | None, suppressed: int) -> in
     text = json.dumps(_sarif_document(payload), indent=2) + "\n"
 
     if output is not None:
-        _write_text(output, text)
-        print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
+        if _write_text(output, text):
+            print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
         return code
 
     print(text, end="")
@@ -1403,20 +1441,20 @@ def _emit_json_payload(
     code = 0 if count == 0 else 1
 
     if output is not None:
-        _write_text(output, json.dumps(payload, indent=2) + "\n")
-        print(f"{count} finding(s) written to {output}", file=sys.stderr)
+        if _write_text(output, json.dumps(payload, indent=2) + "\n"):
+            print(f"{count} finding(s) written to {output}", file=sys.stderr)
         return code
 
     flood = count > JSON_FLOOD_LIMIT and getattr(sys.stdout, "isatty", lambda: False)()
 
     if flood:
         target = Path.cwd() / DEFAULT_JSON_NAME
-        _write_text(target, json.dumps(payload, indent=2) + "\n")
-        print(
-            f"{count} findings — too many to print; written to {target}\n"
-            f"  view with: cat {DEFAULT_JSON_NAME} | python -m json.tool",
-            file=sys.stderr,
-        )
+        if _write_text(target, json.dumps(payload, indent=2) + "\n"):
+            print(
+                f"{count} findings — too many to print; written to {target}\n"
+                f"  view with: cat {DEFAULT_JSON_NAME} | python -m json.tool",
+                file=sys.stderr,
+            )
         return code
 
     print(json.dumps(payload, indent=2))
@@ -1482,6 +1520,7 @@ def _show_findings(
     on_tty = ui.console.is_terminal
     capped = on_tty and len(rows) > MAX_TABLE_ROWS
 
+    wrote_output = False
     if output is not None:
         findings = _json_payload(found_by_file, source)
         output_payload: JsonPayload = findings
@@ -1490,19 +1529,21 @@ def _show_findings(
                 "findings": findings,
                 "stats": stats,
             }
-        _write_text(output, json.dumps(output_payload, indent=2) + "\n")
+        wrote_output = _write_text(output, json.dumps(output_payload, indent=2) + "\n")
 
+    wrote_report = False
     if capped:
         ui.findings_table(rows[:MAX_TABLE_ROWS], source.root)
         report = output if output is not None else Path.cwd() / DEFAULT_REPORT_NAME
         if output is None:
-            _write_text(report, _text_report(found_by_file, source))
-        ui.warn_line(
-            f"…and {len(rows) - MAX_TABLE_ROWS} more — full list written to {report}"
-        )
+            wrote_report = _write_text(report, _text_report(found_by_file, source))
+        if wrote_output or wrote_report:
+            ui.warn_line(
+                f"…and {len(rows) - MAX_TABLE_ROWS} more — full list written to {report}"
+            )
     else:
         ui.findings_table(rows, source.root)
-        if output is not None:
+        if wrote_output:
             ui.warn_line(f"{len(rows)} finding(s) also written to {output}")
 
 
@@ -1529,11 +1570,19 @@ def _text_report_multi(payload: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _write_text(path: Path, text: str) -> None:
+def _write_text(path: Path, text: str) -> bool:
+    """Write text to path; report OSError on stderr and return False on failure.
+
+    Callers use the return value to decide whether a "written to <path>"
+    summary is honest — a failed write must not be followed by a success
+    claim, or the user believes a report exists on disk when it does not.
+    """
     try:
         path.write_text(text, encoding="utf-8")
     except OSError as e:
         print(f"Could not write {path}: {e}", file=sys.stderr)
+        return False
+    return True
 
 
 # Backup patterns undo restores: JSONL transcripts, whole-file JSON and

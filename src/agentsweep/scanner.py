@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +45,24 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile(r"\b(?:sk|rk)_live_[A-Za-z0-9]{24,}\b")),
     ("stripe-test", "Stripe test secret key",
         re.compile(r"\b(?:sk|rk)_test_[A-Za-z0-9]{24,}\b")),
+    ("stripe-webhook-secret", "Stripe webhook signing secret",
+        # Stripe documents the whsec_ prefix and a 32-character example;
+        # its CLI treats the body as base64 with optional padding. Keep the
+        # range bounded while covering both Dashboard and CLI variants. A raw
+        # slash can also delimit a URL path, so match that context separately
+        # without consuming the next path segment. Check the exact upper bound
+        # before shorter candidates so late or adjacent body slashes remain in
+        # a 64-character credential. Shorter forms prefer the first legal path
+        # boundary, with adjacent `//` retaining a body-terminal slash. The
+        # generic branch covers non-path contexts.
+        re.compile(
+            r"(?<![A-Za-z0-9_+])whsec_(?:"
+            r"[A-Za-z0-9+/]{64}={0,2}(?=/)"
+            r"|[A-Za-z0-9+/]{31,62}?/={0,2}(?=/)"
+            r"|[A-Za-z0-9+/]{32,63}?={0,2}(?=/)"
+            r"|[A-Za-z0-9+/]{32,64}={0,2}(?![A-Za-z0-9_+/=])"
+            r")"
+        )),
     ("openai", "OpenAI API key",
         # (?!ant-) / (?!or-v1-) keep this broad rule from shadowing Anthropic
         # and OpenRouter keys, which would otherwise tie on span and win the
@@ -88,6 +107,13 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
                    r"[^:/\s]+:[^@\s'\"]+@[^\s'\"/]+")),
     ("neon-role-password", "Neon role password",
         re.compile(r"(?<![A-Za-z0-9_-])npg_[A-Za-z0-9]{12,64}(?![A-Za-z0-9_-])")),
+    ("tavily-api-key", "Tavily API key",
+        # Dashboard API keys are tvly- followed by exactly 40 alphanumeric
+        # body chars; the quantifier is bounded so short/near-miss strings
+        # (tvly-dev-… enterprise keys included) stay silent.
+        re.compile(r"(?<![A-Za-z0-9_-])tvly-[A-Za-z0-9]{40}(?![A-Za-z0-9_-])")),
+    ("vercel-api-token", "Vercel API Access Token",
+        re.compile(r"\bvcp_[A-Za-z0-9]{24}\b")),
     ("cloudflare-account-api-token", "Cloudflare account API token",
         re.compile(r"(?<![A-Za-z0-9_-])cfat_[A-Za-z0-9]{40}[0-9a-fA-F]{8}(?![A-Za-z0-9_-])")),
     ("npm-token", "npm access token",
@@ -661,10 +687,12 @@ _PREFILTER: dict[str, tuple[str, ...]] = {
 _PREFILTER.update({
     "stripe-live":         ("sk_live_", "rk_live_"),
     "stripe-test":         ("sk_test_", "rk_test_"),
+    "stripe-webhook-secret": ("whsec_",),
     "pinecone-api-key":    ("pcsk_",),
     "supabase-access-token": ("sbp_",),
     "supabase-secret-key":   ("sb_secret_",),
     "neon-role-password":  ("npg" "_",),
+    "tavily-api-key":      ("tvly" "-",),
     "cloudflare-account-api-token": ("cfat_",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
@@ -718,6 +746,55 @@ except ImportError:  # pragma: no cover - exercised only without the wheel
 # data or a serialized cache blob, not a place a secret lives — and scanning a
 # multi-MB string against ~190 rules plus the mnemonic detector costs seconds.
 # Bound per-string work so one giant value can't stall a scan.
+# ---------------------------------------------------------------------------
+# curl-auth context gate
+#
+# The two curl rules (curl-auth-header, curl-auth-user) anchor on 'curl' and
+# were measured at ~68% of total rule time on realistic agent histories: any
+# string that mentions curl a few dozen times (pasted shell logs) pays the
+# full bounded-gap backtracking scan for each mention. A match REQUIRES an
+# auth flag (-H/--header, -u/--user) to appear within the rule's maximum gap
+# after some \bcurl\b — 6 segments of ≤200 chars plus ≤5 newline joins =
+# 1210 chars — followed by quote/equals slack. Checking that pairing with
+# str.find is C-speed and lets scan_text skip both regexes on the vast
+# majority of curl-mentioning strings. Losslessness is enforced by the
+# differential fixture tests in test_scan_performance.py.
+_CURL_GAP_MAX = 1_210
+_CURL_FLAG_SLACK = 32
+_CURL_FLAGS = {
+    "curl-auth-header": ("-H", "--header"),
+    "curl-auth-user": ("-u", "--user"),
+}
+
+
+def _curl_gate_open(text: str, flags: tuple[str, ...]) -> bool:
+    """True when some flag literal sits within reach of some \\bcurl\\b.
+
+    A necessary condition for either curl rule to match. Never approves a
+    match by itself — it only decides whether the real pattern must run.
+    """
+    starts: list[int] = []
+    i = text.find("curl")
+    while i != -1:
+        before_ok = i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")
+        j = i + 4
+        after_ok = j >= len(text) or not (text[j].isalnum() or text[j] == "_")
+        if before_ok and after_ok:
+            starts.append(j)
+        i = text.find("curl", i + 1)
+    if not starts:
+        return False
+    for flag in flags:
+        p = text.find(flag)
+        while p != -1:
+            # nearest \bcurl\b ending at or before this flag occurrence
+            k = bisect.bisect_right(starts, p) - 1
+            if k >= 0 and p - starts[k] <= _CURL_GAP_MAX + _CURL_FLAG_SLACK:
+                return True
+            p = text.find(flag, p + 1)
+    return False
+
+
 _MAX_SCAN_CHARS = 1_000_000
 
 
@@ -737,9 +814,22 @@ def scan_text(text: str) -> list[Finding]:
         else None
     )
     findings: list[Finding] = []
+    triggered = sorted(_triggered_indices(lowered))
+    # One gate decision per curl rule per string, computed only when the rule
+    # actually triggers ('curl' present). Skips the expensive bounded-gap
+    # scans when no flag could possibly pair with a curl token.
+    gates: dict[str, bool] = {}
+    for i in triggered:
+        rule_id = ENGINE_RULES[i][0]
+        flags = _CURL_FLAGS.get(rule_id)
+        if flags is None or rule_id in gates:
+            continue
+        gates[rule_id] = _curl_gate_open(text, flags)
     # sorted() keeps RULES order so overlap dedupe tie-breaks are unchanged.
-    for i in sorted(_triggered_indices(lowered)):
+    for i in triggered:
         rule_id, display, pattern = ENGINE_RULES[i]
+        if rule_id in gates and not gates[rule_id]:
+            continue
         for m in pattern.finditer(text, encoded):
             val = m.group(0)
             if isinstance(val, bytes):
@@ -788,6 +878,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "github-fine-grained": "Revoke: https://github.com/settings/tokens?type=beta",
     "stripe-live": "Roll: https://dashboard.stripe.com/apikeys",
     "stripe-test": "Roll: https://dashboard.stripe.com/test/apikeys",
+    "stripe-webhook-secret": "Roll: https://dashboard.stripe.com/webhooks (select the endpoint, then roll its signing secret)",
     "openai": "Revoke: https://platform.openai.com/api-keys",
     "anthropic": "Revoke: https://console.anthropic.com/settings/keys",
     "google-api": "Rotate: https://console.cloud.google.com/apis/credentials",
@@ -803,6 +894,8 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "private-key-pem": "Regenerate the key pair and rotate any authorized_keys / cert stores that reference it.",
     "db-url-with-password": "Change the database user's password and update connection strings.",
     "neon-role-password": "Rotate: Neon console > project > Roles (reset the role's password), or POST /projects/{project_id}/branches/{branch_id}/roles/{role_name}/reset_password via the Neon API.",
+    "tavily-api-key": "Revoke: Tavily dashboard > API Keys (click regenerate on the exposed key): https://app.tavily.com/home",
+    "vercel-api-token": "Revoke and rotate at https://vercel.com/account/tokens.",
     "cloudflare-account-api-token": "Rotate: Cloudflare dashboard > Manage Account > Account API Tokens (roll or revoke the token).",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",

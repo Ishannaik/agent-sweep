@@ -20,6 +20,7 @@ from ._extended import (
 from ._more import (
     CodebuffSource,
     CrushSource,
+    GrokBuildSource,
     GrokCliSource,
     JetBrainsAiSource,
     JunieSource,
@@ -59,6 +60,7 @@ SOURCES: dict[str, type[Source]] = {
     "llm": LlmSource,
     "warp": WarpSource,
     "crush": CrushSource,
+    "grok-build": GrokBuildSource,
     "grok-cli": GrokCliSource,
     "kiro-cli": KiroCliSource,
     "zed": ZedSource,
@@ -97,6 +99,7 @@ __all__ = [
     "LlmSource",
     "WarpSource",
     "CrushSource",
+    "GrokBuildSource",
     "GrokCliSource",
     "KiroCliSource",
     "ZedSource",
