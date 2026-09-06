@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Keep Grok Build JSONL discovery inside the physical `sessions/` tree so a session-file symlink cannot read or rewrite `auth.json`.
 - Prevent SQLite WAL/SHM sidecars from retaining or replaying plaintext after redaction, and include sidecar backups in undo and purge.
 - Warn that leftover `.bak` files may still retain plaintext secrets.
 - Quote dynamic SQLite identifiers throughout scanning and redaction.

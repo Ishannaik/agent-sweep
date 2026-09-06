@@ -301,7 +301,9 @@ class GrokBuildSource(Source):
 
     Override the home with $GROK_HOME. Shares ~/.grok with Grok CLI
     (superagent-ai sqlite grok.db) but scans only the session JSONL files;
-    auth.json and anything outside sessions/ is never opened.
+    auth.json and anything outside sessions/ is never opened. Discovery
+    resolves each candidate and drops paths that leave the physical
+    sessions tree, so a chat_history.jsonl symlink cannot reach auth.json.
     """
 
     name = "grok-build"
@@ -324,12 +326,21 @@ class GrokBuildSource(Source):
 
     def _session_jsonl(self) -> Iterator[Path]:
         d = self._sessions_dir()
-        if not d.exists():
+        if not d.is_dir():
+            return
+        try:
+            sessions_root = d.resolve()
+        except (OSError, RuntimeError):
             return
         for name in _GROK_BUILD_JSONL:
             for p in d.rglob(name):
-                if p.is_file():
-                    yield p
+                try:
+                    candidate = p.resolve()
+                    candidate.relative_to(sessions_root)
+                except (OSError, RuntimeError, ValueError):
+                    continue
+                if candidate.is_file():
+                    yield candidate
 
     def files(self) -> list[Path]:
         return sorted(self._session_jsonl())

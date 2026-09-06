@@ -227,6 +227,34 @@ def test_grok_build_honors_grok_home(tmp_path: Path, monkeypatch) -> None:
     assert GrokBuildSource.default_root() == custom
 
 
+def test_grok_build_ignores_session_symlink_to_auth(tmp_path: Path) -> None:
+    # A chat_history.jsonl symlink to ~/.grok/auth.json must not be discovered
+    # or rewritten (Path.is_file() follows the link).
+    root = tmp_path / ".grok"
+    sess = root / "sessions" / "cwd" / "sid"
+    sess.mkdir(parents=True)
+    auth = root / "auth.json"
+    original = json.dumps({"token": f"secret {SECRET}"})
+    auth.write_text(original, encoding="utf-8")
+    link = sess / "chat_history.jsonl"
+    try:
+        link.symlink_to(auth)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlink creation requires elevated privileges on this OS")
+    real = root / "sessions" / "other" / "sid2"
+    real.mkdir(parents=True)
+    jsonl = real / "updates.jsonl"
+    jsonl.write_text("{}\n", encoding="utf-8")
+    source = GrokBuildSource(root=root)
+    files = source.files()
+    resolved = {p.resolve() for p in files}
+    assert auth.resolve() not in resolved
+    assert all(p.name != "auth.json" for p in files)
+    assert jsonl.resolve() in resolved
+    # apply_redactions is only called on files(), so auth.json is not rewritten.
+    assert auth.read_text(encoding="utf-8") == original
+
+
 def test_junie_jsonl(tmp_path: Path) -> None:
     root = tmp_path / ".junie"
     sess = root / "sessions"
