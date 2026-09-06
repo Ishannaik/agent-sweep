@@ -370,7 +370,7 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         "-o",
         "--output",
         type=Path,
-        help="Write findings as JSON to this file instead of flooding the terminal.",
+        help="Write machine-readable findings to this file instead of stdout.",
     )
     ap.add_argument(
         "--json",
@@ -396,10 +396,11 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     )
     ap.add_argument(
         "--format",
-        choices=["sarif", "human"],
+        choices=["sarif", "github", "human"],
         help="Emit findings in an interchange format instead of "
         "the default report: sarif = SARIF 2.1.0 for GitHub "
-        "code scanning and SARIF viewers (scan only). Pass "
+        "code scanning and SARIF viewers; github = GitHub "
+        "Actions workflow annotations (scan only). Pass "
         "'human' to force the default report even when a "
         'config file sets format = "sarif".',
     )
@@ -476,7 +477,7 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
 
     if args.source is not None and args.source not in _sources():
         ap.error(f"argument --source: invalid choice from config file: {args.source!r}")
-    if args.format is not None and args.format not in ("sarif", "human"):
+    if args.format is not None and args.format not in ("sarif", "github", "human"):
         ap.error(f"argument --format: invalid choice from config file: {args.format!r}")
 
     # "human" is a CLI-only override that forces the default report even when
@@ -511,7 +512,9 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
 
     if args.format is not None:
         if args.json:
-            ap.error("cannot use --json with --format sarif; pick one output format")
+            ap.error(
+                f"cannot use --json with --format {args.format}; pick one output format"
+            )
         if args.fix:
             ap.error("--format is a scan output format; not valid with fix")
 
@@ -520,7 +523,8 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
             ap.error("--report is a scan output option; not valid with fix")
         if args.format is not None:
             ap.error(
-                "cannot use --report with --format sarif; blast-radius is JSON-only"
+                f"cannot use --report with --format {args.format}; "
+                "blast-radius is JSON-only"
             )
         # Contract: --report always emits machine JSON (with blast_radius).
         args.json = True

@@ -341,6 +341,9 @@ agentsweep scan --json --output /tmp/report.json
 agentsweep scan --format sarif -o agentsweep.sarif
 agentsweep scan --all --format sarif -o agentsweep.sarif
 
+# GitHub Actions annotations in the workflow log (scan only)
+agentsweep scan --all --format github
+
 # Skip .agentsweepignore files
 agentsweep scan --no-ignore
 
@@ -363,6 +366,11 @@ NO_COLOR=1 agentsweep scan
 ```
 
 `|| true` keeps the upload step reachable. `scan` exits 1 when it finds something, and you want the SARIF to report that rather than the step failing.
+
+For a lighter setup without uploading SARIF, `--format github` emits one
+`::error file=...,line=...::...` workflow command per finding. GitHub renders
+these as annotations in the Actions log and on matching files in a pull request.
+The messages contain masked previews only.
 
 ### Use with pre-commit
 
