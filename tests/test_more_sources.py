@@ -1,11 +1,11 @@
 """Round-trip --fix tests for the broad source batch added after v0.1.6,
 one per storage family:
 
-- generic single-db SQLite (Warp/Grok/Kiro/Zed share _GenericSqliteSource)
+- generic single-db SQLite (Warp/Grok CLI/Kiro/Zed share _GenericSqliteSource)
 - VS Code fork SQLite state.vscdb (Trae/Void share _VSCodeSqliteSource)
 - whole-file JSON (Codebuff/Plandex/Qwen)
 - Cline-fork per-task JSON (PearAI)
-- line-oriented text (Mentat .log, JetBrains AI .xml) and JSONL (Junie)
+- line-oriented text (Mentat .log, JetBrains AI .xml) and JSONL (Junie, Grok Build)
 
 Plus a sanity check that every new source is registered with a distinct root.
 """
@@ -25,6 +25,8 @@ from agentsweep.pipeline import _redact_all, _scan_file  # noqa: E402
 from agentsweep.sources import (  # noqa: E402
     SOURCES,
     CodebuffSource,
+    GrokBuildSource,
+    GrokCliSource,
     JetBrainsAiSource,
     JunieSource,
     MentatSource,
@@ -42,6 +44,7 @@ SECRET = "AKIAIOSFODNN7EXAMPLE"
 def _isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.delenv("GROK_HOME", raising=False)
 
 
 def _scan(source, f: Path):
@@ -165,6 +168,93 @@ def test_pearai_cline_fork(tmp_path: Path) -> None:
     assert SECRET not in f.read_text(encoding="utf-8")
 
 
+def test_grok_build_jsonl_round_trip(tmp_path: Path) -> None:
+    root = tmp_path / ".grok"
+    sess = root / "sessions" / "home%2Fproj" / "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    sess.mkdir(parents=True)
+    # Credential files sit beside sessions/ and must never be scanned.
+    (root / "auth.json").write_text(
+        json.dumps({"token": f"secret {SECRET}"}), encoding="utf-8"
+    )
+    f = sess / "chat_history.jsonl"
+    f.write_text(
+        json.dumps({"type": "user", "content": f"key {SECRET}"}) + "\n",
+        encoding="utf-8",
+    )
+    (sess / "updates.jsonl").write_text("{}\n", encoding="utf-8")
+    source = GrokBuildSource(root=root)
+    names = {p.name for p in source.files()}
+    assert "chat_history.jsonl" in names
+    assert "updates.jsonl" in names
+    assert all(p.name != "auth.json" for p in source.files())
+    _ok(source, f)
+    assert SECRET not in f.read_text(encoding="utf-8")
+    json.loads(f.read_text(encoding="utf-8").splitlines()[0])
+
+
+def test_grok_build_detects_jsonl_layout(tmp_path: Path) -> None:
+    root = tmp_path / ".grok"
+    root.mkdir()
+    (root / "auth.json").write_text("{}", encoding="utf-8")
+    # No grok.db — the xAI layout is JSONL under sessions/.
+    assert not GrokBuildSource(root=root).is_detected()
+    sess = root / "sessions" / "cwd" / "sid"
+    sess.mkdir(parents=True)
+    (sess / "events.jsonl").write_text("{}\n", encoding="utf-8")
+    source = GrokBuildSource(root=root)
+    assert source.is_detected()
+    assert any(p.name == "events.jsonl" for p in source.files())
+
+
+def test_grok_cli_missing_db_is_noop(tmp_path: Path) -> None:
+    # Grok Build's ~/.grok/sessions JSONL must not make grok-cli crash when
+    # grok.db (superagent-ai sqlite) is absent.
+    root = tmp_path / ".grok"
+    sess = root / "sessions" / "cwd" / "sid"
+    sess.mkdir(parents=True)
+    (sess / "chat_history.jsonl").write_text(
+        json.dumps({"type": "user", "content": f"key {SECRET}"}) + "\n",
+        encoding="utf-8",
+    )
+    source = GrokCliSource(root=root)
+    assert source.files() == []
+    assert list(source.iter_files()) == []
+
+
+def test_grok_build_honors_grok_home(tmp_path: Path, monkeypatch) -> None:
+    custom = tmp_path / "custom-grok"
+    monkeypatch.setenv("GROK_HOME", str(custom))
+    assert GrokBuildSource.default_root() == custom
+
+
+def test_grok_build_ignores_session_symlink_to_auth(tmp_path: Path) -> None:
+    # A chat_history.jsonl symlink to ~/.grok/auth.json must not be discovered
+    # or rewritten (Path.is_file() follows the link).
+    root = tmp_path / ".grok"
+    sess = root / "sessions" / "cwd" / "sid"
+    sess.mkdir(parents=True)
+    auth = root / "auth.json"
+    original = json.dumps({"token": f"secret {SECRET}"})
+    auth.write_text(original, encoding="utf-8")
+    link = sess / "chat_history.jsonl"
+    try:
+        link.symlink_to(auth)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlink creation requires elevated privileges on this OS")
+    real = root / "sessions" / "other" / "sid2"
+    real.mkdir(parents=True)
+    jsonl = real / "updates.jsonl"
+    jsonl.write_text("{}\n", encoding="utf-8")
+    source = GrokBuildSource(root=root)
+    files = source.files()
+    resolved = {p.resolve() for p in files}
+    assert auth.resolve() not in resolved
+    assert all(p.name != "auth.json" for p in files)
+    assert jsonl.resolve() in resolved
+    # apply_redactions is only called on files(), so auth.json is not rewritten.
+    assert auth.read_text(encoding="utf-8") == original
+
+
 def test_junie_jsonl(tmp_path: Path) -> None:
     root = tmp_path / ".junie"
     sess = root / "sessions"
@@ -216,6 +306,7 @@ def test_jetbrains_ai_xml_plaintext(tmp_path: Path) -> None:
 def test_all_new_sources_registered_with_distinct_roots() -> None:
     expected = {
         "warp",
+        "grok-build",
         "grok-cli",
         "kiro-cli",
         "zed",
@@ -239,7 +330,13 @@ def test_all_new_sources_registered_with_distinct_roots() -> None:
     # would mean one source silently scanning another's store.
     home = str(Path.home())
     fixed = {slug: r for slug, r in roots.items() if r != home}
-    assert len(set(fixed.values())) == len(fixed), "sources share a default_root"
+    # grok-cli (sqlite grok.db) and grok-build (sessions/*.jsonl) share
+    # ~/.grok but scan different files — not a copy-paste slip.
+    grok_shared = {"grok-cli", "grok-build"}
+    unique = {slug: r for slug, r in fixed.items() if slug not in grok_shared}
+    assert len(set(unique.values())) == len(unique), "sources share a default_root"
+    grok_roots = {fixed[slug] for slug in grok_shared}
+    assert len(grok_roots) == 1, "grok-cli and grok-build should share ~/.grok"
 
 
 def test_new_sources_flagged_experimental() -> None:
@@ -261,5 +358,12 @@ def test_new_sources_flagged_experimental() -> None:
     for slug in experimental:
         assert SOURCES[slug].experimental, f"{slug} should be experimental"
     # Verified / battle-tested sources must NOT be flagged experimental.
-    for slug in ("claude-code", "cursor", "cline", "kilo-code", "open-interpreter"):
+    for slug in (
+        "claude-code",
+        "cursor",
+        "cline",
+        "kilo-code",
+        "open-interpreter",
+        "grok-build",
+    ):
         assert not SOURCES[slug].experimental, f"{slug} must stay stable"

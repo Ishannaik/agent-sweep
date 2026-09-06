@@ -35,6 +35,7 @@ def _isolate_home(tmp_path, monkeypatch):
     fake_home.mkdir()
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setenv("USERPROFILE", str(fake_home))
+    monkeypatch.delenv("GROK_HOME", raising=False)
     yield fake_home
 
 
