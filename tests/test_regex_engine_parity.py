@@ -42,6 +42,7 @@ def _core_fixtures() -> dict[str, str]:
         ),
         "db-url-with-password": "postgresql://user:password@example.test/db",
         "neon-role-password": "npg_" + "a" * 12,
+        "cloudflare-account-api-token": "cfat" + "_" + "a" * 40 + "0" * 8,
         "npm-token": "npm_" + "a" * 36,
         "pypi-token": "pypi-AgEIcHlwaS5vcmc" + "a" * 50,
         "sendgrid": "SG." + "a" * 22 + "." + "b" * 43,
