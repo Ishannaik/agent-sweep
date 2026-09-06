@@ -543,6 +543,51 @@ def test_sarif_write_failure_exits_2(tmp_path, capsys):
     assert not bad_out.exists()
 
 
+def test_json_no_history_with_output_write_failure_exits_2(tmp_path, capsys):
+    """JSON + -o on an empty root: write failure -> exit 2, stdout clean."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    bad_out = tmp_path / "no_such_dir" / "report.json"
+
+    code = main(["scan", "--root", str(empty), "--json", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
+    assert not bad_out.exists()
+
+
+def test_sarif_no_history_with_output_write_failure_exits_2(tmp_path, capsys):
+    """SARIF + -o on an empty root: write failure -> exit 2, stdout clean."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    bad_out = tmp_path / "no_such_dir" / "report.sarif"
+
+    code = main(["scan", "--root", str(empty), "--format", "sarif", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
+    assert not bad_out.exists()
+
+
+def test_json_no_history_stats_with_output_write_failure_exits_2(tmp_path, capsys):
+    """JSON + --stats + -o on an empty root: write failure -> exit 2, stdout clean."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    bad_out = tmp_path / "no_such_dir" / "report.json"
+
+    code = main(["scan", "--root", str(empty), "--json", "--stats", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
+    assert not bad_out.exists()
+
+
 def test_no_ignore_flag_skips_ignore_file(tmp_path, capsys):
     """--no-ignore means .agentsweepignore is not loaded (no suppression)."""
     # Use a file with only the AWS key so a single ignore rule covers everything.

@@ -124,12 +124,21 @@ def run(
     if not files:
         print(f"No history files found under {source.root}", file=sys.stderr)
         stats_flag = getattr(args, "stats", False)
+        exit_code = 0
         if machine:
-            if args.json and stats_flag:
-                empty_stats = _stats_payload({}, source_key=source.name)
-                _emit_json_payload({"findings": [], "stats": empty_stats}, output, 0)
-            else:
-                _print_empty_machine_output()
+            if as_sarif:
+                exit_code = _emit_sarif(_json_payload({}, source), output, 0)
+            elif args.json:
+                if stats_flag:
+                    empty_stats = _stats_payload({}, source_key=source.name)
+                    exit_code = _emit_json_payload(
+                        {"findings": [], "stats": empty_stats}, output, 0
+                    )
+                else:
+                    if output is not None:
+                        exit_code = _emit_json_payload({"findings": []}, output, 0)
+                    else:
+                        _print_empty_machine_output()
         else:
             ui.stage(
                 1,
@@ -141,7 +150,7 @@ def run(
             )
             if stats_flag:
                 _show_stats(_stats_payload({}, source_key=source.name))
-        return 0
+        return exit_code
 
     ignores = (
         ignore_mod.IgnoreSet()
@@ -449,19 +458,25 @@ def run_all(args) -> int:
         )
         print(msg, file=sys.stderr)
         stats_flag = _opt(args, "stats", False)
+        exit_code = 0
         if as_json:
-            if stats_flag:
-                _emit_json_payload(
+            if as_sarif:
+                exit_code = _emit_sarif([], output, 0)
+            elif stats_flag:
+                exit_code = _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
             else:
-                print("[]")
+                if output is not None:
+                    exit_code = _emit_json_payload({"findings": []}, output, 0)
+                else:
+                    print("[]")
         else:
             ui.banner(__version__)
             ui.warn_line(msg)
             if stats_flag:
                 _show_stats(_stats_payload_multi([]))
-        return 0
+        return exit_code
 
     if not as_json:
         ui.banner(__version__)
@@ -547,13 +562,19 @@ def run_all(args) -> int:
     if total_files == 0:
         print("No history files found under any selected source", file=sys.stderr)
         stats_flag = _opt(args, "stats", False)
+        exit_code = 0
         if as_json:
-            if stats_flag:
-                _emit_json_payload(
+            if as_sarif:
+                exit_code = _emit_sarif([], output, 0)
+            elif stats_flag:
+                exit_code = _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
             else:
-                print("[]")
+                if output is not None:
+                    exit_code = _emit_json_payload({"findings": []}, output, 0)
+                else:
+                    print("[]")
         else:
             ui.stage(
                 1,
@@ -570,7 +591,7 @@ def run_all(args) -> int:
             ui.stage(4, "skip", "REDACT", "nothing to redact")
             ui.stage(5, "skip", "ROTATE", "nothing to rotate")
             ui.contribute_line()
-        return 0
+        return exit_code
 
     if not as_json:
         ui.stage(
