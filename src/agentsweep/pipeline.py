@@ -1354,7 +1354,8 @@ def _emit_github(payload: list[dict], output: Path | None, suppressed: int) -> i
     if output is not None:
         if _write_text(output, text):
             print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
-        return code
+            return code
+        return 2
 
     print(text, end="")
     if suppressed:

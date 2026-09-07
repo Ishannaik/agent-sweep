@@ -88,6 +88,21 @@ def test_output_file_keeps_stdout_clean(tmp_path, capsys):
     assert AWS_KEY not in output.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("secrets", [(), (AWS_KEY,)])
+def test_output_write_failure_is_user_error(tmp_path, capsys, secrets):
+    root = _seed(tmp_path, *secrets)
+    output = tmp_path / "output-directory"
+    output.mkdir()
+
+    code = main(["scan", "--root", str(root), "--format", "github", "-o", str(output)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert captured.out == ""
+    assert f"Could not write {output}" in captured.err
+    assert "finding(s) written" not in captured.err
+
+
 def test_all_sources_uses_same_annotation_format(_isolate_home, capsys):
     root = _isolate_home / ".claude" / "projects"
     root.mkdir(parents=True)
