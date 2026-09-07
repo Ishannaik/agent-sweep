@@ -149,6 +149,7 @@ FIXTURES: dict[str, str] = {
     'vault-batch-token': 'hvb.a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a' '1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'vault-service-token': 'hvs.a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a' '1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'xai-api-key': 'xai-a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5' 'a1b2c3d4e5a1b2c3d4e5',
+    'replicate-api-token': 'r8_' '0123456789ab' 'cdef0123456789ab' 'cdef0123456789ab' 'cdef0123456789ab' 'cdef01234567',
     # --- gitleaks port wave 2 ---
     'adafruit-api-key': 'adafruit_key = a1b2c3d4e5a1b' '2c3d4e5a1b2c3d4e5f0',
     'airtable-api-key': 'airtable_api_key = a1b2' 'c3d4e5a1b2c3x',
