@@ -63,23 +63,28 @@ def run(
     source: Source = source_cls(root=args.root) if args.root else source_cls()
     output: Path | None = _opt(args, "output")
 
-    as_sarif = _opt(args, "format") == "sarif"
-    if as_sarif and getattr(args, "stats", False):
+    output_format = _opt(args, "format")
+    as_sarif = output_format == "sarif"
+    as_github = output_format == "github"
+    if (as_sarif or as_github) and getattr(args, "stats", False):
+        format_label = "SARIF" if as_sarif else "GitHub"
         print(
-            "error: --stats is not supported in SARIF mode; "
+            f"error: --stats is not supported in {format_label} mode; "
             "omit --stats or use --json instead",
             file=sys.stderr,
         )
         return 2
     # Both machine formats share every no-banner/no-styling branch below; they
     # differ only in what an empty result set looks like on stdout.
-    machine = bool(args.json) or as_sarif
+    machine = bool(args.json) or as_sarif or as_github
 
     def _print_empty_machine_output() -> None:
         # stdout must stay parseable in every machine-format run, including
         # user errors — for SARIF that means a valid document, not "[]".
         if as_sarif:
             print(json.dumps(_sarif_document([]), indent=2))
+        elif as_github:
+            return
         elif args.json:
             print("[]")
 
@@ -171,6 +176,10 @@ def run(
         _warn_leftover_backups(source, as_json=True)
         if as_sarif:
             return _emit_sarif(_json_payload(found_by_file, source), output, suppressed)
+        if as_github:
+            return _emit_github(
+                _json_payload(found_by_file, source), output, suppressed
+            )
         return _output_json(
             found_by_file,
             source,
@@ -407,15 +416,18 @@ def run_all(args) -> int:
     on this machine (same signal as ``list-sources --detected``).
     """
     output: Path | None = _opt(args, "output")
-    as_sarif = _opt(args, "format") == "sarif"
-    if as_sarif and _opt(args, "stats", False):
+    output_format = _opt(args, "format")
+    as_sarif = output_format == "sarif"
+    as_github = output_format == "github"
+    if (as_sarif or as_github) and _opt(args, "stats", False):
+        format_label = "SARIF" if as_sarif else "GitHub"
         print(
-            "error: --stats is not supported in SARIF mode; "
+            f"error: --stats is not supported in {format_label} mode; "
             "omit --stats or use --json instead",
             file=sys.stderr,
         )
         return 2
-    as_json = bool(_opt(args, "json", False)) or as_sarif
+    as_json = bool(_opt(args, "json", False)) or as_sarif or as_github
     report = getattr(args, "report", False)
     detected_only = bool(_opt(args, "detected", False))
     no_ignore = bool(_opt(args, "no_ignore", False))
@@ -449,7 +461,7 @@ def run_all(args) -> int:
                 _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
-            else:
+            elif not as_github:
                 print("[]")
         else:
             ui.banner(__version__)
@@ -547,7 +559,7 @@ def run_all(args) -> int:
                 _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
-            else:
+            elif not as_github:
                 print("[]")
         else:
             ui.stage(
@@ -737,6 +749,8 @@ def run_all(args) -> int:
         _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=True)
         if as_sarif:
             return _emit_sarif(payload, output, total_suppressed)
+        if as_github:
+            return _emit_github(payload, output, total_suppressed)
         stats = (
             _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
         )
@@ -1308,6 +1322,45 @@ def _show_stats(stats: JsonObject) -> None:
     if isinstance(by_source, dict):
         for source, count in by_source.items():
             ui.console.print(f"    source:{source}  {count}")
+
+
+def _github_escape(value: object, *, property_value: bool = False) -> str:
+    """Escape a workflow-command message or property value."""
+    text = str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    if property_value:
+        text = text.replace(":", "%3A").replace(",", "%2C")
+    return text
+
+
+def _github_annotations(payload: list[dict]) -> str:
+    """Render findings as GitHub Actions workflow-command annotations."""
+    lines = []
+    for finding in payload:
+        path = _github_escape(finding["file"], property_value=True)
+        line = max(1, int(finding["line"]))
+        message = _github_escape(
+            f"{finding['display']} found in {finding['source']} history: "
+            f"{finding['masked']}"
+        )
+        lines.append(f"::error file={path},line={line}::{message}")
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def _emit_github(payload: list[dict], output: Path | None, suppressed: int) -> int:
+    """Emit GitHub Actions annotations without banners or styling."""
+    code = 0 if not payload else 1
+    text = _github_annotations(payload)
+
+    if output is not None:
+        if _write_text(output, text):
+            print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
+            return code
+        return 2
+
+    print(text, end="")
+    if suppressed:
+        print(f"({suppressed} suppressed by .agentsweepignore)", file=sys.stderr)
+    return code
 
 
 SARIF_SCHEMA = (
