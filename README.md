@@ -75,7 +75,7 @@ agentsweep runs a fixed 5-stage pipeline. `scan` stops after stage 3; `fix` cont
 
 ```mermaid
 flowchart LR
-    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n207 regex rules + BIP-39")
+    A("🔍 DISCOVER\nwalk history dirs\nstream file list") --> B("⚡ SCAN\nAho-Corasick pre-filter\n208 regex rules + BIP-39")
     B --> C{"secrets\nfound?"}
     C -- "none" --> D("✅ CLEAN\nexit 0")
     C -- "found" --> E("📋 FINDINGS\nshow report\nexit 1")
