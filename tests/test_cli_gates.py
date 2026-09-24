@@ -3,8 +3,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from agentsweep.cli import main
 from agentsweep.sources import ClaudeCodeSource  # noqa: E402
 from agentsweep.preflight import is_production_root  # noqa: E402
 
@@ -57,3 +60,14 @@ def test_cli_fix_refuses_default_root_without_allow_production(
     assert "--allow-production" in captured.err
     assert session.read_text(encoding="utf-8").find("AKIAIOSFODNN7EXAMPLE") != -1
     assert not (fake_root / "session.jsonl.bak").exists()
+def test_cli_output_write_failure(tmp_path, capsys):
+    invalid_output_path = tmp_path / "unwritable_directory"
+    invalid_output_path.mkdir()
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["scan", "--output", str(invalid_output_path)])
+
+    assert exc_info.value.code != 0
+
+    captured = capsys.readouterr()
+    assert "Could not write" in captured.err or "Error" in captured.err

@@ -127,7 +127,7 @@ def run(
         if machine:
             if args.json and stats_flag:
                 empty_stats = _stats_payload({}, source_key=source.name)
-                _emit_json_payload({"findings": [], "stats": empty_stats}, output, 0)
+                return _emit_json_payload({"findings": [], "stats": empty_stats}, output, 0)
             else:
                 _print_empty_machine_output()
         else:
@@ -446,7 +446,7 @@ def run_all(args) -> int:
         stats_flag = _opt(args, "stats", False)
         if as_json:
             if stats_flag:
-                _emit_json_payload(
+                return _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
             else:
@@ -544,7 +544,7 @@ def run_all(args) -> int:
         stats_flag = _opt(args, "stats", False)
         if as_json:
             if stats_flag:
-                _emit_json_payload(
+                return _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
             else:
@@ -791,6 +791,8 @@ def run_all(args) -> int:
                     json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
                 ):
                     print(f"0 finding(s) written to {output}", file=sys.stderr)
+                else:
+                    return 1
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
@@ -1443,6 +1445,8 @@ def _emit_json_payload(
     if output is not None:
         if _write_text(output, json.dumps(payload, indent=2) + "\n"):
             print(f"{count} finding(s) written to {output}", file=sys.stderr)
+        else:
+            return 1
         return code
 
     flood = count > JSON_FLOOD_LIMIT and getattr(sys.stdout, "isatty", lambda: False)()
