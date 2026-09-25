@@ -349,6 +349,17 @@ agentsweep scan --no-color
 NO_COLOR=1 agentsweep scan
 ```
 
+#### Scope CI failures with `--fail-on`
+
+By default `scan` exits 1 on a finding from any rule. `--fail-on` narrows that: the run exits 1 only if a finding matches one of the listed rule ids. Findings from other rules still appear in the report (human, JSON, or SARIF) but leave the exit code at 0. It takes comma-separated ids, can be repeated, and rejects unknown ids the same way `--only-rule` does (`agentsweep explain --list` shows them all).
+
+```bash
+# Block on cloud and source-control credentials, only report everything else
+agentsweep scan --all --detected --fail-on aws-access-key,github-pat,github-fine-grained
+```
+
+Error exits (2) are unaffected, and without `--fail-on` the behavior is unchanged.
+
 #### SARIF in CI
 
 `--format sarif` emits [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html), so findings show up as code-scanning annotations instead of something you have to parse. Rotation guidance rides along in each rule's `help` text, and only the masked preview is included. The secret itself is never written to the report.
@@ -377,6 +388,8 @@ repos:
 ```
 
 Then `pre-commit install`. The hook runs `agentsweep scan --all --detected` on every commit and blocks it (exit 1) if any detected agent history contains a secret. It scans your **history roots** (`~/.claude`, `~/.codex`, ...) rather than the repo's staged files, so it runs once per commit no matter what changed. It works as a per-commit checkpoint. With no agent history on the machine it exits 0 and does nothing.
+
+To block only on specific credential types, pass [`--fail-on`](#scope-ci-failures-with---fail-on) through the hook's `args`, e.g. `args: [--fail-on, "aws-access-key,github-pat"]`.
 
 ### Fix-only flags
 

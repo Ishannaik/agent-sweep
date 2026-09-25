@@ -299,7 +299,9 @@ def main(argv: list[str] | None = None) -> int:
         findings_out: list = []
         args.fix = False
         code = run(args, _findings_out=findings_out)
-        if code == 1 and not args.json and _interactive():
+        # Key the offer on findings, not the exit code: --fail-on can turn a
+        # findings run into exit 0 while there is still something to redact.
+        if findings_out and not args.json and _interactive():
             src, fbf = findings_out[0] if findings_out else (None, None)
             fixed = offer_redaction(args, source=src, found_by_file=fbf)
             if fixed is not None:
@@ -332,6 +334,12 @@ def _add_common(ap: argparse.ArgumentParser) -> None:
     ap.add_argument(
         "--root", type=Path, help="Override the source's default root directory."
     )
+
+
+_FAIL_ON_HELP = (
+    "Exit 1 only when a finding matches one of these rule ids; findings from "
+    "other rules are still reported but exit 0. Comma-separated and repeatable."
+)
 
 
 def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
@@ -429,6 +437,13 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         metavar="RULE_ID",
         help="Keep only findings from this rule id. Repeatable.",
     )
+    ap.add_argument(
+        "--fail-on",
+        action="append",
+        default=[],
+        metavar="RULE_ID[,RULE_ID...]",
+        help=_FAIL_ON_HELP,
+    )
     # Redaction flags (used by `fix` / legacy --fix; harmless on `scan`).
     ap.add_argument(
         "--no-backup",
@@ -499,8 +514,17 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     all_rule_ids = {rule_id for rule_id, _display, _pattern in RULES} | set(
         DETECTOR_IDS
     )
+    # --fail-on takes comma-separated ids and is repeatable; flatten both forms.
+    args.fail_on = [
+        rule_id.strip()
+        for value in args.fail_on
+        for rule_id in value.split(",")
+        if rule_id.strip()
+    ]
     unknown = sorted(
-        set(args.exclude_rule).union(args.only_rule).difference(all_rule_ids)
+        set(args.exclude_rule)
+        .union(args.only_rule, args.fail_on)
+        .difference(all_rule_ids)
     )
     if unknown:
         joined = ", ".join(unknown)
@@ -508,6 +532,7 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
 
     args.exclude_rule = set(args.exclude_rule)
     args.only_rule = set(args.only_rule)
+    args.fail_on = set(args.fail_on)
 
     if args.format is not None:
         if args.json:
@@ -744,6 +769,15 @@ def _get_completion_parser() -> argparse.ArgumentParser:
             help="Keep only findings from this rule id. Repeatable.",
         )
     )
+    _with_rule_id_completer(
+        scan_p.add_argument(
+            "--fail-on",
+            action="append",
+            default=[],
+            metavar="RULE_ID[,RULE_ID...]",
+            help=_FAIL_ON_HELP,
+        )
+    )
     scan_p.add_argument(
         "--no-backup", action="store_true", help="Skip .bak file creation."
     )
@@ -819,6 +853,15 @@ def _get_completion_parser() -> argparse.ArgumentParser:
             default=[],
             metavar="RULE_ID",
             help="Keep only findings from this rule id. Repeatable.",
+        )
+    )
+    _with_rule_id_completer(
+        fix_p.add_argument(
+            "--fail-on",
+            action="append",
+            default=[],
+            metavar="RULE_ID[,RULE_ID...]",
+            help=_FAIL_ON_HELP,
         )
     )
     fix_p.add_argument(

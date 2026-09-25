@@ -46,6 +46,24 @@ def _opt(args, name: str, default=None):
     return getattr(args, name, default)
 
 
+def _scope_exit_to_fail_on(code: int, rules: set[str], args) -> int:
+    """Apply --fail-on to a scan's exit code.
+
+    Only the "findings found" code (1) is rescoped: it stays 1 when any finding
+    comes from a --fail-on rule and drops to 0 otherwise. Clean (0) and error
+    (2) exits pass through untouched, as does every exit when --fail-on is
+    not set.
+    """
+    fail_on = _opt(args, "fail_on", None)
+    if code != 1 or not fail_on:
+        return code
+    return 1 if rules & set(fail_on) else 0
+
+
+def _finding_rules(found_by_file: dict) -> set[str]:
+    return {finding.rule for items in found_by_file.values() for *_, finding in items}
+
+
 def run(
     args,
     *,
@@ -170,15 +188,17 @@ def run(
         _warn_unscannable([source], machine=True)
         _warn_leftover_backups(source, as_json=True)
         if as_sarif:
-            return _emit_sarif(_json_payload(found_by_file, source), output, suppressed)
-        return _output_json(
-            found_by_file,
-            source,
-            output,
-            suppressed,
-            report=getattr(args, "report", False),
-            stats=getattr(args, "stats", False),
-        )
+            code = _emit_sarif(_json_payload(found_by_file, source), output, suppressed)
+        else:
+            code = _output_json(
+                found_by_file,
+                source,
+                output,
+                suppressed,
+                report=getattr(args, "report", False),
+                stats=getattr(args, "stats", False),
+            )
+        return _scope_exit_to_fail_on(code, _finding_rules(found_by_file), args)
 
     ui.stage(1, "ok", "DISCOVER", source.name, f"{len(files)} file(s)", source.root)
 
@@ -256,7 +276,7 @@ def run(
         ui.contribute_line()
         if _findings_out is not None:
             _findings_out.append((source, found_by_file))
-        return 1
+        return _scope_exit_to_fail_on(1, _finding_rules(found_by_file), args)
 
     gate_err, gate_recoverable = _preflight_gates(source, source_cls, args)
     if gate_err is not None:
@@ -735,8 +755,14 @@ def run_all(args) -> int:
             machine=True,
         )
         _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=True)
+        all_rules = {
+            rule
+            for *_, fbf, _sc, _sup, _tr in per_source
+            for rule in _finding_rules(fbf)
+        }
         if as_sarif:
-            return _emit_sarif(payload, output, total_suppressed)
+            code = _emit_sarif(payload, output, total_suppressed)
+            return _scope_exit_to_fail_on(code, all_rules, args)
         stats = (
             _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
         )
@@ -747,13 +773,13 @@ def run_all(args) -> int:
             }
             if stats is not None:
                 result["stats"] = stats
-            return _emit_json_payload(
+            code = _emit_json_payload(
                 result,
                 output,
                 total_suppressed,
             )
-        if stats is not None:
-            return _emit_json_payload(
+        elif stats is not None:
+            code = _emit_json_payload(
                 {
                     "findings": payload,
                     "stats": stats,
@@ -761,7 +787,9 @@ def run_all(args) -> int:
                 output,
                 total_suppressed,
             )
-        return _emit_json_payload(payload, output, total_suppressed)
+        else:
+            code = _emit_json_payload(payload, output, total_suppressed)
+        return _scope_exit_to_fail_on(code, all_rules, args)
 
     ui.stage(
         2,
@@ -870,7 +898,8 @@ def run_all(args) -> int:
     ui.rotation_panel(_rotation_items_multi(dirty))
     _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=False)
     ui.contribute_line()
-    return 1
+    dirty_rules = {rule for _k, _s, fbf in dirty for rule in _finding_rules(fbf)}
+    return _scope_exit_to_fail_on(1, dirty_rules, args)
 
 
 def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:

@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add command completion for Bash, Zsh, Fish, and PowerShell.
 - Add `explain <rule-id>` and `explain --list` for redaction rules.
 - Add repeatable `--only-rule` and `--exclude-rule` rule filtering.
+- Add `--fail-on RULE_ID[,RULE_ID...]` to `scan`/`fix` so a findings run exits 1 only when a listed rule matched; other findings are still reported.
 - Add SARIF 2.1.0 scan output.
 - Add JSON blast-radius reporting through `--report`.
 - Add finding rollups through `--stats`.
