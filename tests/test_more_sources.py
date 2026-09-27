@@ -221,6 +221,39 @@ def test_grok_cli_missing_db_is_noop(tmp_path: Path) -> None:
     assert list(source.iter_files()) == []
 
 
+def test_grok_cli_scans_real_message_schema(tmp_path: Path) -> None:
+    root = tmp_path / ".grok"
+    root.mkdir()
+    db = root / "grok.db"
+    token = "xai-" + "A1b2" * 20
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE messages (session_id TEXT, seq INTEGER, role TEXT, "
+        "message_json TEXT, created_at TEXT)"
+    )
+    con.execute(
+        "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
+        (
+            "test-session",
+            1,
+            "user",
+            json.dumps({"role": "user", "content": token}),
+            "now",
+        ),
+    )
+    con.commit()
+    con.close()
+
+    source = GrokCliSource(root=root)
+    assert source.is_detected()
+    _, findings, _, _, _ = _scan_file(source, db, ignores=None)
+    assert any(
+        finding.rule == "xai-api-key"
+        and keypath == ["messages", 1, "message_json", "content"]
+        for _, keypath, _, finding in findings
+    )
+
+
 def test_grok_build_honors_grok_home(tmp_path: Path, monkeypatch) -> None:
     custom = tmp_path / "custom-grok"
     monkeypatch.setenv("GROK_HOME", str(custom))
@@ -342,7 +375,6 @@ def test_all_new_sources_registered_with_distinct_roots() -> None:
 def test_new_sources_flagged_experimental() -> None:
     experimental = {
         "warp",
-        "grok-cli",
         "kiro-cli",
         "zed",
         "codebuff",
@@ -365,5 +397,6 @@ def test_new_sources_flagged_experimental() -> None:
         "kilo-code",
         "open-interpreter",
         "grok-build",
+        "grok-cli",
     ):
         assert not SOURCES[slug].experimental, f"{slug} must stay stable"

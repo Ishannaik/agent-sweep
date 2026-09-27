@@ -269,14 +269,16 @@ class WarpSource(_GenericSqliteSource):
 class GrokCliSource(_GenericSqliteSource):
     """Grok CLI (superagent-ai/grok-cli) — ~/.grok/grok.db (messages table).
 
-    Experimental: path/schema from research, not a real install. This is a
-    different product from xAI Grok Build, which stores JSONL under
-    ~/.grok/sessions/ (see GrokBuildSource). A missing grok.db is a no-op.
+    Verified against grok-dev 1.1.7: messages.message_json stores the
+    transcript as JSON. This is a different product from xAI Grok Build,
+    which stores JSONL under ~/.grok/sessions/ (see GrokBuildSource).
+    A missing grok.db is a no-op.
     """
 
     name = "grok-cli"
     display_name = "Grok CLI"
     process_markers = GROK_CLI_MARKERS
+    experimental = False
 
     @classmethod
     def default_root(cls) -> Path:

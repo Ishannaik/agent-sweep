@@ -28,9 +28,9 @@
 
 **32 agents supported:** Claude Code · Codex · OpenCode · Cursor · Windsurf · Aider · Cline · Kilo Code · Roo Code · PearAI · Trae · Void · Gemini CLI · Qwen Code · Continue · Open Interpreter · GitHub Copilot Chat · OpenClaw · Hermes · Goose · llm (Datasette) · Warp · Crush · Grok Build · Grok CLI · Kiro CLI · Zed · Codebuff · Plandex · Junie · Mentat · JetBrains AI
 
-> **Experimental sources** (Warp, Crush, Grok CLI, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe: a wrong path finds nothing. They may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
+> **Experimental sources** (Warp, Crush, Kiro CLI, Zed, Codebuff, Plandex, Qwen Code, PearAI, Trae, Void, Junie, Mentat, JetBrains AI) have storage paths/formats derived from research but **not yet verified against a real install**. Scanning is safe: a wrong path finds nothing. They may under-report until confirmed. They're tagged `(experimental)` in the picker and print a notice on scan.
 >
-> **Grok Build (xAI)** is verified against a real Windows install: JSONL transcripts at `~/.grok/sessions/<cwd>/<session-id>/` (`chat_history.jsonl`, `updates.jsonl`, `events.jsonl`; `$GROK_HOME` override). **Grok CLI** remains experimental — it is [superagent-ai/grok-cli](https://github.com/superagent-ai/grok-cli) SQLite (`~/.grok/grok.db`), a different product. They share `~/.grok` but scan different files; `auth.json` is never opened.
+> **Grok Build (xAI)** is verified against a real Windows install: JSONL transcripts at `~/.grok/sessions/<cwd>/<session-id>/` (`chat_history.jsonl`, `updates.jsonl`, `events.jsonl`; `$GROK_HOME` override). **Grok CLI** is [superagent-ai/grok-cli](https://github.com/superagent-ai/grok-cli), verified with grok-dev 1.1.7: SQLite at `~/.grok/grok.db`, with prompts in `messages.message_json`. It is a different product. They share `~/.grok` but scan different files; `auth.json` is never opened.
 
 **207 regex rules + seed-phrase detection:** AWS, GitHub, Stripe, OpenAI, Anthropic, Google, Slack, Discord, HuggingFace, Supabase sensitive tokens, JWT, PEM keys, DB URLs, BIP-39 seed phrases, and [many more](#whats-detected)
 
@@ -266,7 +266,7 @@ agentsweep scan --source windsurf             # Windsurf history
 agentsweep scan --source aider                # per-repo .aider.chat.history.md under $HOME
 agentsweep scan --source crush                # per-project .crush/crush.db under $HOME
 agentsweep scan --source grok-build           # xAI Grok Build ~/.grok/sessions/ (or $GROK_HOME)
-agentsweep scan --source grok-cli             # superagent-ai Grok CLI ~/.grok/grok.db (experimental)
+agentsweep scan --source grok-cli             # superagent-ai Grok CLI ~/.grok/grok.db
 agentsweep scan --source cline                # Cline history
 agentsweep scan --source gemini-cli           # Gemini CLI history
 agentsweep scan --source continue-vscode      # Continue (VS Code) history
