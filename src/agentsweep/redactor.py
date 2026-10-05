@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 import time
 from collections.abc import Iterable, Sequence
@@ -12,6 +13,24 @@ from pathlib import Path
 
 
 MIN_AGE_SECONDS = 60
+
+# A JSONL record ends at \r\n, \r or \n -- exactly the terminators
+# bytes.splitlines() honours, which is how JsonlSource.iter_strings numbers
+# records. str.splitlines() additionally breaks a *decoded* string on U+0085,
+# U+2028 and U+2029, all of which RFC 8259 allows to appear raw inside a JSON
+# string (and json.dumps(..., ensure_ascii=False) writes them through), so
+# splitting the text that way renumbers records away from the line numbers the
+# scan reported and splits one record into two invalid fragments.
+_PHYSICAL_LINE_RE = re.compile(r"(?:[^\r\n]*(?:\r\n|\r|\n))|[^\r\n]+\Z")
+
+
+def jsonl_lines(text: str) -> list[str]:
+    """Split JSONL text into records, terminators included.
+
+    Use this instead of ``str.splitlines()`` anywhere a line number has to mean
+    the same record it meant while scanning.
+    """
+    return _PHYSICAL_LINE_RE.findall(text)
 
 
 def audit_path() -> Path:
@@ -304,7 +323,7 @@ def _validate_json(content: str) -> None:
 
 
 def _validate_jsonl(content: str) -> None:
-    for i, line in enumerate(content.splitlines(), 1):
+    for i, line in enumerate(jsonl_lines(content), 1):
         if not line.strip():
             continue
         try:

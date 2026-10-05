@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Iterator
 
-from ..redactor import SafetyError
+from ..redactor import SafetyError, jsonl_lines
 from ._base import KeyPath, _line_ending, _set_by_path, _walk_json
 
 
@@ -179,7 +179,7 @@ def _iter_jsonl_strings(path: Path) -> Iterator[tuple[int, KeyPath, str]]:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return
-    for i, line in enumerate(text.splitlines(), 1):
+    for i, line in enumerate(jsonl_lines(text), 1):
         if not line.strip():
             continue
         try:
@@ -195,7 +195,7 @@ def _apply_jsonl_redactions(
 ) -> str:
     """Apply redactions to a JSONL file, preserving line count and endings."""
     text = path.read_bytes().decode("utf-8")
-    lines = text.splitlines(keepends=True)
+    lines = jsonl_lines(text)
     by_line: dict[int, list[tuple[KeyPath, str]]] = {}
     for line_num, kp, new_val in redactions:
         by_line.setdefault(line_num, []).append((kp, new_val))

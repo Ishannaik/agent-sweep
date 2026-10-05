@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterator
 
+from ..redactor import jsonl_lines
+
 KeyPath = list  # list of str (dict keys) or int (list indices)
 
 
@@ -193,7 +195,7 @@ class JsonlSource(Source):
         redactions: list[tuple[int, KeyPath, str]],
     ) -> str:
         text = path.read_bytes().decode("utf-8")
-        lines = text.splitlines(keepends=True)
+        lines = jsonl_lines(text)
 
         by_line: dict[int, list[tuple[KeyPath, str]]] = {}
         for line_num, kp, new_val in redactions:
@@ -269,4 +271,6 @@ def _line_ending(line: str) -> str:
         return "\r\n"
     if line.endswith("\n"):
         return "\n"
+    if line.endswith("\r"):
+        return "\r"
     return ""
