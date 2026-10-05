@@ -73,6 +73,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     "neon-role-password": None,  # no gitleaks equivalent
     "tavily-api-key": None,  # no gitleaks equivalent
     "cloudflare-account-api-token": None,  # no gitleaks equivalent
+    "cloudflare-user-api-token": None,  # no gitleaks equivalent
     "npm-token": "npm-access-token",
     "pypi-token": "pypi-upload-token",
     "sendgrid": "sendgrid-api-token",
