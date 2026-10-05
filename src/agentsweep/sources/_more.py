@@ -51,22 +51,10 @@ from ._helpers import (
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
-from ._vscode import _VSCodeSqliteSource
+from ._vscode import _VSCodeSqliteSource, _vscode_appdata_base
 
 
 # ── shared helpers ────────────────────────────────────────────────────────────
-
-
-def _vscode_appdata_base() -> Path:
-    """The per-OS base dir VS Code-fork editors put their data folder under."""
-    if sys.platform == "win32":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            return Path(appdata)
-    elif sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support"
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    return Path(xdg) if xdg else (Path.home() / ".config")
 
 
 def _all_table_columns(con: sqlite3.Connection) -> list[tuple[str, str]]:
