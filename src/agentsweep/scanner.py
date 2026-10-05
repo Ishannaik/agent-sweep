@@ -508,6 +508,13 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile('(?i)[\\w.\\-]{0,50}?yandex[\\w.\\- \\t]{0,20}[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(YC[a-zA-Z0-9_\\-]{38})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('yandex-oauth-access-token', 'Yandex OAuth Access Token',
         re.compile('(?i)[\\w.\\-]{0,50}?yandex[\\w.\\- \\t]{0,20}[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(t1\\.[A-Za-z0-9_\\-]{1,100}={0,2}\\.[A-Za-z0-9_\\-]{86}={0,2})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
+    ('replicate-api-token', 'Replicate API token',
+        # Replicate docs state the credential is a 40-char string that always
+        # starts with the `r8_` prefix; body is alphanumeric (no `-` or `_` per
+        # the official spec). Lower bound stays at 32 so any future body-length
+        # bump is still caught; upper bound is bounded per the issue's review
+        # rule against unbounded quantifiers.
+        re.compile(r'(?<![A-Za-z0-9_])r8_[A-Za-z0-9]{32,80}(?![A-Za-z0-9_])')),
 ]
 
 # Keep the public registry as real ``re.Pattern`` objects. The CLI, tests, and
@@ -697,6 +704,7 @@ _PREFILTER.update({
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
+    "replicate-api-token": ("r8" "_",),
 })
 
 
@@ -1082,4 +1090,5 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'yandex-api-key': 'Rotate: https://console.cloud.yandex.com/iam (IAM -> Service accounts -> API keys)',
     'yandex-aws-access-token': 'Rotate: https://console.cloud.yandex.com/iam (IAM -> Service accounts -> Static access keys)',
     'yandex-oauth-access-token': 'Revoke: https://oauth.yandex.com/ (Manage tokens -> Revoke)',
+    'replicate-api-token': 'Revoke: https://replicate.com/account/api-tokens',
 }
