@@ -87,6 +87,35 @@ def test_aider_markdown_fix_end_to_end(tmp_path: Path) -> None:
         encoding="utf-8") == original
 
 
+def test_aider_markdown_fully_redacts_stateless_github_app_token(
+        tmp_path: Path) -> None:
+    root = tmp_path / "work"
+    repo = root / "proj"
+    repo.mkdir(parents=True)
+    hist = repo / ".aider.chat.history.md"
+    token = "ghs_" + "APPID_JWT.payload-" * 30
+    hist.write_text(
+        f"keep-before {token} keep-after\n",
+        encoding="utf-8",
+    )
+    original = hist.read_text(encoding="utf-8")
+    source = AiderSource(root=root)
+
+    rows, errors = _redact_all(source, _scan(source, hist),
+                               backup=True, force=True)
+
+    assert errors == 0
+    assert rows[0][0] == "ok"
+    after = hist.read_text(encoding="utf-8")
+    assert token not in after
+    assert token[-64:] not in after
+    assert "keep-before " in after
+    assert " keep-after" in after
+    assert "[REDACTED:github-app]" in after
+    assert hist.with_name(hist.name + ".bak").read_text(
+        encoding="utf-8") == original
+
+
 def test_opencode_legacy_json_fix_end_to_end(tmp_path: Path) -> None:
     root = tmp_path / "opencode"
     msgdir = root / "storage" / "session" / "message"

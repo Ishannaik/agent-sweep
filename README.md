@@ -239,6 +239,8 @@ mv session.jsonl.bak session.jsonl
 
 The patterns: AWS access keys, GitHub tokens (PAT/OAuth/App/fine-grained), Stripe live/test, OpenAI, Anthropic, Google API, Slack bot/user/webhook, Hugging Face, JWT, PEM private keys, DB URLs with embedded passwords, npm/PyPI/SendGrid/Twilio tokens — plus 167 rules ported from the [gitleaks](https://github.com/gitleaks/gitleaks) pack covering GitLab, Grafana, HashiCorp Vault/Terraform, DigitalOcean, Shopify, PlanetScale, Databricks, Atlassian, Azure AD, 1Password, Sentry, New Relic, Mailgun, Datadog, Twilio, Twitter/X, Twitch, Yandex, JFrog, Snyk, Mailchimp, curl credentials on the command line, and many more. Patterns are high-precision — false positives are rare, and provider-context rules are keyword-gated so large pastes stay fast.
 
+GitHub App detection covers both legacy tokens and the [stateless installation-token format](https://github.blog/changelog/2026-10-02-stateless-github-app-installation-tokens-rolled-out/). Installation tokens (`ghs_`) are matched at variable lengths, including dots, underscores, and hyphens, so redaction removes the full token. User access tokens (`ghu_`) retain their existing format.
+
 ## What's NOT detected
 
 - Custom/proprietary secrets without a recognizable prefix.
