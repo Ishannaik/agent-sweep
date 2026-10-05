@@ -613,6 +613,10 @@ agentsweep runs against your most sensitive data, so a malicious contribution wo
 
 Every PR also runs GitGuardian and a [bandit](https://bandit.readthedocs.io/) SAST scan in CI (see [Security linting](CONTRIBUTING.md#security-linting)), and workflows from first-time contributors require maintainer approval before they execute. Maintainers merge only after this review. A green checkmark on its own is never enough.
 
+## GUI
+
+Prefer a desktop window over the terminal? [agent-sweep-gui](https://github.com/Pdzly/agent-sweep-gui) is a community-built native PySide6 GUI for agentsweep. It runs the installed `agentsweep` CLI as a subprocess and adds scan, redact, and restore as a desktop workflow with activity history.
+
 ## Contributors
 
 Thanks to everyone who has contributed code, bug reports, and ideas. Ask questions or get help in the [Discord server](https://discord.gg/KKvtRhQvRv).

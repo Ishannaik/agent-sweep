@@ -1,5 +1,7 @@
 # Contributing
 
+Join the [Discord](https://discord.gg/KKvtRhQvRv) before picking an issue. Claim it there, or comment on the issue, so two people don't end up working on the same thing.
+
 ## PRs we want right now
 
 **New `Source` adapters.** Every AI coding agent stores history somewhere. agentsweep currently understands ~30 agents (run `agentsweep list-sources` for the full, current list) — if you write code against something not on that list, a small adapter makes agentsweep work for your tool too.
