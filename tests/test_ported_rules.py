@@ -121,6 +121,7 @@ FIXTURES: dict[str, str] = {
     'prefect-api-key': 'pnu_a1b2c3a1b2c3a1b2' 'c3a1b2c3a1b2c3a1b2c3',
     'pulumi-access-token': 'pul-a1b2c3a1b2c3a1b2c3' 'a1b2c3a1b2c3a1b2c3d4e5',
     'readme-api-token': 'rdme_a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1' 'b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3d4e5',
+    'resend-api-key': 're_' + 'a1b2c3d4' + '_' + 'a1b2c3d4' * 3,
     'rubygems-api-key': 'rubygems_a1b2c3a1b2c3a1b2c3a' '1b2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'scalingo-api-token': 'tk-us-a1b2c3a1b2c3a1b2c3a1b' '2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'sendinblue-api-key': 'xkeysib-a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3' 'a1b2c3a1b2c3a1b2c3a1b2c3d4e5-a1b2c3d4e5f6a1b2',
