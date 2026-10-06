@@ -528,6 +528,8 @@ a config file, even if present in one (agentsweep drops them with a warning)
 — those safety gates must stay explicit on every invocation so a stale or
 shared config file can't silently weaken a redaction safety check.
 
+GitHub App detection covers both legacy tokens and the [stateless installation-token format](https://github.blog/changelog/2026-10-02-stateless-github-app-installation-tokens-rolled-out/). Installation tokens (`ghs_`) are matched at variable lengths, including dots, underscores, and hyphens, so redaction removes the full token. User access tokens (`ghu_`) retain their existing format.
+
 ## What's NOT detected
 
 - Custom/proprietary secrets without a recognizable prefix.
