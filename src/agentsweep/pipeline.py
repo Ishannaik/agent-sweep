@@ -17,12 +17,33 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from . import __version__, ui
+from . import __version__
+
+
 from . import ignore as ignore_mod
 from .preflight import is_agent_running, is_production_root
-from .redactor import SafetyError, safe_write, safety_check
+from .redactor import (
+    RedactionTarget,
+    RedactionVerification,
+    SafetyError,
+    safe_write,
+    safety_check,
+)
 from .scanner import ROTATION_GUIDANCE, RULES, Finding, scan_text
 from .sources import SOURCES, Source
+
+
+class _LazyUI:
+    """Load terminal rendering only when a human-output path needs it."""
+
+    def __getattr__(self, name: str):
+        """Resolve a UI attribute only when a human-output path requests it."""
+        from . import ui as ui_module
+
+        return getattr(ui_module, name)
+
+
+ui = _LazyUI()
 
 
 REDACT_TEMPLATE = "[REDACTED:{rule}]"
@@ -55,6 +76,7 @@ def run(
     """Execute one scan (and optional redact) run. Exit codes:
     0 clean · 1 findings (scan-only) · 2 gate-blocked, write error, or bad path.
 
+    ``--verify-scanner`` runs its isolated positive control before discovery.
     When _findings_out is provided and args.fix is False, appends
     (source, found_by_file) to it so the caller can pass pre-computed
     findings to offer_redaction(), avoiding a double-scan on REDACT.
@@ -100,6 +122,10 @@ def run(
         if machine:
             _print_empty_machine_output()
         return 2
+
+    verify_err = _scanner_verification_gate(args, source)
+    if verify_err is not None:
+        return verify_err
 
     if not machine:
         ui.banner(__version__)
@@ -335,9 +361,14 @@ def redact_findings(
 
     Called from offer_redaction() when the first scan cached its results via
     _findings_out, so the user never sees the pipeline restart from scratch.
+    ``--verify-scanner`` still runs before the cached findings can be written.
     Exit codes: 0 clean, 2 gate-blocked or write error.
     """
     source_cls = SOURCES[args.source]
+    verify_err = _scanner_verification_gate(args, source)
+    if verify_err is not None:
+        return verify_err
+
     gate_err, gate_recoverable = _preflight_gates(source, source_cls, args)
     if gate_err is not None:
         ui.stage(5, "warn", "ROTATE", "these keys are still live")
@@ -412,7 +443,8 @@ def run_all(args) -> int:
     """Scan every registered (or detected) source and aggregate findings.
 
     With ``--fix``, each source with findings is then redacted through the
-    single-source path — see _fix_all_sources.
+    single-source path — see _fix_all_sources. ``--verify-scanner`` validates
+    every selected source's positive control before any discovery or write.
 
     Exit codes: 0 clean / nothing scanned / everything redacted · 1 findings
     (scan-only) · 2 a source was gate-blocked or errored during --fix.
@@ -478,6 +510,12 @@ def run_all(args) -> int:
                 _show_stats(_stats_payload_multi([]))
         return exit_code
 
+    if _opt(args, "verify_scanner"):
+        for _key, source in selected:
+            verify_err = _scanner_verification_gate(args, source)
+            if verify_err is not None:
+                return verify_err
+
     if not as_json:
         ui.banner(__version__)
         if experimental:
@@ -491,7 +529,7 @@ def run_all(args) -> int:
     # between workers.  Results are collected into a list keyed by the
     # original index so the final ordering matches `selected` regardless of
     # which worker finishes first.
-    #
+
     # Discovery workers are capped at _SOURCE_WORKERS_CAP to ensure bounded
     # concurrency across the entire pipeline.
     _SOURCE_WORKERS_CAP = 4
@@ -1052,6 +1090,14 @@ def _scan(
 _MAX_FILE_SCAN_CHARS = 50_000_000
 
 
+def _relative_path(path: Path, root: Path) -> str:
+    """Return the display/ignore path without loading terminal UI code."""
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
 def _warn_unscannable(sources: list[Source], *, machine: bool) -> None:
     """Report history content the scanner never saw (#196) — never silent.
 
@@ -1106,7 +1152,7 @@ def _scan_file(
     suppressed = 0
     scanned_chars = 0
     truncated = False
-    relpath = ui.rel(f, source.root)
+    relpath = _relative_path(f, source.root)
     for line_num, keypath, value in source.iter_strings(f):
         strings_scanned += 1
         scanned_chars += len(value)
@@ -1817,13 +1863,14 @@ def _redact_all(
     force: bool,
     template: str = REDACT_TEMPLATE,
 ) -> tuple[list[tuple[str, str, str]], int, bool]:
-    """Apply redactions, returning (rows, error_count, force_recoverable).
+    """Write and verify redactions, returning (rows, error_count, force_recoverable).
 
-    Rows are (status, path_display, note); status is "ok", "skip" or "fail".
-    A file whose .bak already exists was redacted in a prior pass, so it is a
-    "skip" ("already redacted"), NOT an error. `force_recoverable` is True if
-    any failure was an active-session gate (mtime) that --force could bypass —
-    the caller uses it to decide whether offering --force is worthwhile.
+    Each non-no-op write carries stable targets into ``safe_write`` so it can
+    validate the persisted content and restore the original on a failure. Rows
+    are (status, path_display, note); status is "ok", "skip" or "fail". A file
+    whose .bak already exists was redacted in a prior pass, so it is a "skip"
+    ("already redacted"), not an error. ``force_recoverable`` is true only for
+    an active-session gate (mtime) that --force could bypass.
     """
     rows: list[tuple[str, str, str]] = []
     errors = 0
@@ -1839,6 +1886,24 @@ def _redact_all(
             continue
 
         redactions = _build_redactions(items, template)
+        replacements = {
+            (line, tuple(keypath)): replacement
+            for line, keypath, replacement in redactions
+        }
+        verification = RedactionVerification(
+            source=source,
+            targets=tuple(
+                RedactionTarget(
+                    line=line,
+                    keypath=tuple(keypath),
+                    original=value,
+                    replacement=replacements[(line, tuple(keypath))],
+                    rule=finding.rule,
+                    span=finding.span,
+                )
+                for line, keypath, value, finding in items
+            ),
+        )
         try:
             new_content = source.apply_redactions(path, redactions)
             record = safe_write(
@@ -1847,6 +1912,7 @@ def _redact_all(
                 backup=backup,
                 fmt=source.content_format(path),
                 sidecars=source.sidecars(path),
+                verification=verification,
             )
             if record.unchanged:
                 # File was already in the redacted state — calm skip, not a fail.
@@ -1862,6 +1928,35 @@ def _redact_all(
             rows.append(("fail", display, f"{type(e).__name__}: {e}"))
             errors += 1
     return rows, errors, recoverable
+
+
+def _scanner_verification_gate(args, source: Source) -> int | None:
+    """Fail closed when --verify-scanner's isolated positive control fails."""
+    if not _opt(args, "verify_scanner"):
+        return None
+
+    from .selftest import run_selftest
+
+    only_rules = _opt(args, "only_rule")
+    result = run_selftest(
+        source.root,
+        no_ignore=_opt(args, "no_ignore"),
+        exclude_rules=set(_opt(args, "exclude_rule", set())),
+        only_rules=None if not only_rules else set(only_rules),
+    )
+    if result.ok:
+        return None
+
+    detail = f" ({result.error_type})" if result.error_type else ""
+    print(
+        f"Scanner verification failed; no scan or redaction was performed{detail}.",
+        file=sys.stderr,
+    )
+    if _opt(args, "format") == "sarif":
+        print(json.dumps(_sarif_document([]), indent=2))
+    elif _opt(args, "json"):
+        print("[]")
+    return 2
 
 
 def _preflight_gates(

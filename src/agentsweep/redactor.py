@@ -4,12 +4,19 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import time
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from .sources import Source
 
 
 MIN_AGE_SECONDS = 60
@@ -63,6 +70,43 @@ class WriteRecord:
     bytes_before: int
     bytes_after: int
     unchanged: bool = False  # True when the redaction was a no-op (already done)
+
+
+@dataclass(frozen=True)
+class RedactionTarget:
+    """One scanner finding and its expected decoded replacement."""
+
+    line: int
+    keypath: tuple[object, ...]
+    original: str
+    replacement: str
+    rule: str
+    span: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class RedactionVerification:
+    """Semantic proof that a source applied its selected redactions."""
+
+    source: Source
+    targets: tuple[RedactionTarget, ...]
+
+
+@dataclass(frozen=True)
+class _DecodedStrings:
+    """Decoded source values indexed by location and stable identity."""
+
+    by_location: dict[tuple[int, tuple[object, ...]], tuple[object, str]]
+    by_identity: dict[object, str]
+
+
+@dataclass(frozen=True)
+class _VerificationBaseline:
+    """Pre-write values and residual detector matches allowed after redaction."""
+
+    values: dict[object, str]
+    expected: dict[object, str]
+    allowed: Counter[tuple[object, str, str]]
 
 
 def _sha256(data: bytes) -> str:
@@ -124,6 +168,8 @@ def safe_write(
     backup: bool = True,
     fmt: str = "jsonl",
     sidecars: Sequence[Path] = (),
+    *,
+    verification: RedactionVerification | None = None,
 ) -> WriteRecord:
     """Atomically replace `path`'s content with `new_content`.
 
@@ -132,10 +178,13 @@ def safe_write(
         `-shm`) are backed up alongside `path` and deleted once the replace
         lands. The caller MUST only pass sidecars whose committed contents
         are already folded into `new_content` — for SQLite that is what
-        `Connection.backup()` does. Deleting them is what makes the
-        redaction stick: a `-wal` left beside a replaced database still
-        holds the pre-redaction plaintext, and SQLite replays it over the
-        new file on the next open, silently restoring the secret.
+        `Connection.backup()` does. A verified no-backup SQLite write first
+        prepares one fsynced, standalone SQLite recovery snapshot; it folds
+        committed sidecar pages into that recovery copy before the replace.
+        Deleting live sidecars is what makes the redaction stick: a `-wal`
+        left beside a replaced database still holds the pre-redaction
+        plaintext, and SQLite replays it over the new file on the next open,
+        silently restoring the secret.
       - Post-write validation (str content), selected by `fmt`:
           "jsonl" — every non-empty line must parse as JSON and the line
                     count must match the original (the default);
@@ -149,13 +198,17 @@ def safe_write(
         these checks are meaningless — the producing source MUST validate
         the bytes itself (e.g. PRAGMA integrity_check on the rewritten
         copy) before handing them over; `fmt` is ignored.
+      - When `verification` is supplied, the persisted bytes are read back
+        and the source re-decodes the file. Every selected location must
+        hold its intended replacement; only pre-existing, unselected fired
+        detector matches may remain at the same logical location.
       - Atomic replacement: writes to a sibling tempfile with fsync, then
         os.replace. A crash at any point leaves either the complete old file
         or the complete new file on disk — never a torn write.
       - Backup: writes `<path>.bak` before replacement (refuses if one
         already exists, to avoid clobbering a prior backup).
       - Audit: appends a record to ~/.agentsweep/audit.jsonl with
-        SHA256 of both versions.
+        SHA256 of both versions, only after successful verification.
     """
     original_bytes = path.read_bytes()
     original_hash = _sha256(original_bytes)
@@ -182,9 +235,16 @@ def safe_write(
                     f"({original_line_count} -> {new_line_count}); refusing to write"
                 )
 
+    baseline = (
+        _prepare_redaction_verification(path, verification)
+        if verification is not None
+        else None
+    )
     new_hash = _sha256(new_bytes)
 
     if new_bytes == original_bytes:
+        if verification is not None:
+            _verify_redaction(path, new_bytes, verification, baseline)
         # Idempotent no-op: the file is already in the target (redacted) state
         # — e.g. it was redacted in a previous pass, and re-applying the same
         # redaction changes nothing. Don't create a backup or rewrite; report
@@ -200,9 +260,10 @@ def safe_write(
             unchanged=True,
         )
 
-    # Sidecars are backed up before the replace and removed after it, so a
-    # crash in between leaves the original database recoverable from the pair
-    # of .bak files rather than half-retired.
+    # Backups retain raw main and sidecar bytes. Verified no-backup SQLite
+    # writes instead keep one fsynced, WAL-folded recovery database until all
+    # cleanup succeeds, because independently removing raw recovery files
+    # cannot preserve a complete recovery set across a later unlink failure.
     sidecar_backups: list[Path] = []
 
     backup_path: Path | None = None
@@ -254,6 +315,15 @@ def safe_write(
                 sc_file.write(sidecar.read_bytes())
             sidecar_backups.append(sidecar_bak)
 
+    recovery_path: Path | None = None
+    sqlite_recovery = verification is not None and not backup and bool(sidecars)
+    if verification is not None and not backup:
+        recovery_path = (
+            _prepare_sqlite_recovery(path)
+            if sqlite_recovery
+            else _prepare_recovery(path, original_bytes)
+        )
+
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent),
         prefix=f".{path.name}.",
@@ -277,17 +347,97 @@ def safe_write(
                 backup_path.unlink()
             except OSError:
                 pass
-        for sidecar_bak in sidecar_backups:
+        for stale_backup in [
+            *sidecar_backups,
+            *([recovery_path] if recovery_path is not None else []),
+        ]:
             try:
-                sidecar_bak.unlink()
+                stale_backup.unlink()
             except OSError:
                 pass
         raise
 
-    # The replace landed. Every committed page these sidecars held is already
-    # inside the bytes we just wrote, so they are now stale *and* still hold
-    # pre-redaction plaintext. Retire them, or SQLite replays them on the next
-    # open and the secret comes back.
+    try:
+        _retire_sidecars(path, sidecars)
+    except SafetyError as sidecar_error:
+        if sqlite_recovery and recovery_path is not None:
+            raise SafetyError(
+                "Redaction could not retire stale SQLite sidecars; complete "
+                f"recovery copy retained at {recovery_path}"
+            ) from sidecar_error
+        raise
+
+    if verification is not None:
+        try:
+            _verify_redaction(path, new_bytes, verification, baseline)
+            _retire_sidecars(path, verification.source.sidecars(path))
+        except Exception as verification_error:
+            try:
+                if recovery_path is not None:
+                    if sqlite_recovery:
+                        _restore_sqlite_recovery(
+                            path,
+                            recovery_path,
+                            verification.source.sidecars(path),
+                        )
+                    else:
+                        _restore_prepared_recovery(path, recovery_path)
+                elif backup_path is not None:
+                    _restore_from_backup(path, backup_path)
+                    _restore_sidecars_from_backups(sidecars, sidecar_backups)
+                else:  # pragma: no cover - guarded by recovery preparation
+                    raise SafetyError("No recovery copy is available")
+            except SafetyError as rollback_error:
+                raise SafetyError(
+                    "Post-write redaction verification failed and rollback "
+                    f"failed; {rollback_error}"
+                ) from rollback_error
+            raise SafetyError(
+                "Post-write redaction verification failed; original content "
+                "was restored"
+            ) from verification_error
+
+    if recovery_path is not None:
+        try:
+            recovery_path.unlink()
+        except OSError as cleanup_error:
+            try:
+                if sqlite_recovery:
+                    if verification is None:
+                        raise SafetyError(
+                            "SQLite recovery verification state is unavailable"
+                        )
+                    _restore_sqlite_recovery(
+                        path,
+                        recovery_path,
+                        verification.source.sidecars(path),
+                    )
+                else:
+                    _restore_prepared_recovery(path, recovery_path)
+            except SafetyError as rollback_error:
+                raise SafetyError(
+                    "Verified redaction could not remove its recovery copy; "
+                    f"{rollback_error}"
+                ) from rollback_error
+            raise SafetyError(
+                "Verified redaction was rolled back because its recovery copy "
+                "could not be removed"
+            ) from cleanup_error
+
+    record = WriteRecord(
+        path=path,
+        original_sha256=original_hash,
+        new_sha256=new_hash,
+        backup=backup_path,
+        bytes_before=len(original_bytes),
+        bytes_after=len(new_bytes),
+    )
+    _append_audit(record)
+    return record
+
+
+def _retire_sidecars(path: Path, sidecars: Iterable[Path]) -> None:
+    """Remove stale SQLite sidecars after their pages were folded into ``path``."""
     for sidecar in sidecars:
         try:
             sidecar.unlink()
@@ -300,16 +450,328 @@ def safe_write(
                 f"delete it manually."
             ) from e
 
-    record = WriteRecord(
-        path=path,
-        original_sha256=original_hash,
-        new_sha256=new_hash,
-        backup=backup_path,
-        bytes_before=len(original_bytes),
-        bytes_after=len(new_bytes),
+
+def _prepare_redaction_verification(
+    path: Path,
+    verification: RedactionVerification,
+) -> _VerificationBaseline:
+    """Capture the only residual matches a verified write may retain."""
+    from .scanner import DETECTOR_IDS, RULES
+
+    known_rules = {rule for rule, _display, _pattern in RULES}
+    known_rules.update(DETECTOR_IDS)
+    fired_rules = {target.rule for target in verification.targets}
+    if not verification.targets or not fired_rules <= known_rules:
+        raise SafetyError(
+            "Redaction verification has no valid fired detector set; refusing to write"
+        )
+
+    before = _decoded_strings(
+        verification.source,
+        path,
+        _verification_target_keypaths(verification),
     )
-    _append_audit(record)
-    return record
+    expected: dict[object, str] = {}
+    selected: set[tuple[object, str, tuple[int, int]]] = set()
+    for target in verification.targets:
+        location = (target.line, target.keypath)
+        actual = before.by_location.get(location)
+        if actual is None or actual[1] not in {
+            target.original,
+            target.replacement,
+        }:
+            raise SafetyError(
+                "Redaction verification could not confirm selected source "
+                "content; refusing to write"
+            )
+        identity, value = actual
+        already_replaced = value == target.replacement
+        prior = expected.setdefault(identity, target.replacement)
+        if prior != target.replacement:
+            raise SafetyError(
+                "Redaction verification has conflicting selected locations; "
+                "refusing to write"
+            )
+        matches = _fired_matches(target.original, {target.rule})
+        if not any(
+            rule == target.rule
+            and span == target.span
+            and value == target.original[span[0] : span[1]]
+            for rule, value, span in matches
+        ):
+            raise SafetyError(
+                "Redaction verification could not confirm a selected detector "
+                "match; refusing to write"
+            )
+        if not already_replaced:
+            selected.add((identity, target.rule, target.span))
+
+    allowed: Counter[tuple[object, str, str]] = Counter()
+    for identity, value in before.by_identity.items():
+        for rule, match_value, span in _fired_matches(value, fired_rules):
+            if (identity, rule, span) not in selected:
+                allowed[(identity, rule, match_value)] += 1
+    return _VerificationBaseline(before.by_identity, expected, allowed)
+
+
+def _verify_redaction(
+    path: Path,
+    new_bytes: bytes,
+    verification: RedactionVerification,
+    baseline: _VerificationBaseline | None,
+) -> None:
+    """Prove persisted content preserves identities and removes selected matches."""
+    if baseline is None:
+        raise SafetyError("Redaction verification state is unavailable")
+    try:
+        if path.read_bytes() != new_bytes:
+            raise SafetyError("Persisted bytes differ from the redaction output")
+        after = _decoded_strings(
+            verification.source,
+            path,
+            _verification_target_keypaths(verification),
+        )
+        if after.by_identity.keys() != baseline.values.keys():
+            raise SafetyError(
+                "Redaction verification could not re-read every logical source location"
+            )
+        for identity, replacement in baseline.expected.items():
+            if after.by_identity.get(identity) != replacement:
+                raise SafetyError(
+                    "Redaction verification could not confirm an intended replacement"
+                )
+
+        fired_rules = {target.rule for target in verification.targets}
+        residuals: Counter[tuple[object, str, str]] = Counter(
+            (identity, rule, value)
+            for identity, text in after.by_identity.items()
+            for rule, value, _span in _fired_matches(text, fired_rules)
+        )
+        if residuals - baseline.allowed:
+            raise SafetyError(
+                "Redaction verification found a selected or new residual detector match"
+            )
+    except SafetyError:
+        raise
+    except Exception as e:
+        raise SafetyError(
+            "Redaction verification could not read or scan persisted content"
+        ) from e
+
+
+def _verification_target_keypaths(
+    verification: RedactionVerification,
+) -> frozenset[tuple[object, ...]]:
+    """Return the logical fields selected for semantic verification."""
+    return frozenset(target.keypath for target in verification.targets)
+
+
+def _decoded_strings(
+    source: Source,
+    path: Path,
+    target_keypaths: frozenset[tuple[object, ...]],
+) -> _DecodedStrings:
+    """Decode source strings and index them by location and stable identity."""
+    try:
+        entries = list(source.iter_strings(path))
+        by_location: dict[tuple[int, tuple[object, ...]], tuple[object, str]] = {}
+        for line, keypath, value in entries:
+            location = (line, tuple(keypath))
+            if location in by_location or not isinstance(value, str):
+                raise SafetyError(
+                    "Redaction verification received invalid logical source locations"
+                )
+            by_location[location] = (None, value)
+
+        identities = source.verification_identities(
+            path,
+            entries,
+            target_keypaths,
+        )
+        if len(identities) != len(entries):
+            raise SafetyError(
+                "Redaction verification received incomplete source identities"
+            )
+        by_identity: dict[object, str] = {}
+        for (line, keypath, value), identity in zip(entries, identities):
+            location = (line, tuple(keypath))
+            if identity in by_identity:
+                raise SafetyError(
+                    "Redaction verification found ambiguous stable source identities"
+                )
+            by_location[location] = (identity, value)
+            by_identity[identity] = value
+        return _DecodedStrings(by_location, by_identity)
+    except SafetyError:
+        raise
+    except Exception as e:
+        raise SafetyError("Redaction verification could not read source content") from e
+
+
+def _fired_matches(
+    text: str,
+    fired_rules: set[str],
+) -> list[tuple[str, str, tuple[int, int]]]:
+    """Run every selected detector directly, without scanner overlap dedupe."""
+    try:
+        from .mnemonic import detect_mnemonics
+        from .scanner import RULES
+
+        matches = [
+            (rule, match.group(0), (match.start(), match.end()))
+            for rule, _display, pattern in RULES
+            if rule in fired_rules
+            for match in pattern.finditer(text)
+        ]
+        if "bip39-mnemonic" in fired_rules:
+            matches.extend(
+                (finding.rule, finding.value, finding.span)
+                for finding in detect_mnemonics(text)
+            )
+        return matches
+    except Exception as e:
+        raise SafetyError("Redaction verification could not run fired detectors") from e
+
+
+def _prepare_recovery(path: Path, original_bytes: bytes) -> Path:
+    """Persist the no-backup rollback copy before replacing the original."""
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".recover",
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "wb") as f:
+            f.write(original_bytes)
+            f.flush()
+            os.fsync(f.fileno())
+        return tmp_path
+    except Exception as e:
+        if tmp_path is not None and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise SafetyError(
+            "Could not persist recovery copy before redaction; refusing to write"
+        ) from e
+
+
+def _prepare_sqlite_recovery(path: Path) -> Path:
+    """Create and fsync a standalone SQLite rollback snapshot before writing."""
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".recover",
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        source = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            snapshot: sqlite3.Connection | None = None
+            try:
+                snapshot = sqlite3.connect(str(tmp_path))
+                source.backup(snapshot)
+            finally:
+                if snapshot is not None:
+                    snapshot.close()
+        finally:
+            source.close()
+        sync_fd = os.open(str(tmp_path), os.O_RDWR)
+        try:
+            os.fsync(sync_fd)
+        finally:
+            os.close(sync_fd)
+        return tmp_path
+    except Exception as e:
+        if tmp_path is not None:
+            for artifact in (
+                tmp_path,
+                tmp_path.with_name(tmp_path.name + "-wal"),
+                tmp_path.with_name(tmp_path.name + "-shm"),
+            ):
+                try:
+                    artifact.unlink()
+                except OSError:
+                    pass
+        raise SafetyError(
+            "Could not persist SQLite recovery snapshot before redaction; "
+            "refusing to write"
+        ) from e
+
+
+def _restore_prepared_recovery(path: Path, recovery_path: Path) -> None:
+    """Atomically restore a persisted no-backup recovery copy."""
+    try:
+        os.replace(recovery_path, path)
+    except Exception as e:
+        raise SafetyError(f"complete recovery copy retained at {recovery_path}") from e
+
+
+def _restore_sqlite_recovery(
+    path: Path,
+    recovery_path: Path,
+    sidecars: Iterable[Path],
+) -> None:
+    """Retire stale sidecars before atomically promoting a folded snapshot."""
+    try:
+        _retire_sidecars(path, sidecars)
+        _restore_prepared_recovery(path, recovery_path)
+    except SafetyError as e:
+        raise SafetyError(f"complete recovery copy retained at {recovery_path}") from e
+
+
+def _restore_from_backup(path: Path, backup_path: Path) -> None:
+    """Restore a main file or SQLite sidecar from its retained backup."""
+    try:
+        original_bytes = backup_path.read_bytes()
+    except Exception as e:
+        raise SafetyError(f"backup retained at {backup_path}") from e
+    _restore_original(path, original_bytes, backup_path)
+
+
+def _restore_sidecars_from_backups(
+    sidecars: Sequence[Path],
+    sidecar_backups: Sequence[Path],
+) -> None:
+    """Restore every SQLite sidecar from its paired persistent backup."""
+    if len(sidecars) != len(sidecar_backups):
+        raise SafetyError("SQLite sidecar recovery state is incomplete")
+    for sidecar, sidecar_backup in zip(sidecars, sidecar_backups):
+        _restore_from_backup(sidecar, sidecar_backup)
+
+
+def _restore_original(
+    path: Path,
+    original_bytes: bytes,
+    backup_path: Path,
+) -> None:
+    """Atomically restore backup bytes while retaining recovery evidence."""
+    tmp_path: Path | None = None
+    complete = False
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".restore",
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "wb") as f:
+            f.write(original_bytes)
+            f.flush()
+            os.fsync(f.fileno())
+        complete = True
+        os.replace(tmp_path, path)
+    except Exception as e:
+        if complete and tmp_path is not None and tmp_path.exists():
+            evidence = f"complete recovery copy retained at {tmp_path}"
+        else:
+            evidence = f"backup retained at {backup_path}"
+        raise SafetyError(evidence) from e
 
 
 def _validate_json(content: str) -> None:
