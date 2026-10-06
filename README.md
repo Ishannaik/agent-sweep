@@ -484,12 +484,15 @@ A redactor that corrupts your history leaves you worse off than the leak it's fi
 
 Verification failures after replacement exit nonzero. With backups enabled, the
 `.bak` recovery copy is retained. With `--no-backup`, a non-no-op write first
-writes and syncs temporary recovery copies, then removes them only after verified
-success; the flag does not disable verification or rollback. For SQLite, a
-recovery-cleanup failure restores the main database together with its WAL and SHM.
-If any rollback is incomplete, the error identifies every retained `.recover`
-artifact for manual recovery. A rejection before replacement creates no backup or
-audit record.
+writes and syncs a temporary recovery copy, then removes it only after verified
+success; the flag does not disable verification or rollback. For SQLite with
+WAL/SHM sidecars, that recovery copy is one standalone SQLite snapshot created
+with SQLite's backup API before replacement, so it folds committed WAL pages
+into the snapshot rather than restoring raw sidecar files. On rollback,
+agentsweep retires current sidecars before atomically promoting that snapshot.
+If rollback or cleanup is incomplete, the error identifies the retained
+`.recover` snapshot for manual recovery. A rejection before replacement creates
+no backup or audit record.
 
 SQLite verification derives logical identities from metadata untouched by the
 current redaction transaction, excluding every targeted column in a row, rather

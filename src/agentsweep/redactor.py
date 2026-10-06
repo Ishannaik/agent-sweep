@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import time
 from collections import Counter
@@ -177,10 +178,13 @@ def safe_write(
         `-shm`) are backed up alongside `path` and deleted once the replace
         lands. The caller MUST only pass sidecars whose committed contents
         are already folded into `new_content` — for SQLite that is what
-        `Connection.backup()` does. Deleting them is what makes the
-        redaction stick: a `-wal` left beside a replaced database still
-        holds the pre-redaction plaintext, and SQLite replays it over the
-        new file on the next open, silently restoring the secret.
+        `Connection.backup()` does. A verified no-backup SQLite write first
+        prepares one fsynced, standalone SQLite recovery snapshot; it folds
+        committed sidecar pages into that recovery copy before the replace.
+        Deleting live sidecars is what makes the redaction stick: a `-wal`
+        left beside a replaced database still holds the pre-redaction
+        plaintext, and SQLite replays it over the new file on the next open,
+        silently restoring the secret.
       - Post-write validation (str content), selected by `fmt`:
           "jsonl" — every non-empty line must parse as JSON and the line
                     count must match the original (the default);
@@ -256,11 +260,11 @@ def safe_write(
             unchanged=True,
         )
 
-    # Sidecars must share the main file's recovery state: backup writes
-    # persistent .bak copies, while verified no-backup writes prepare and fsync
-    # ephemeral recovery copies before replacing anything.
+    # Backups retain raw main and sidecar bytes. Verified no-backup SQLite
+    # writes instead keep one fsynced, WAL-folded recovery database until all
+    # cleanup succeeds, because independently removing raw recovery files
+    # cannot preserve a complete recovery set across a later unlink failure.
     sidecar_backups: list[Path] = []
-    sidecar_recoveries: list[tuple[Path, Path]] = []
 
     backup_path: Path | None = None
     if backup:
@@ -312,28 +316,13 @@ def safe_write(
             sidecar_backups.append(sidecar_bak)
 
     recovery_path: Path | None = None
+    sqlite_recovery = verification is not None and not backup and bool(sidecars)
     if verification is not None and not backup:
-        recovery_path = _prepare_recovery(path, original_bytes)
-        try:
-            for sidecar in sidecars:
-                sidecar_recoveries.append(
-                    (sidecar, _prepare_recovery(sidecar, sidecar.read_bytes()))
-                )
-        except Exception as e:
-            for _sidecar, recovery in sidecar_recoveries:
-                try:
-                    recovery.unlink()
-                except OSError:
-                    pass
-            try:
-                recovery_path.unlink()
-            except OSError:
-                pass
-            if isinstance(e, SafetyError):
-                raise
-            raise SafetyError(
-                "Could not persist recovery copy before redaction; refusing to write"
-            ) from e
+        recovery_path = (
+            _prepare_sqlite_recovery(path)
+            if sqlite_recovery
+            else _prepare_recovery(path, original_bytes)
+        )
 
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent),
@@ -361,7 +350,6 @@ def safe_write(
         for stale_backup in [
             *sidecar_backups,
             *([recovery_path] if recovery_path is not None else []),
-            *(recovery for _sidecar, recovery in sidecar_recoveries),
         ]:
             try:
                 stale_backup.unlink()
@@ -369,7 +357,15 @@ def safe_write(
                 pass
         raise
 
-    _retire_sidecars(path, sidecars)
+    try:
+        _retire_sidecars(path, sidecars)
+    except SafetyError as sidecar_error:
+        if sqlite_recovery and recovery_path is not None:
+            raise SafetyError(
+                "Redaction could not retire stale SQLite sidecars; complete "
+                f"recovery copy retained at {recovery_path}"
+            ) from sidecar_error
+        raise
 
     if verification is not None:
         try:
@@ -378,8 +374,14 @@ def safe_write(
         except Exception as verification_error:
             try:
                 if recovery_path is not None:
-                    _restore_prepared_recovery(path, recovery_path)
-                    _restore_prepared_sidecars(sidecar_recoveries)
+                    if sqlite_recovery:
+                        _restore_sqlite_recovery(
+                            path,
+                            recovery_path,
+                            verification.source.sidecars(path),
+                        )
+                    else:
+                        _restore_prepared_recovery(path, recovery_path)
                 elif backup_path is not None:
                     _restore_from_backup(path, backup_path)
                     _restore_sidecars_from_backups(sidecars, sidecar_backups)
@@ -400,11 +402,18 @@ def safe_write(
             recovery_path.unlink()
         except OSError as cleanup_error:
             try:
-                _restore_prepared_recoveries(
-                    path,
-                    recovery_path,
-                    sidecar_recoveries,
-                )
+                if sqlite_recovery:
+                    if verification is None:
+                        raise SafetyError(
+                            "SQLite recovery verification state is unavailable"
+                        )
+                    _restore_sqlite_recovery(
+                        path,
+                        recovery_path,
+                        verification.source.sidecars(path),
+                    )
+                else:
+                    _restore_prepared_recovery(path, recovery_path)
             except SafetyError as rollback_error:
                 raise SafetyError(
                     "Verified redaction could not remove its recovery copy; "
@@ -414,16 +423,6 @@ def safe_write(
                 "Verified redaction was rolled back because its recovery copy "
                 "could not be removed"
             ) from cleanup_error
-
-    for _sidecar, sidecar_recovery in sidecar_recoveries:
-        try:
-            sidecar_recovery.unlink()
-        except OSError as e:
-            raise SafetyError(
-                "Verified redaction could not remove its SQLite sidecar "
-                f"recovery copy; complete recovery copy retained at "
-                f"{sidecar_recovery}"
-            ) from e
 
     record = WriteRecord(
         path=path,
@@ -660,11 +659,69 @@ def _prepare_recovery(path: Path, original_bytes: bytes) -> Path:
         ) from e
 
 
+def _prepare_sqlite_recovery(path: Path) -> Path:
+    """Create and fsync a standalone SQLite rollback snapshot before writing."""
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".recover",
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        source = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            snapshot: sqlite3.Connection | None = None
+            try:
+                snapshot = sqlite3.connect(str(tmp_path))
+                source.backup(snapshot)
+            finally:
+                if snapshot is not None:
+                    snapshot.close()
+        finally:
+            source.close()
+        sync_fd = os.open(str(tmp_path), os.O_RDWR)
+        try:
+            os.fsync(sync_fd)
+        finally:
+            os.close(sync_fd)
+        return tmp_path
+    except Exception as e:
+        if tmp_path is not None:
+            for artifact in (
+                tmp_path,
+                tmp_path.with_name(tmp_path.name + "-wal"),
+                tmp_path.with_name(tmp_path.name + "-shm"),
+            ):
+                try:
+                    artifact.unlink()
+                except OSError:
+                    pass
+        raise SafetyError(
+            "Could not persist SQLite recovery snapshot before redaction; "
+            "refusing to write"
+        ) from e
+
+
 def _restore_prepared_recovery(path: Path, recovery_path: Path) -> None:
     """Atomically restore a persisted no-backup recovery copy."""
     try:
         os.replace(recovery_path, path)
     except Exception as e:
+        raise SafetyError(f"complete recovery copy retained at {recovery_path}") from e
+
+
+def _restore_sqlite_recovery(
+    path: Path,
+    recovery_path: Path,
+    sidecars: Iterable[Path],
+) -> None:
+    """Retire stale sidecars before atomically promoting a folded snapshot."""
+    try:
+        _retire_sidecars(path, sidecars)
+        _restore_prepared_recovery(path, recovery_path)
+    except SafetyError as e:
         raise SafetyError(f"complete recovery copy retained at {recovery_path}") from e
 
 
@@ -686,47 +743,6 @@ def _restore_sidecars_from_backups(
         raise SafetyError("SQLite sidecar recovery state is incomplete")
     for sidecar, sidecar_backup in zip(sidecars, sidecar_backups):
         _restore_from_backup(sidecar, sidecar_backup)
-
-
-def _restore_prepared_sidecars(
-    sidecar_recoveries: Sequence[tuple[Path, Path]],
-) -> None:
-    """Restore SQLite sidecars from persisted no-backup recovery copies."""
-    for sidecar, recovery_path in sidecar_recoveries:
-        _restore_prepared_recovery(sidecar, recovery_path)
-
-
-def _restore_prepared_recoveries(
-    path: Path,
-    recovery_path: Path,
-    sidecar_recoveries: Sequence[tuple[Path, Path]],
-) -> None:
-    """Attempt every prepared restore and name each recovery copy still retained.
-
-    Continue after individual restore failures so every recoverable artifact is
-    either restored or exposed to the caller.
-    """
-    recoveries = ((path, recovery_path), *sidecar_recoveries)
-    failures: list[SafetyError] = []
-    for original, prepared_recovery in recoveries:
-        try:
-            _restore_prepared_recovery(original, prepared_recovery)
-        except SafetyError as e:
-            failures.append(e)
-    if failures:
-        retained = [
-            prepared_recovery
-            for _original, prepared_recovery in recoveries
-            if prepared_recovery.exists()
-        ]
-        paths = ", ".join(str(prepared_recovery) for prepared_recovery in retained)
-        if paths:
-            raise SafetyError(
-                f"rollback was incomplete; complete recovery copies retained at {paths}"
-            ) from failures[0]
-        raise SafetyError(
-            "rollback was incomplete; no recovery copy remains"
-        ) from failures[0]
 
 
 def _restore_original(

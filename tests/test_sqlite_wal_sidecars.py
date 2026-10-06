@@ -92,13 +92,17 @@ def _redact(db: Path, *, backup: bool = True):
     )
 
 
-def _block_main_recovery_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the verified no-backup cleanup branch without changing permissions."""
+def _block_main_recovery_cleanup(
+    monkeypatch: pytest.MonkeyPatch, snapshot_copy: Path | None = None
+) -> None:
+    """Force snapshot cleanup failure while optionally preserving its test copy."""
     real_unlink = Path.unlink
 
     def fail_main_recovery_unlink(path: Path, *args, **kwargs) -> None:
-        """Fail only removal of the database's prepared recovery copy."""
+        """Fail only removal of the database's prepared recovery snapshot."""
         if path.suffix == ".recover" and path.name.startswith(".opencode.db."):
+            if snapshot_copy is not None:
+                snapshot_copy.write_bytes(path.read_bytes())
             raise OSError("synthetic main recovery cleanup failure")
         real_unlink(path, *args, **kwargs)
 
@@ -246,86 +250,98 @@ def test_failed_write_leaves_sidecars_and_their_backups_alone(
     assert not (d / "opencode.db.bak").exists()
 
 
-def test_recovery_cleanup_failure_restores_wal_only_rows_without_audit(
+def _read_original_rows(db: Path, *, standalone: bool = False) -> tuple[int, str]:
+    """Read fixture rows, using immutable access for standalone snapshots."""
+    uri = f"{db.as_uri()}?mode=ro"
+    if standalone:
+        uri += "&immutable=1"
+    con = sqlite3.connect(uri, uri=True)
+    try:
+        count = con.execute("SELECT count(*) FROM part").fetchone()[0]
+        (content,) = con.execute(
+            "SELECT content FROM part WHERE id='secret-row'"
+        ).fetchone()
+        return count, json.loads(content)["text"]
+    finally:
+        con.close()
+
+
+def test_recovery_snapshot_stands_alone_and_restores_wal_only_rows(
     wal_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A failed main recovery cleanup restores the database and both sidecars."""
+    """A cleanup failure promotes the folded snapshot without an audit record."""
     audit = wal_db.parent / "audit.jsonl"
+    captured_snapshot = wal_db.parent / "captured-recovery.db"
     monkeypatch.setattr(redactor, "audit_path", lambda: audit)
-    _block_main_recovery_cleanup(monkeypatch)
+    _block_main_recovery_cleanup(monkeypatch, captured_snapshot)
 
     with pytest.raises(redactor.SafetyError, match="was rolled back"):
         _redact(wal_db, backup=False)
 
     assert not audit.exists(), "a rolled-back write must not report success"
-    assert (wal_db.parent / "opencode.db-wal").is_file()
-    assert (wal_db.parent / "opencode.db-shm").is_file()
-    con = sqlite3.connect(str(wal_db))
-    try:
-        assert con.execute("SELECT count(*) FROM part").fetchone()[0] == 201
-        (content,) = con.execute(
-            "SELECT content FROM part WHERE id='secret-row'"
-        ).fetchone()
-    finally:
-        con.close()
-    assert json.loads(content)["text"] == SECRET
+    assert not (captured_snapshot.parent / f"{captured_snapshot.name}-wal").exists()
+    assert not (captured_snapshot.parent / f"{captured_snapshot.name}-shm").exists()
+    assert _read_original_rows(captured_snapshot, standalone=True) == (201, SECRET)
+    assert _read_original_rows(wal_db, standalone=True) == (201, SECRET)
+    assert not (wal_db.parent / "opencode.db-wal").exists()
+    assert not (wal_db.parent / "opencode.db-shm").exists()
 
 
-def test_recovery_rollback_reports_every_retained_sidecar_copy(
+def test_verification_restore_failure_retains_complete_sqlite_snapshot(
     wal_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Failed restores retain and enumerate every prepared main and sidecar copy."""
+    """A failed snapshot promotion leaves one independently usable recovery DB."""
     audit = wal_db.parent / "audit.jsonl"
-    sidecars = (
-        wal_db.with_name("opencode.db-wal"),
-        wal_db.with_name("opencode.db-shm"),
-    )
-    originals = {
-        wal_db: wal_db.read_bytes(),
-        sidecars[0]: sidecars[0].read_bytes(),
-    }
-    recovery_sources = (wal_db, *sidecars)
     real_replace = os.replace
-    restored_targets: set[str] = set()
 
-    def fail_prepared_recoveries(src, dst, *args, **kwargs) -> None:
-        """Leave every prepared recovery in place while recording each restore."""
+    def fail_verification(*args, **kwargs) -> None:
+        """Send the write through post-verification SQLite snapshot recovery."""
+        raise redactor.SafetyError("synthetic verification failure")
+
+    def fail_snapshot_promotion(src, dst, *args, **kwargs) -> None:
+        """Fail only atomic promotion of the prepared SQLite recovery snapshot."""
         if Path(src).suffix == ".recover":
-            restored_targets.add(Path(dst).name)
-            raise OSError("synthetic prepared recovery restore failure")
+            raise OSError("synthetic recovery promotion failure")
         real_replace(src, dst, *args, **kwargs)
 
     monkeypatch.setattr(redactor, "audit_path", lambda: audit)
-    monkeypatch.setattr(redactor.os, "replace", fail_prepared_recoveries)
-    _block_main_recovery_cleanup(monkeypatch)
+    monkeypatch.setattr(redactor, "_verify_redaction", fail_verification)
+    monkeypatch.setattr(redactor.os, "replace", fail_snapshot_promotion)
 
-    with pytest.raises(redactor.SafetyError, match="rollback was incomplete") as exc:
+    with pytest.raises(redactor.SafetyError, match="rollback failed") as exc:
         _redact(wal_db, backup=False)
 
-    message = str(exc.value)
-    assert restored_targets == {path.name for path in recovery_sources}
-    recoveries: dict[Path, Path] = {}
-    for original in recovery_sources:
-        paths = list(wal_db.parent.glob(f".{original.name}.*.recover"))
-        assert len(paths) == 1
-        recoveries[original] = paths[0]
-        assert str(paths[0]) in message
-    for original, bytes_before in originals.items():
-        assert recoveries[original].read_bytes() == bytes_before
-
-    recovered = wal_db.with_name("recovered.db")
-    for original, recovery in recoveries.items():
-        suffix = original.name.removeprefix(wal_db.name)
-        target = recovered.with_name(f"{recovered.name}{suffix}")
-        target.write_bytes(recovery.read_bytes())
-    con = sqlite3.connect(str(recovered))
-    try:
-        assert con.execute("SELECT count(*) FROM part").fetchone()[0] == 201
-        (content,) = con.execute(
-            "SELECT content FROM part WHERE id='secret-row'"
-        ).fetchone()
-    finally:
-        con.close()
-    assert json.loads(content)["text"] == SECRET
-    assert "was rolled back" not in message
+    snapshots = list(wal_db.parent.glob(".opencode.db.*.recover"))
+    assert len(snapshots) == 1
+    assert str(snapshots[0]) in str(exc.value)
+    assert _read_original_rows(snapshots[0], standalone=True) == (201, SECRET)
+    assert not snapshots[0].with_name(f"{snapshots[0].name}-wal").exists()
+    assert not snapshots[0].with_name(f"{snapshots[0].name}-shm").exists()
     assert not audit.exists(), "an incomplete rollback must not report success"
+
+
+def test_sqlite_snapshot_preparation_failure_writes_nothing(
+    wal_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A snapshot preparation error leaves the original WAL database untouched."""
+    audit = wal_db.parent / "audit.jsonl"
+    main_before = wal_db.read_bytes()
+    wal = wal_db.parent / "opencode.db-wal"
+    wal_before = wal.read_bytes()
+
+    def fail_snapshot_preparation(path: Path) -> Path:
+        """Reject snapshot persistence before the replacement tempfile is made."""
+        raise redactor.SafetyError("synthetic SQLite snapshot preparation failure")
+
+    monkeypatch.setattr(redactor, "audit_path", lambda: audit)
+    monkeypatch.setattr(redactor, "_prepare_sqlite_recovery", fail_snapshot_preparation)
+
+    with pytest.raises(redactor.SafetyError, match="snapshot preparation failure"):
+        _redact(wal_db, backup=False)
+
+    assert wal_db.read_bytes() == main_before
+    assert wal.read_bytes() == wal_before
+    assert (wal_db.parent / "opencode.db-shm").is_file()
+    assert _read_original_rows(wal_db) == (201, SECRET)
+    assert not list(wal_db.parent.glob(".opencode.db.*.recover"))
+    assert not audit.exists(), "a pre-write refusal must not report success"
