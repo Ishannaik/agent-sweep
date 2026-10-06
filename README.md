@@ -80,7 +80,7 @@ flowchart LR
     C -- "none" --> D("✅ CLEAN\nexit 0")
     C -- "found" --> E("📋 FINDINGS\nshow report\nexit 1")
     E -. "scan only" .-> F("⚠️ ROTATE\nkeys still live")
-    E -- "type REDACT" --> G("✏️ REDACT\natomic write · .bak backup\npost-write JSON validation")
+    E -- "type REDACT" --> G("✏️ REDACT\natomic write · .bak backup\nstructure + detection verification")
     G --> H("🔑 ROTATE\nper-provider\nrevocation links")
 
     style A fill:#1e3a5f,color:#fff,stroke:#2d5986
@@ -93,7 +93,7 @@ flowchart LR
     style H fill:#2d1e4a,color:#fff,stroke:#5a3a8b
 ```
 
-Eight safety invariants protect every write: atomic replace, mandatory `.bak` backup, symlink rejection, mtime and process gates, and post-write JSONL validation. `agentsweep undo` restores from backups.
+Every redaction uses atomic replacement, a `.bak` backup by default, structural validation, and verification of the bytes persisted to disk. Symlink rejection and mtime and process gates protect against unsafe writes. Failed verification restores the original instead of reporting success. `agentsweep undo` restores successful redactions from their backups.
 
 ## Install
 
@@ -248,6 +248,7 @@ menu and behaves as documented below.
 | `agentsweep purge` | Delete all `.bak` backups once the leaked keys are rotated (permanent, `undo` stops working) |
 | `agentsweep list-sources` | List every supported agent and show which ones have history on this machine (read-only) |
 | `agentsweep explain <rule-id>` | Print one detection rule's pattern and its rotation guidance (read-only) |
+| `agentsweep selftest` | Check the installed scanner against four synthetic positive controls without scanning real histories |
 | `agentsweep --version` / `-V` | Print the installed version |
 | `agentsweep --update` | Check PyPI for a newer release |
 
@@ -347,6 +348,9 @@ agentsweep scan --no-ignore
 # Plain output with no ANSI colors/styling (also honored via NO_COLOR=1)
 agentsweep scan --no-color
 NO_COLOR=1 agentsweep scan
+
+# Require the scanner's positive controls to pass before scanning
+agentsweep scan --verify-scanner --json
 ```
 
 #### SARIF in CI
@@ -397,7 +401,60 @@ agentsweep fix --allow-production --redact-with "***{rule}***"
 
 # Combine: non-interactive JSON-mode redaction against a custom root
 agentsweep fix --root ~/history-copy --json
+
+# Verify the scanner before redacting a copy of your history
+agentsweep fix --root ~/history-copy --verify-scanner
 ```
+
+### Scanner self-test
+
+```bash
+agentsweep selftest
+agentsweep selftest --json
+agentsweep selftest --root ~/history-copy
+agentsweep selftest --only-rule github-pat
+agentsweep selftest --exclude-rule aws-access-key
+```
+
+The self-test creates a temporary Claude Code JSONL history containing synthetic
+Anthropic, GitHub PAT, AWS access-key, and BIP-39 controls. It runs normal file
+discovery, parsing, detection, and ignore filtering, then removes the temporary
+files. It does not scan real histories, write an audit entry, or contact the network.
+Exit status is **0** when every active control exactly matches its expected
+metadata and count, or **2** on any mismatch or error. `--json` output is
+machine-readable and secret-free.
+
+`--root` selects the ignore context, not a directory to scan. The self-test reads
+`.agentsweepignore` from that root and the current directory; without `--root`,
+it uses the current directory. Suppressing an active control makes the check fail.
+`--no-ignore` explicitly tests without those suppressions. `--only-rule` and
+`--exclude-rule` are mutually exclusive and apply the same rule filters as a
+scan; they select the active controls, and a filter that leaves no controls
+fails closed.
+
+Add `--verify-scanner` to `scan`, `fix`, or legacy `--fix` to require the same
+preflight before any scan or write, including cached and direct fixes. A failed
+check exits **2**, also guards interactive redaction, and `--force` cannot bypass
+it. These four positive controls check the shared scanner path, **not every
+detection rule or source adapter**.
+
+For an existing pre-commit scan command, add `--verify-scanner`. To run the
+positive control alone with [pre-commit](https://pre-commit.com/), install
+`agentsweep` in the hook's environment and add this local hook:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: agentsweep-selftest
+        name: AgentSweep scanner self-test
+        entry: agentsweep selftest
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+This hook checks scanner health; it does not scan staged files for secrets.
 
 ### Undo flags
 
@@ -415,7 +472,7 @@ A redactor that corrupts your history leaves you worse off than the leak it's fi
 
 1. **Redaction happens in parsed JSON, not on raw bytes.** Secrets are replaced as string *values* inside the parsed structure, then re-serialized. Structural damage is impossible by construction.
 2. **Atomic writes.** Every rewrite goes: temp file → `fsync()` → `os.replace()` over the original. A crash at any instant leaves either the complete old file or the complete new file, never a torn write.
-3. **Post-write validation.** Before committing, the new content must pass a format-aware check. JSONL: every non-empty line parses as JSON and the line count matches the original. Whole-file JSON: the document parses. Markdown/plaintext: the line count matches the original. SQLite: the rewritten copy passes `PRAGMA integrity_check`. If the check fails, the write aborts and the original is untouched.
+3. **Structural and effectiveness checks.** Before replacement, JSONL must parse with its original line count, whole-file JSON must parse, and plaintext must retain its line count. SQLite adapters validate their rewritten copy with `PRAGMA integrity_check`. After replacement, agentsweep reads the persisted bytes and decoded strings, checks the intended replacements, and reruns the detectors that fired. Unexpected remaining matches or unreadable content cause an error and atomic restoration of the original. Pre-existing ignored or unselected occurrences remain allowed only at their original stable identities and counts. A failed write is never recorded as a successful redaction.
 4. **`.bak` backup by default.** Created owner-readable only (mode `0600`) since it holds the pre-redaction secrets; refuses to run if a `.bak` already exists (so prior backups can't be clobbered).
 5. **Path containment.** Refuses any target that doesn't resolve inside one of the source's history trees (e.g. Windsurf's User dir and its `~/.codeium/windsurf/memories/`).
 6. **Symlink rejection.** Refuses symlinks outright.
@@ -423,6 +480,18 @@ A redactor that corrupts your history leaves you worse off than the leak it's fi
 8. **Running-process check.** Refuses if a Claude Code process appears to be running. `--force` overrides.
 9. **Alpha-stage production gate.** `--fix` against the default `~/.claude/projects/` root requires `--allow-production` until v1.0.
 10. **Audit log.** Every write appends SHA256 before/after and path to `~/.agentsweep/audit.jsonl`.
+
+Verification failures after replacement exit nonzero. With backups enabled, the
+`.bak` recovery copy is retained. With `--no-backup`, a non-no-op write first
+writes and syncs a temporary recovery copy, then removes it after verified
+success; the flag does not disable verification or rollback. A rejection before
+replacement creates no backup or audit record. If restoration itself fails, the
+error identifies the retained recovery file for manual intervention.
+
+SQLite verification derives logical identities from metadata untouched by the
+current redaction transaction, excluding every targeted column in a row, rather
+than physical rowids, which can change during `VACUUM`. If those identities are
+ambiguous, the write is refused rather than guessing which row was redacted.
 
 ## Recovery
 

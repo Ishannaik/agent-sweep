@@ -50,6 +50,7 @@ from ._helpers import (
     _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
+    _sqlite_verification_identities,
 )
 from ._vscode import _VSCodeSqliteSource, _vscode_appdata_base
 
@@ -148,6 +149,19 @@ class _GenericSqliteSource(Source):
 
     def sidecars(self, path: Path) -> list[Path]:
         return sqlite_sidecars(path)
+
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        return _sqlite_verification_identities(
+            path,
+            entries,
+            self._sqlite_text_columns,
+            target_keypaths,
+        )
 
 
 # ── SQLite agents ─────────────────────────────────────────────────────────────

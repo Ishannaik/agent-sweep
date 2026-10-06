@@ -22,6 +22,7 @@ from ._helpers import (
     _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
+    _sqlite_verification_identities,
 )
 
 
@@ -124,6 +125,19 @@ class _VSCodeSqliteSource(Source):
     def sidecars(self, path: Path) -> list[Path]:
         return sqlite_sidecars(path)
 
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        return _sqlite_verification_identities(
+            path,
+            entries,
+            self._sqlite_text_columns,
+            target_keypaths,
+        )
+
 
 class CursorSource(_VSCodeSqliteSource):
     """Cursor IDE (Anysphere) — history in state.vscdb files under the Cursor
@@ -187,6 +201,21 @@ class CursorSource(_VSCodeSqliteSource):
             return _apply_jsonl_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
 
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        if path.suffix == ".jsonl":
+            return Source.verification_identities(
+                self,
+                path,
+                entries,
+                target_keypaths,
+            )
+        return super().verification_identities(path, entries, target_keypaths)
+
 
 class WindsurfSource(_VSCodeSqliteSource):
     """Windsurf IDE (Codeium / Cascade) — state.vscdb SQLite files under the
@@ -245,6 +274,21 @@ class WindsurfSource(_VSCodeSqliteSource):
         if path.suffix == ".md":
             return _apply_plaintext_redactions(path, redactions)
         return super().apply_redactions(path, redactions)
+
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        if path.suffix == ".md":
+            return Source.verification_identities(
+                self,
+                path,
+                entries,
+                target_keypaths,
+            )
+        return super().verification_identities(path, entries, target_keypaths)
 
     def content_format(self, path: Path) -> str:
         # .md memories are plaintext; .vscdb redactions return

@@ -21,7 +21,11 @@ from pathlib import Path
 
 import pytest
 
-from agentsweep.redactor import safe_write
+from agentsweep.redactor import (
+    RedactionTarget,
+    RedactionVerification,
+    safe_write,
+)
 from agentsweep.sources._core import OpenCodeSource
 
 SECRET = "sk-ant-api03-" + "A" * 40  # noqa: S105 — synthetic, matches no real key
@@ -63,13 +67,26 @@ def _redact(db: Path, *, backup: bool = True):
     hits = [(ln, kp, v) for ln, kp, v in source.iter_strings(db) if SECRET in v]
     assert len(hits) == 1, f"scan should find the secret through the WAL, got {hits}"
     ln, kp, val = hits[0]
-    new_bytes = source.apply_redactions(db, [(ln, kp, val.replace(SECRET, REDACTED))])
+    replacement = val.replace(SECRET, REDACTED)
     return safe_write(
         db,
-        new_bytes,
+        source.apply_redactions(db, [(ln, kp, replacement)]),
         backup=backup,
         fmt=source.content_format(db),
         sidecars=source.sidecars(db),
+        verification=RedactionVerification(
+            source=source,
+            targets=(
+                RedactionTarget(
+                    line=ln,
+                    keypath=tuple(kp),
+                    original=val,
+                    replacement=replacement,
+                    rule="anthropic",
+                    span=(val.index(SECRET), val.index(SECRET) + len(SECRET)),
+                ),
+            ),
+        ),
     )
 
 

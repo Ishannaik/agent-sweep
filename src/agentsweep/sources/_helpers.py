@@ -44,6 +44,114 @@ def sqlite_sidecars(db: Path) -> list[Path]:
     return [p for p in (Path(f"{db}-wal"), Path(f"{db}-shm")) if p.is_file()]
 
 
+def _sqlite_verification_identities(
+    path: Path,
+    entries: list[tuple[int, KeyPath, str]],
+    columns_fn,
+    target_keypaths: frozenset[tuple[object, ...]],
+) -> list[object]:
+    """Batch stable identities for verification after SQLite VACUUM.
+
+    Physical rowids are not stable across VACUUM. Identities therefore use
+    the table, rewritten column, nested JSON path, and the row's metadata
+    excluding every column targeted in this transaction. An empty metadata
+    tuple is safe for a singleton logical location; redactor.py rejects any
+    resulting duplicate identity.
+    """
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.Error as e:
+        raise SafetyError("Cannot open SQLite source for redaction verification") from e
+    try:
+        allowed = set(columns_fn(con))
+        targeted_columns: dict[str, set[str]] = {}
+        for target_keypath in target_keypaths:
+            if (
+                len(target_keypath) < 3
+                or not isinstance(target_keypath[0], str)
+                or not isinstance(target_keypath[2], str)
+                or (target_keypath[0], target_keypath[2]) not in allowed
+            ):
+                raise SafetyError(
+                    "SQLite redaction target has an unverifiable location"
+                )
+            targeted_columns.setdefault(target_keypath[0], set()).add(target_keypath[2])
+
+        grouped: dict[str, list[tuple[int, KeyPath, str]]] = {}
+        for entry in entries:
+            _line, keypath, _value = entry
+            if (
+                len(keypath) < 3
+                or not isinstance(keypath[0], str)
+                or not isinstance(keypath[1], int)
+                or not isinstance(keypath[2], str)
+                or (keypath[0], keypath[2]) not in allowed
+            ):
+                raise SafetyError(
+                    "SQLite source yielded an unverifiable redaction location"
+                )
+            grouped.setdefault(keypath[0], []).append(entry)
+
+        identities_by_location: dict[tuple[int, tuple[object, ...]], object] = {}
+        for table, table_entries in grouped.items():
+            quoted_table = _quote_ident(table)
+            columns = [
+                row[1] for row in con.execute(f"PRAGMA table_info({quoted_table})")
+            ]
+            immutable = [
+                column
+                for column in columns
+                if column not in targeted_columns.get(table, set())
+            ]
+            select_columns = ", ".join(_quote_ident(column) for column in immutable)
+            rows: dict[int, tuple[object, ...]] = {}
+            rowids = sorted({entry[1][1] for entry in table_entries})
+            for start in range(0, len(rowids), 900):
+                chunk = rowids[start : start + 900]
+                placeholders = ", ".join("?" for _ in chunk)
+                query = (
+                    f"SELECT rowid{', ' if select_columns else ''}{select_columns} "  # nosec B608 # Identifiers quoted; values bound below.
+                    f"FROM {quoted_table} WHERE rowid IN ({placeholders})"
+                )
+                rows.update(
+                    {row[0]: tuple(row[1:]) for row in con.execute(query, chunk)}
+                )
+            for line, keypath, _value in table_entries:
+                row = rows.get(keypath[1])
+                if row is None:
+                    raise SafetyError("SQLite source lost a row before verification")
+                immutable_state = tuple(
+                    (column, _sqlite_identity_value(value))
+                    for column, value in zip(immutable, row)
+                )
+                location = (line, tuple(keypath))
+                if location in identities_by_location:
+                    raise SafetyError(
+                        "SQLite source yielded duplicate redaction locations"
+                    )
+                identities_by_location[location] = (
+                    "sqlite",
+                    table,
+                    keypath[2],
+                    tuple(keypath[3:]),
+                    immutable_state,
+                )
+        return [
+            identities_by_location[(line, tuple(keypath))]
+            for line, keypath, _value in entries
+        ]
+    except sqlite3.Error as e:
+        raise SafetyError("Cannot read SQLite row identities for verification") from e
+    finally:
+        con.close()
+
+
+def _sqlite_identity_value(value) -> tuple[str, object]:
+    if isinstance(value, (str, int, float, bytes)) or value is None:
+        return (type(value).__name__, value)
+    raise SafetyError("SQLite row has an unsupported immutable identity value")
+
+
 def _redact_sqlite_copy(path: Path, redactions: list, columns_fn) -> bytes:
     """Apply SQLite redactions to a temp copy of `path` and return its bytes.
 

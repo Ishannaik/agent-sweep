@@ -42,9 +42,33 @@ class Source(ABC):
         or line-count-preserving text) — the redactor's post-write validation
         will reject a write that doesn't.
         """
+
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        """Optionally return stable identities for decoded string locations."""
 ```
 
 `process_markers` feeds `preflight.is_agent_running()`, a best-effort check that warns if the source's agent is currently running (to avoid redacting a file mid-write). Set `experimental = True` if the storage path/format was derived from research but not yet confirmed against a real install of the tool.
+
+The default `verification_identities()` returns `(line, tuple(keypath))` for
+each entry. Its `target_keypaths` argument contains every source keypath selected
+for this write; text-backed sources normally ignore it. Sources whose physical
+locations can change during a rewrite may override the method with one unique,
+hashable identity per decoded string, in entry order. Identities must remain
+stable across redaction and must not depend on replaced values.
+
+An SQLite source must perform one batched identity lookup per file, grouping
+queries by table. It uses immutable metadata plus the table, target column, and
+subpath while excluding
+every column represented in `target_keypaths`, including multiple targeted
+columns in the same row. Untargeted metadata remains available to establish a
+row identity; empty metadata is permitted only if the resulting identities are
+still unique. Do not use `rowid`, because `VACUUM` can renumber it. Ambiguous
+identities must refuse the write rather than guessing which row was redacted.
 
 ## Adding a new source — checklist
 
@@ -95,6 +119,8 @@ Any PR that touches `redactor.py` or the write path must:
 
 - Preserve all post-write validations (JSON re-parse, line count match).
 - Preserve atomic write semantics (tempfile → fsync → replace).
+- Preserve persisted-content verification and atomic restoration on failure,
+  including the temporary recovery copy used with `--no-backup`.
 - Preserve `.bak` creation.
 - Not add any code path that writes without going through `safe_write()`.
 
