@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+import agentsweep.redactor as redactor
 from agentsweep.redactor import (
     RedactionTarget,
     RedactionVerification,
@@ -63,6 +64,7 @@ def wal_db(tmp_path: Path) -> Path:
 
 
 def _redact(db: Path, *, backup: bool = True):
+    """Apply one verified synthetic-secret replacement to the WAL database."""
     source = OpenCodeSource(root=db.parent)
     hits = [(ln, kp, v) for ln, kp, v in source.iter_strings(db) if SECRET in v]
     assert len(hits) == 1, f"scan should find the secret through the WAL, got {hits}"
@@ -88,6 +90,19 @@ def _redact(db: Path, *, backup: bool = True):
             ),
         ),
     )
+
+
+def _block_main_recovery_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force the verified no-backup cleanup branch without changing permissions."""
+    real_unlink = Path.unlink
+
+    def fail_main_recovery_unlink(path: Path, *args, **kwargs) -> None:
+        """Fail only removal of the database's prepared recovery copy."""
+        if path.suffix == ".recover" and path.name.startswith(".opencode.db."):
+            raise OSError("synthetic main recovery cleanup failure")
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_main_recovery_unlink)
 
 
 def test_sidecars_are_reported_for_the_database(wal_db: Path) -> None:
@@ -229,3 +244,88 @@ def test_failed_write_leaves_sidecars_and_their_backups_alone(
         "aborted write must clean its backups"
     )
     assert not (d / "opencode.db.bak").exists()
+
+
+def test_recovery_cleanup_failure_restores_wal_only_rows_without_audit(
+    wal_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed main recovery cleanup restores the database and both sidecars."""
+    audit = wal_db.parent / "audit.jsonl"
+    monkeypatch.setattr(redactor, "audit_path", lambda: audit)
+    _block_main_recovery_cleanup(monkeypatch)
+
+    with pytest.raises(redactor.SafetyError, match="was rolled back"):
+        _redact(wal_db, backup=False)
+
+    assert not audit.exists(), "a rolled-back write must not report success"
+    assert (wal_db.parent / "opencode.db-wal").is_file()
+    assert (wal_db.parent / "opencode.db-shm").is_file()
+    con = sqlite3.connect(str(wal_db))
+    try:
+        assert con.execute("SELECT count(*) FROM part").fetchone()[0] == 201
+        (content,) = con.execute(
+            "SELECT content FROM part WHERE id='secret-row'"
+        ).fetchone()
+    finally:
+        con.close()
+    assert json.loads(content)["text"] == SECRET
+
+
+def test_recovery_rollback_reports_every_retained_sidecar_copy(
+    wal_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failed restores retain and enumerate every prepared main and sidecar copy."""
+    audit = wal_db.parent / "audit.jsonl"
+    sidecars = (
+        wal_db.with_name("opencode.db-wal"),
+        wal_db.with_name("opencode.db-shm"),
+    )
+    originals = {
+        wal_db: wal_db.read_bytes(),
+        sidecars[0]: sidecars[0].read_bytes(),
+    }
+    recovery_sources = (wal_db, *sidecars)
+    real_replace = os.replace
+    restored_targets: set[str] = set()
+
+    def fail_prepared_recoveries(src, dst, *args, **kwargs) -> None:
+        """Leave every prepared recovery in place while recording each restore."""
+        if Path(src).suffix == ".recover":
+            restored_targets.add(Path(dst).name)
+            raise OSError("synthetic prepared recovery restore failure")
+        real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(redactor, "audit_path", lambda: audit)
+    monkeypatch.setattr(redactor.os, "replace", fail_prepared_recoveries)
+    _block_main_recovery_cleanup(monkeypatch)
+
+    with pytest.raises(redactor.SafetyError, match="rollback was incomplete") as exc:
+        _redact(wal_db, backup=False)
+
+    message = str(exc.value)
+    assert restored_targets == {path.name for path in recovery_sources}
+    recoveries: dict[Path, Path] = {}
+    for original in recovery_sources:
+        paths = list(wal_db.parent.glob(f".{original.name}.*.recover"))
+        assert len(paths) == 1
+        recoveries[original] = paths[0]
+        assert str(paths[0]) in message
+    for original, bytes_before in originals.items():
+        assert recoveries[original].read_bytes() == bytes_before
+
+    recovered = wal_db.with_name("recovered.db")
+    for original, recovery in recoveries.items():
+        suffix = original.name.removeprefix(wal_db.name)
+        target = recovered.with_name(f"{recovered.name}{suffix}")
+        target.write_bytes(recovery.read_bytes())
+    con = sqlite3.connect(str(recovered))
+    try:
+        assert con.execute("SELECT count(*) FROM part").fetchone()[0] == 201
+        (content,) = con.execute(
+            "SELECT content FROM part WHERE id='secret-row'"
+        ).fetchone()
+    finally:
+        con.close()
+    assert json.loads(content)["text"] == SECRET
+    assert "was rolled back" not in message
+    assert not audit.exists(), "an incomplete rollback must not report success"

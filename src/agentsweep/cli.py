@@ -212,6 +212,8 @@ def _interactive() -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch CLI verbs while keeping selftest JSON failures machine-clean."""
+
     if argv is None:
         argv = sys.argv[1:]
 
@@ -384,6 +386,8 @@ def _validate_rule_filters(
 
 
 def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
+    """Parse a scan or fix command and normalize its shared policy options."""
+
     ap = argparse.ArgumentParser(
         prog=f"agentsweep {verb}",
         description="Find and redact secrets in AI coding agent histories.",
@@ -653,7 +657,7 @@ def _parse_selftest(rest: list[str]) -> argparse.Namespace:
     ap.add_argument(
         "--root",
         type=Path,
-        default=Path.cwd(),
+        default=None,
         help="Root whose .agentsweepignore context to use (default: cwd).",
     )
     ap.add_argument(
@@ -777,6 +781,8 @@ def _with_rule_id_completer(action: argparse.Action) -> argparse.Action:
 
 
 def _get_completion_parser() -> argparse.ArgumentParser:
+    """Build the argcomplete parser that mirrors every supported CLI verb."""
+
     ap = argparse.ArgumentParser(
         prog="agentsweep",
         description="Find and redact secrets in AI coding agent histories.",

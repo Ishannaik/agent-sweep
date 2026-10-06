@@ -37,6 +37,7 @@ class _LazyUI:
     """Load terminal rendering only when a human-output path needs it."""
 
     def __getattr__(self, name: str):
+        """Resolve a UI attribute only when a human-output path requests it."""
         from . import ui as ui_module
 
         return getattr(ui_module, name)
@@ -75,6 +76,7 @@ def run(
     """Execute one scan (and optional redact) run. Exit codes:
     0 clean · 1 findings (scan-only) · 2 gate-blocked, write error, or bad path.
 
+    ``--verify-scanner`` runs its isolated positive control before discovery.
     When _findings_out is provided and args.fix is False, appends
     (source, found_by_file) to it so the caller can pass pre-computed
     findings to offer_redaction(), avoiding a double-scan on REDACT.
@@ -359,6 +361,7 @@ def redact_findings(
 
     Called from offer_redaction() when the first scan cached its results via
     _findings_out, so the user never sees the pipeline restart from scratch.
+    ``--verify-scanner`` still runs before the cached findings can be written.
     Exit codes: 0 clean, 2 gate-blocked or write error.
     """
     source_cls = SOURCES[args.source]
@@ -440,7 +443,8 @@ def run_all(args) -> int:
     """Scan every registered (or detected) source and aggregate findings.
 
     With ``--fix``, each source with findings is then redacted through the
-    single-source path — see _fix_all_sources.
+    single-source path — see _fix_all_sources. ``--verify-scanner`` validates
+    every selected source's positive control before any discovery or write.
 
     Exit codes: 0 clean / nothing scanned / everything redacted · 1 findings
     (scan-only) · 2 a source was gate-blocked or errored during --fix.
@@ -1859,13 +1863,14 @@ def _redact_all(
     force: bool,
     template: str = REDACT_TEMPLATE,
 ) -> tuple[list[tuple[str, str, str]], int, bool]:
-    """Apply redactions, returning (rows, error_count, force_recoverable).
+    """Write and verify redactions, returning (rows, error_count, force_recoverable).
 
-    Rows are (status, path_display, note); status is "ok", "skip" or "fail".
-    A file whose .bak already exists was redacted in a prior pass, so it is a
-    "skip" ("already redacted"), NOT an error. `force_recoverable` is True if
-    any failure was an active-session gate (mtime) that --force could bypass —
-    the caller uses it to decide whether offering --force is worthwhile.
+    Each non-no-op write carries stable targets into ``safe_write`` so it can
+    validate the persisted content and restore the original on a failure. Rows
+    are (status, path_display, note); status is "ok", "skip" or "fail". A file
+    whose .bak already exists was redacted in a prior pass, so it is a "skip"
+    ("already redacted"), not an error. ``force_recoverable`` is true only for
+    an active-session gate (mtime) that --force could bypass.
     """
     rows: list[tuple[str, str, str]] = []
     errors = 0

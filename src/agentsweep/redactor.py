@@ -93,12 +93,16 @@ class RedactionVerification:
 
 @dataclass(frozen=True)
 class _DecodedStrings:
+    """Decoded source values indexed by location and stable identity."""
+
     by_location: dict[tuple[int, tuple[object, ...]], tuple[object, str]]
     by_identity: dict[object, str]
 
 
 @dataclass(frozen=True)
 class _VerificationBaseline:
+    """Pre-write values and residual detector matches allowed after redaction."""
+
     values: dict[object, str]
     expected: dict[object, str]
     allowed: Counter[tuple[object, str, str]]
@@ -396,7 +400,11 @@ def safe_write(
             recovery_path.unlink()
         except OSError as cleanup_error:
             try:
-                _restore_prepared_recovery(path, recovery_path)
+                _restore_prepared_recoveries(
+                    path,
+                    recovery_path,
+                    sidecar_recoveries,
+                )
             except SafetyError as rollback_error:
                 raise SafetyError(
                     "Verified redaction could not remove its recovery copy; "
@@ -513,6 +521,7 @@ def _verify_redaction(
     verification: RedactionVerification,
     baseline: _VerificationBaseline | None,
 ) -> None:
+    """Prove persisted content preserves identities and removes selected matches."""
     if baseline is None:
         raise SafetyError("Redaction verification state is unavailable")
     try:
@@ -554,6 +563,7 @@ def _verify_redaction(
 def _verification_target_keypaths(
     verification: RedactionVerification,
 ) -> frozenset[tuple[object, ...]]:
+    """Return the logical fields selected for semantic verification."""
     return frozenset(target.keypath for target in verification.targets)
 
 
@@ -562,6 +572,7 @@ def _decoded_strings(
     path: Path,
     target_keypaths: frozenset[tuple[object, ...]],
 ) -> _DecodedStrings:
+    """Decode source strings and index them by location and stable identity."""
     try:
         entries = list(source.iter_strings(path))
         by_location: dict[tuple[int, tuple[object, ...]], tuple[object, str]] = {}
@@ -650,6 +661,7 @@ def _prepare_recovery(path: Path, original_bytes: bytes) -> Path:
 
 
 def _restore_prepared_recovery(path: Path, recovery_path: Path) -> None:
+    """Atomically restore a persisted no-backup recovery copy."""
     try:
         os.replace(recovery_path, path)
     except Exception as e:
@@ -657,6 +669,7 @@ def _restore_prepared_recovery(path: Path, recovery_path: Path) -> None:
 
 
 def _restore_from_backup(path: Path, backup_path: Path) -> None:
+    """Restore a main file or SQLite sidecar from its retained backup."""
     try:
         original_bytes = backup_path.read_bytes()
     except Exception as e:
@@ -668,6 +681,7 @@ def _restore_sidecars_from_backups(
     sidecars: Sequence[Path],
     sidecar_backups: Sequence[Path],
 ) -> None:
+    """Restore every SQLite sidecar from its paired persistent backup."""
     if len(sidecars) != len(sidecar_backups):
         raise SafetyError("SQLite sidecar recovery state is incomplete")
     for sidecar, sidecar_backup in zip(sidecars, sidecar_backups):
@@ -677,8 +691,42 @@ def _restore_sidecars_from_backups(
 def _restore_prepared_sidecars(
     sidecar_recoveries: Sequence[tuple[Path, Path]],
 ) -> None:
+    """Restore SQLite sidecars from persisted no-backup recovery copies."""
     for sidecar, recovery_path in sidecar_recoveries:
         _restore_prepared_recovery(sidecar, recovery_path)
+
+
+def _restore_prepared_recoveries(
+    path: Path,
+    recovery_path: Path,
+    sidecar_recoveries: Sequence[tuple[Path, Path]],
+) -> None:
+    """Attempt every prepared restore and name each recovery copy still retained.
+
+    Continue after individual restore failures so every recoverable artifact is
+    either restored or exposed to the caller.
+    """
+    recoveries = ((path, recovery_path), *sidecar_recoveries)
+    failures: list[SafetyError] = []
+    for original, prepared_recovery in recoveries:
+        try:
+            _restore_prepared_recovery(original, prepared_recovery)
+        except SafetyError as e:
+            failures.append(e)
+    if failures:
+        retained = [
+            prepared_recovery
+            for _original, prepared_recovery in recoveries
+            if prepared_recovery.exists()
+        ]
+        paths = ", ".join(str(prepared_recovery) for prepared_recovery in retained)
+        if paths:
+            raise SafetyError(
+                f"rollback was incomplete; complete recovery copies retained at {paths}"
+            ) from failures[0]
+        raise SafetyError(
+            "rollback was incomplete; no recovery copy remains"
+        ) from failures[0]
 
 
 def _restore_original(

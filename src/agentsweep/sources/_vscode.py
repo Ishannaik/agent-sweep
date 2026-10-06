@@ -131,6 +131,7 @@ class _VSCodeSqliteSource(Source):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Return batched metadata identities for SQLite-backed editor history."""
         return _sqlite_verification_identities(
             path,
             entries,
@@ -207,6 +208,7 @@ class CursorSource(_VSCodeSqliteSource):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Use base identities for JSONL transcripts and metadata IDs for SQLite."""
         if path.suffix == ".jsonl":
             return Source.verification_identities(
                 self,
@@ -281,6 +283,7 @@ class WindsurfSource(_VSCodeSqliteSource):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Use base identities for plaintext memories and metadata IDs for SQLite."""
         if path.suffix == ".md":
             return Source.verification_identities(
                 self,

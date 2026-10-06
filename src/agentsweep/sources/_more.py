@@ -156,6 +156,7 @@ class _GenericSqliteSource(Source):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Return batched metadata identities for this source's SQLite strings."""
         return _sqlite_verification_identities(
             path,
             entries,

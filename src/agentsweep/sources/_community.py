@@ -142,6 +142,7 @@ class HermesSource(Source):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Use SQLite metadata identities only for the database-backed history."""
         if path == self._db():
             return _sqlite_verification_identities(
                 path,
@@ -245,6 +246,7 @@ class GooseSource(Source):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Use SQLite metadata identities only for the database-backed history."""
         if path == self._db():
             return _sqlite_verification_identities(
                 path,
@@ -406,6 +408,7 @@ class LlmSource(Source):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Return metadata-based identities that survive this SQLite rewrite."""
         return _sqlite_verification_identities(
             path,
             entries,

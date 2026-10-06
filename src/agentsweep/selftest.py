@@ -68,6 +68,8 @@ class SelftestResult:
     selection_error: str | None = None
 
     def as_dict(self) -> dict:
+        """Serialize safe coverage statuses without exposing scanned control text."""
+
         rule_ids = tuple(EXPECTED_COUNTS)
         coverage = []
         for rule_id in rule_ids:

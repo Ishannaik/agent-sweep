@@ -147,6 +147,7 @@ def _sqlite_verification_identities(
 
 
 def _sqlite_identity_value(value) -> tuple[str, object]:
+    """Type-tag supported SQLite metadata so equal values retain their type."""
     if isinstance(value, (str, int, float, bytes)) or value is None:
         return (type(value).__name__, value)
     raise SafetyError("SQLite row has an unsupported immutable identity value")

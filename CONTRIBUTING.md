@@ -119,8 +119,8 @@ Any PR that touches `redactor.py` or the write path must:
 
 - Preserve all post-write validations (JSON re-parse, line count match).
 - Preserve atomic write semantics (tempfile → fsync → replace).
-- Preserve persisted-content verification and atomic restoration on failure,
-  including the temporary recovery copy used with `--no-backup`.
+- Preserve persisted-content verification and coordinated recovery of the main
+  file and SQLite sidecars on failure, including `--no-backup` recovery copies.
 - Preserve `.bak` creation.
 - Not add any code path that writes without going through `safe_write()`.
 

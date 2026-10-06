@@ -422,7 +422,8 @@ discovery, parsing, detection, and ignore filtering, then removes the temporary
 files. It does not scan real histories, write an audit entry, or contact the network.
 Exit status is **0** when every active control exactly matches its expected
 metadata and count, or **2** on any mismatch or error. `--json` output is
-machine-readable and secret-free.
+machine-readable and secret-free. In `--json` mode, an unavailable working
+directory returns failed self-test JSON rather than a traceback.
 
 `--root` selects the ignore context, not a directory to scan. The self-test reads
 `.agentsweepignore` from that root and the current directory; without `--root`,
@@ -483,10 +484,12 @@ A redactor that corrupts your history leaves you worse off than the leak it's fi
 
 Verification failures after replacement exit nonzero. With backups enabled, the
 `.bak` recovery copy is retained. With `--no-backup`, a non-no-op write first
-writes and syncs a temporary recovery copy, then removes it after verified
-success; the flag does not disable verification or rollback. A rejection before
-replacement creates no backup or audit record. If restoration itself fails, the
-error identifies the retained recovery file for manual intervention.
+writes and syncs temporary recovery copies, then removes them only after verified
+success; the flag does not disable verification or rollback. For SQLite, a
+recovery-cleanup failure restores the main database together with its WAL and SHM.
+If any rollback is incomplete, the error identifies every retained `.recover`
+artifact for manual recovery. A rejection before replacement creates no backup or
+audit record.
 
 SQLite verification derives logical identities from metadata untouched by the
 current redaction transaction, excluding every targeted column in a row, rather

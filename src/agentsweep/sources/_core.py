@@ -206,6 +206,7 @@ class OpenCodeSource(Source):
         entries: list[tuple[int, KeyPath, str]],
         target_keypaths: frozenset[tuple[object, ...]],
     ) -> list[object]:
+        """Use SQLite metadata identities for the database, base identities otherwise."""
         if path == self._db_path():
             return _sqlite_verification_identities(
                 path,

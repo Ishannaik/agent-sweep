@@ -21,6 +21,8 @@ from agentsweep.scanner import RULES  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _isolated_home(tmp_path, monkeypatch):
+    """Isolate user-home source discovery for each selftest case."""
+
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
@@ -29,10 +31,14 @@ def _isolated_home(tmp_path, monkeypatch):
 
 
 def _aws_control() -> str:
+    """Return an AWS-shaped control without a literal credential fixture."""
+
     return "AKIA" + "A" * 16
 
 
 def _history(root: Path) -> Path:
+    """Write a minimal Claude JSONL history containing the AWS control."""
+
     session = root / "session.jsonl"
     session.write_text(
         json.dumps({"message": {"content": [{"type": "text", "text": _aws_control()}]}})
@@ -45,10 +51,14 @@ def _history(root: Path) -> Path:
 def test_standalone_selftest_uses_canonical_control_and_cleans_tempdir(
     tmp_path, monkeypatch, capsys, _isolated_home
 ):
+    """Verify the CLI uses and removes a private canonical control corpus."""
+
     created: list[Path] = []
     real_temporary_directory = tempfile.TemporaryDirectory
 
     def tracked_temporary_directory(*args, **kwargs):
+        """Place and record the temporary corpus so cleanup is observable."""
+
         kwargs["dir"] = tmp_path
         directory = real_temporary_directory(*args, **kwargs)
         created.append(Path(directory.name))
@@ -79,9 +89,13 @@ def test_standalone_selftest_uses_canonical_control_and_cleans_tempdir(
 def test_selftest_rejects_missing_duplicate_or_wrong_rule_even_at_same_total(
     tmp_path, monkeypatch, mutation
 ):
+    """Reject count-preserving scans that lose, duplicate, or relabel controls."""
+
     original_scan_all = pipeline._scan_all
 
     def altered_scan_all(*args, **kwargs):
+        """Inject a count-preserving mutation into the normal scan result."""
+
         found_by_file, strings, suppressed, truncated = original_scan_all(
             *args, **kwargs
         )
@@ -111,9 +125,13 @@ def test_selftest_rejects_missing_duplicate_or_wrong_rule_even_at_same_total(
 def test_selftest_rejects_corrupt_metadata_with_correct_rule_counts(
     tmp_path, monkeypatch, corruption
 ):
+    """Reject correct rule counts when a control's metadata is corrupted."""
+
     original_scan_all = pipeline._scan_all
 
     def altered_scan_all(*args, **kwargs):
+        """Inject one metadata defect while retaining all expected rule counts."""
+
         found_by_file, strings, suppressed, truncated = original_scan_all(
             *args, **kwargs
         )
@@ -146,7 +164,11 @@ def test_selftest_rejects_corrupt_metadata_with_correct_rule_counts(
 def test_selftest_fails_closed_without_echoing_scanner_exception(
     tmp_path, monkeypatch, capsys
 ):
+    """Return structured JSON while suppressing scanner exception content."""
+
     def broken_scan(*args, **kwargs):
+        """Raise with control-shaped text to prove it is never emitted."""
+
         raise RuntimeError("scanner saw " + _aws_control())
 
     monkeypatch.setattr(pipeline, "_scan_all", broken_scan)
@@ -162,7 +184,11 @@ def test_selftest_fails_closed_without_echoing_scanner_exception(
 
 
 def test_selftest_fails_closed_when_source_reader_raises(tmp_path, monkeypatch):
+    """Fail closed when the canonical source reader cannot read its corpus."""
+
     def broken_reader(self, path):
+        """Act as a failing generator-shaped source reader."""
+
         raise OSError("unreadable canary")
         yield  # pragma: no cover - establishes this as a generator
 
@@ -177,6 +203,8 @@ def test_selftest_fails_closed_when_source_reader_raises(tmp_path, monkeypatch):
 def test_root_and_cwd_ignores_fail_selftest_and_no_ignore_restores_it(
     tmp_path, monkeypatch, capsys
 ):
+    """Apply root and cwd ignores, then prove --no-ignore restores controls."""
+
     root = tmp_path / "history"
     cwd = tmp_path / "workdir"
     root.mkdir()
@@ -197,7 +225,32 @@ def test_root_and_cwd_ignores_fail_selftest_and_no_ignore_restores_it(
     assert clean["ok"] is True
 
 
+def test_selftest_fails_closed_when_cwd_is_unavailable_during_dispatch(
+    monkeypatch, capsys
+):
+    """Return structured failure when dispatch cannot resolve the current directory."""
+
+    def unavailable_cwd():
+        """Model a deleted working directory without removing a live directory."""
+
+        raise FileNotFoundError("working directory is unavailable")
+
+    with monkeypatch.context() as cwd_patch:
+        cwd_patch.setattr(Path, "cwd", staticmethod(unavailable_cwd))
+        code = main(["selftest", "--json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert code == 2
+    assert payload["ok"] is False
+    assert payload["error_type"] == "FileNotFoundError"
+    assert "Traceback" not in captured.out + captured.err
+
+
 def test_verify_scanner_blocks_empty_json_scan_before_success(tmp_path, capsys):
+    """Block empty scans before success when scanner verification fails."""
+
     root = tmp_path / "empty"
     root.mkdir()
     (root / ".agentsweepignore").write_text("rule:anthropic\n", encoding="utf-8")
@@ -213,6 +266,8 @@ def test_verify_scanner_blocks_empty_json_scan_before_success(tmp_path, capsys):
 def test_verify_scanner_blocks_force_no_backup_before_any_write(
     tmp_path, capsys, _isolated_home
 ):
+    """Prevent forced no-backup redaction before a failed verification can write."""
+
     root = tmp_path / "history"
     root.mkdir()
     session = _history(root)
@@ -237,6 +292,8 @@ def test_verify_scanner_blocks_force_no_backup_before_any_write(
 
 
 def test_verify_scanner_blocks_cached_redaction_before_any_write(tmp_path):
+    """Prevent cached findings from being redacted after failed verification."""
+
     root = tmp_path / "history"
     root.mkdir()
     session = _history(root)
@@ -263,6 +320,8 @@ def test_verify_scanner_blocks_cached_redaction_before_any_write(tmp_path):
 
 
 def test_selftest_rule_selection_exercises_only_active_controls(tmp_path):
+    """Exercise only controls selected by the explicit inclusion filter."""
+
     result = selftest.run_selftest(
         tmp_path,
         only_rules={"aws-access-key", "github-pat"},
@@ -278,6 +337,8 @@ def test_selftest_rule_selection_exercises_only_active_controls(tmp_path):
 
 
 def test_selftest_rejects_rule_selection_without_a_control(tmp_path, capsys):
+    """Return a failed coverage payload when selected rules have no control."""
+
     uncovered_rule = next(
         rule_id
         for rule_id, _display, _pattern in RULES
@@ -296,9 +357,13 @@ def test_selftest_rejects_rule_selection_without_a_control(tmp_path, capsys):
 
 
 def test_selftest_fails_closed_on_scan_warning(tmp_path, monkeypatch):
+    """Fail closed when the pipeline reports truncated or unreadable scan input."""
+
     original_scan_all = pipeline._scan_all
 
     def truncated_scan(*args, **kwargs):
+        """Return a pipeline result marked as truncated."""
+
         found_by_file, strings, suppressed, _ = original_scan_all(*args, **kwargs)
         return found_by_file, strings, suppressed, [tmp_path / "truncated.jsonl"]
 
