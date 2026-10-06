@@ -88,7 +88,8 @@ def test_aider_markdown_fix_end_to_end(tmp_path: Path) -> None:
 
 
 def test_aider_markdown_fully_redacts_stateless_github_app_token(
-        tmp_path: Path) -> None:
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "work"
     repo = root / "proj"
     repo.mkdir(parents=True)
@@ -101,19 +102,12 @@ def test_aider_markdown_fully_redacts_stateless_github_app_token(
     original = hist.read_text(encoding="utf-8")
     source = AiderSource(root=root)
 
-    rows, errors = _redact_all(source, _scan(source, hist),
-                               backup=True, force=True)
+    _redact_all(source, _scan(source, hist), backup=True, force=True)
 
-    assert errors == 0
-    assert rows[0][0] == "ok"
-    after = hist.read_text(encoding="utf-8")
-    assert token not in after
-    assert token[-64:] not in after
-    assert "keep-before " in after
-    assert " keep-after" in after
-    assert "[REDACTED:github-app]" in after
-    assert hist.with_name(hist.name + ".bak").read_text(
-        encoding="utf-8") == original
+    assert hist.read_text(encoding="utf-8") == (
+        "keep-before [REDACTED:github-app] keep-after\n"
+    )
+    assert hist.with_name(hist.name + ".bak").read_text(encoding="utf-8") == original
 
 
 def test_opencode_legacy_json_fix_end_to_end(tmp_path: Path) -> None:
