@@ -227,6 +227,17 @@ def test_ported_rule_detects_its_fixture(rule_id: str) -> None:
     )
 
 
+def test_render_rule_rejects_invalid_boundaries() -> None:
+    invalid = (
+        "rnd_" + "a1b2c3" * 4 + "a1b",  # 27 characters
+        "rnd_" + "a1b2c3" * 4 + "a1b2c",  # 29 characters
+        "x" + "rnd_" + "a1b2c3" * 4 + "a1b2",  # embedded token
+    )
+    for text in invalid:
+        found = {f.rule for f in scan_text(text)}
+        assert "render-api-key" not in found
+
+
 def test_every_rule_compiles_and_ids_are_unique() -> None:
     ids = [rule_id for rule_id, _display, _pattern in RULES]
     assert len(ids) == len(set(ids)), "duplicate rule ids in RULES"
