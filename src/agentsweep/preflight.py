@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess  # nosec B404 # used only to list running processes for is_agent_running(); no shell, no untrusted input
 import sys
 
@@ -293,6 +294,48 @@ def _list_process_cmdlines() -> list[str] | None:
     except (subprocess.SubprocessError, OSError, FileNotFoundError):
         return None
     return out.splitlines()
+
+
+def open_paths() -> set[str] | None:
+    """Paths currently held open by any process of this user, via lsof.
+
+    Returns None when that cannot be established (lsof missing, failed, or not
+    a POSIX host). Callers treat None as "assume everything is open": the
+    --settled gate fails closed rather than rewrite a file a writer still holds.
+    """
+    if sys.platform == "win32":
+        return None
+    try:
+        out = subprocess.run(  # nosec B603 B607 # fixed argv, no shell, timeout-bounded; lsof resolved via PATH
+            ["lsof", "-n", "-w", "-Fn", "-u", str(os.getuid())],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    paths = {line[1:] for line in out.stdout.splitlines() if line.startswith("n/")}
+    # lsof always lists something for a live user session (this process's
+    # own cwd and libraries); an empty set means the call did not work.
+    return paths or None
+
+
+def is_open_now(path) -> bool:
+    """True if any process holds `path` open right now (fails closed)."""
+    if sys.platform == "win32":
+        return True
+    try:
+        out = subprocess.run(  # nosec B603 B607 # fixed argv, no shell, timeout-bounded; lsof resolved via PATH
+            ["lsof", "-t", "--", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return True
+    if out.returncode not in (0, 1):
+        return True
+    return bool(out.stdout.strip())
 
 
 def is_production_root(source, source_cls) -> bool:
