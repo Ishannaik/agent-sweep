@@ -163,6 +163,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     'prefect-api-key': 'prefect-api-token',
     'pulumi-access-token': 'pulumi-api-token',
     'readme-api-token': 'readme-api-token',
+    'render-api-key': None,  # no gitleaks equivalent
     'rubygems-api-key': 'rubygems-api-token',
     'scalingo-api-token': 'scalingo-api-token',
     'sendinblue-api-key': 'sendinblue-api-token',

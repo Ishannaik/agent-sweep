@@ -121,6 +121,7 @@ FIXTURES: dict[str, str] = {
     'prefect-api-key': 'pnu_a1b2c3a1b2c3a1b2' 'c3a1b2c3a1b2c3a1b2c3',
     'pulumi-access-token': 'pul-a1b2c3a1b2c3a1b2c3' 'a1b2c3a1b2c3a1b2c3d4e5',
     'readme-api-token': 'rdme_a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1' 'b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3d4e5',
+    'render-api-key': 'rnd_a1b2c3a1' 'b2c3a1b2' 'c3a1b2c3' 'a1b2',
     'rubygems-api-key': 'rubygems_a1b2c3a1b2c3a1b2c3a' '1b2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'scalingo-api-token': 'tk-us-a1b2c3a1b2c3a1b2c3a1b' '2c3a1b2c3a1b2c3a1b2c3a1b2c3',
     'sendinblue-api-key': 'xkeysib-a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3' 'a1b2c3a1b2c3a1b2c3a1b2c3d4e5-a1b2c3d4e5f6a1b2',
@@ -224,6 +225,17 @@ def test_ported_rule_detects_its_fixture(rule_id: str) -> None:
     assert rule_id in found, (
         f"{rule_id} not reported for its fixture; got {sorted(found) or 'nothing'}"
     )
+
+
+def test_render_rule_rejects_invalid_boundaries() -> None:
+    invalid = (
+        "rnd_" + "a1b2c3" * 4 + "a1b",  # 27 characters
+        "rnd_" + "a1b2c3" * 4 + "a1b2c",  # 29 characters
+        "x" + "rnd_" + "a1b2c3" * 4 + "a1b2",  # embedded token
+    )
+    for text in invalid:
+        found = {f.rule for f in scan_text(text)}
+        assert "render-api-key" not in found
 
 
 def test_every_rule_compiles_and_ids_are_unique() -> None:

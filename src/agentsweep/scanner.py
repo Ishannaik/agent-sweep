@@ -330,6 +330,11 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile('\\bpul-[a-f0-9]{40}\\b')),
     ('readme-api-token', 'ReadMe API token',
         re.compile('\\brdme_[a-z0-9]{70}\\b')),
+    # Dashboard API keys are rnd_ plus exactly 28 alphanumeric characters.
+    # Render's docs publish the prefix, not the body length; the quantifier
+    # stays exact so shorter or longer strings stay silent.
+    ('render-api-key', 'Render API key',
+        re.compile('\\brnd_[A-Za-z0-9]{28}\\b')),
     ('rubygems-api-key', 'RubyGems API key',
         re.compile('\\brubygems_[a-f0-9]{48}\\b')),
     ('scalingo-api-token', 'Scalingo API token',
@@ -1007,6 +1012,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'prefect-api-key': 'Revoke: https://app.prefect.cloud/my/api-keys',
     'pulumi-access-token': 'Revoke: https://app.pulumi.com/account/tokens',
     'readme-api-token': 'Rotate: https://dash.readme.com (project Configuration > API Keys)',
+    'render-api-key': 'Revoke: https://dashboard.render.com/u/settings#api-keys',
     'rubygems-api-key': 'Revoke: https://rubygems.org/profile/api_keys',
     'scalingo-api-token': 'Revoke: https://dashboard.scalingo.com/account/tokens',
     'sendinblue-api-key': 'Revoke: https://app.brevo.com/settings/keys/api',
