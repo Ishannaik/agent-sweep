@@ -101,7 +101,11 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
     ("private-key-pem", "Private key (PEM block)",
         re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----"
-                   r"[\s\S]+?-----END (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----")),
+                   # Body: key characters only (base64, whitespace, and the
+                   # Proc-Type/DEK-Info header characters). [\s\S] let a header
+                   # quoted in code or prose run to the next END, flagging —
+                   # and redacting — everything in between.
+                   r"[A-Za-z0-9+/=\s:,\-]{40,}?-----END (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----")),
     ("db-url-with-password", "Database URL with password",
         re.compile(r"\b(?:postgres|postgresql|mysql|mongodb(?:\+srv)?|redis|amqp)://"
                    r"[^:/\s]+:[^@\s'\"]+@[^\s'\"/]+")),

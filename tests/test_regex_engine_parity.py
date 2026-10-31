@@ -38,7 +38,9 @@ def _core_fixtures() -> dict[str, str]:
         "supabase-secret-key": "sb_secret_" + "a1" * 11 + "_" + "b2" * 4,
         "jwt": "eyJ" + "a" * 10 + ".eyJ" + "b" * 10 + "." + "c" * 10,
         "private-key-pem": (
-            "-----BEGIN PRIVATE KEY-----\nsynthetic-body\n-----END PRIVATE KEY-----"
+            "-----BEGIN PRIVATE KEY-----\n"
+            + "QUFB" * 16
+            + "\n-----END PRIVATE KEY-----"
         ),
         "db-url-with-password": "postgresql://user:password@example.test/db",
         "neon-role-password": "npg_" + "a" * 12,
