@@ -334,6 +334,28 @@ def _add_common(ap: argparse.ArgumentParser) -> None:
     )
 
 
+def _positive_seconds(value: str) -> int:
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("expected a whole number of seconds") from None
+    if n <= 0:
+        raise argparse.ArgumentTypeError("expected a positive number of seconds")
+    return n
+
+
+def _settled_seconds(value: str) -> int:
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "--settled takes a whole number of seconds"
+        ) from None
+    if n < 60:
+        raise argparse.ArgumentTypeError("--settled must be at least 60 seconds")
+    return n
+
+
 def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     from .scanner import DETECTOR_IDS, RULES
 
@@ -428,6 +450,30 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         default=[],
         metavar="RULE_ID",
         help="Keep only findings from this rule id. Repeatable.",
+    )
+    ap.add_argument(
+        "--files-from",
+        default=None,
+        metavar="FILE",
+        help="Only consider the history files listed in FILE (one path per line); "
+        "paths the source would not discover itself are ignored.",
+    )
+    ap.add_argument(
+        "--newer-than",
+        type=_positive_seconds,
+        default=None,
+        metavar="SECONDS",
+        help="Only consider files modified within the last SECONDS, for frequent "
+        "incremental runs (pair with an occasional full run).",
+    )
+    ap.add_argument(
+        "--settled",
+        type=_settled_seconds,
+        default=None,
+        metavar="SECONDS",
+        help="fix: only redact files unchanged for SECONDS (>= 60) and not held open by any "
+        "process (lsof); defer the rest. Replaces the whole-agent running-process gate, "
+        "so unattended fixes are safe while the agent runs.",
     )
     # Redaction flags (used by `fix` / legacy --fix; harmless on `scan`).
     ap.add_argument(
@@ -764,6 +810,13 @@ def _get_completion_parser() -> argparse.ArgumentParser:
 
     # fix
     fix_p = subparsers.add_parser("fix", description="Redact secrets in history.")
+    fix_p.add_argument(
+        "--settled",
+        type=_settled_seconds,
+        default=None,
+        metavar="SECONDS",
+        help="Only redact files settled for SECONDS and not held open.",
+    )
     fix_source = fix_p.add_argument(
         "--source",
         choices=list(_sources()),

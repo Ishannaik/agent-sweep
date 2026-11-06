@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 import difflib
+import hashlib
 from typing import TypeAlias, cast
 import json
 import os
@@ -19,7 +20,7 @@ from pathlib import Path
 
 from . import __version__, ui
 from . import ignore as ignore_mod
-from .preflight import is_agent_running, is_production_root
+from .preflight import is_agent_running, is_open_now, is_production_root, open_paths
 from .redactor import SafetyError, safe_write, safety_check
 from .scanner import ROTATION_GUIDANCE, RULES, Finding, scan_text
 from .sources import SOURCES, Source
@@ -121,6 +122,7 @@ def run(
                 )
     else:
         files = list(source.iter_files())
+    files = _select(files, args)
     if not files:
         print(f"No history files found under {source.root}", file=sys.stderr)
         stats_flag = getattr(args, "stats", False)
@@ -285,6 +287,7 @@ def run(
         backup=not args.no_backup,
         force=args.force,
         template=_opt(args, "redact_with", None) or REDACT_TEMPLATE,
+        settled=_opt(args, "settled", None),
     )
     if _force_recoverable_out is not None:
         _force_recoverable_out.append(recoverable)
@@ -352,6 +355,7 @@ def redact_findings(
         backup=not args.no_backup,
         force=args.force,
         template=_opt(args, "redact_with", None) or REDACT_TEMPLATE,
+        settled=_opt(args, "settled", None),
     )
     if _force_recoverable_out is not None:
         _force_recoverable_out.append(recoverable)
@@ -499,7 +503,7 @@ def run_all(args) -> int:
     def _discover_one(key: str, source: Source) -> tuple[str, Source, list[Path]]:
         """Collect every file for a single source; safe to call from a thread."""
         try:
-            files = list(source.iter_files())
+            files = _select(list(source.iter_files()), args)
         except Exception:
             files = []
         return key, source, files
@@ -969,6 +973,7 @@ def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:
             backup=not args.no_backup,
             force=args.force,
             template=_opt(args, "redact_with", None) or REDACT_TEMPLATE,
+            settled=_opt(args, "settled", None),
         )
         for status, path_display, note in rows:
             ui.redact_row(status, f"{key}: {path_display}", note)
@@ -1107,6 +1112,7 @@ def _scan_file(
     scanned_chars = 0
     truncated = False
     relpath = ui.rel(f, source.root)
+    before = _identity(f)
     for line_num, keypath, value in source.iter_strings(f):
         strings_scanned += 1
         scanned_chars += len(value)
@@ -1129,6 +1135,8 @@ def _scan_file(
         if scanned_chars > _MAX_FILE_SCAN_CHARS:
             truncated = True
             break
+    after = _identity(f)
+    _SCANNED[f] = before if before is not None and before == after else None
     return f, items, strings_scanned, suppressed, truncated
 
 
@@ -1816,6 +1824,7 @@ def _redact_all(
     backup: bool,
     force: bool,
     template: str = REDACT_TEMPLATE,
+    settled: int | None = None,
 ) -> tuple[list[tuple[str, str, str]], int, bool]:
     """Apply redactions, returning (rows, error_count, force_recoverable).
 
@@ -1828,8 +1837,17 @@ def _redact_all(
     rows: list[tuple[str, str, str]] = []
     errors = 0
     recoverable = False
+    held = open_paths() if settled is not None else None
+    now = time.time()
     for path, items in found_by_file.items():
         display = ui.rel(path, source.root)
+        if settled is not None:
+            # --settled: redact only files no writer can still be appending to.
+            # A deferred file is not an error; the next run picks it up.
+            reason = _unsettled_reason(path, settled, held, now)
+            if reason:
+                rows.append(("skip", display, f"deferred: {reason}"))
+                continue
         try:
             safety_check(path, source.roots(), force=force)
         except SafetyError as e:
@@ -1838,7 +1856,28 @@ def _redact_all(
             recoverable = recoverable or e.force_recoverable
             continue
 
+        expect = None
+        if settled is not None:
+            # The findings (lines, keypaths) belong to the version that was
+            # scanned. Rewrite only that exact version: its identity must be
+            # unchanged since the scan, and safe_write re-checks the content
+            # hash taken here immediately before writing.
+            scanned = _SCANNED.get(path)
+            if scanned is None or _identity(path) != scanned:
+                rows.append(
+                    ("skip", display, "deferred: changed during or after its scan")
+                )
+                continue
+            expect = hashlib.sha256(path.read_bytes()).hexdigest()
+            if _identity(path) != scanned:
+                rows.append(
+                    ("skip", display, "deferred: changed during or after its scan")
+                )
+                continue
         redactions = _build_redactions(items, template)
+        if expect is not None and _identity(path) != _SCANNED.get(path):
+            rows.append(("skip", display, "deferred: changed during or after its scan"))
+            continue
         try:
             new_content = source.apply_redactions(path, redactions)
             record = safe_write(
@@ -1847,6 +1886,8 @@ def _redact_all(
                 backup=backup,
                 fmt=source.content_format(path),
                 sidecars=source.sidecars(path),
+                in_place=settled is not None,
+                expect_sha256=expect,
             )
             if record.unchanged:
                 # File was already in the redacted state — calm skip, not a fail.
@@ -1855,6 +1896,9 @@ def _redact_all(
                 note = f".bak: {record.backup.name}" if record.backup else "no backup"
                 rows.append(("ok", display, note))
         except SafetyError as e:
+            if e.deferred:
+                rows.append(("skip", display, f"deferred: {e}"))
+                continue
             rows.append(("fail", display, str(e)))
             errors += 1
             recoverable = recoverable or e.force_recoverable
@@ -1862,6 +1906,74 @@ def _redact_all(
             rows.append(("fail", display, f"{type(e).__name__}: {e}"))
             errors += 1
     return rows, errors, recoverable
+
+
+def _unsettled_reason(
+    path: Path, settled: int, held: set[str] | None, now: float
+) -> str | None:
+    """Why `path` may still have a writer, or None if it is safe to rewrite."""
+    try:
+        age = now - path.stat().st_mtime
+    except OSError as e:
+        return f"cannot stat ({e.strerror})"
+    if age < settled:
+        return f"written {int(age)}s ago (< --settled {settled}s)"
+    if held is None:
+        return "cannot list open files (lsof unavailable), so cannot prove no writer holds it"
+    if str(path) in held or str(path.resolve()) in held or is_open_now(path):
+        return "held open by a running process"
+    return None
+
+
+# File identity (inode, size, mtime_ns) observed unchanged across each file's
+# scan, or None if the file changed while it was being scanned. --settled only
+# rewrites a file whose identity still matches: its redactions were computed
+# from exactly that version.
+_SCANNED: dict[Path, tuple[int, int, int] | None] = {}
+
+
+def _identity(path: Path) -> tuple[int, int, int] | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def _recent(files: list[Path], newer_than: int | None) -> list[Path]:
+    """--newer-than: keep files modified within the last N seconds (incremental runs)."""
+    if newer_than is None:
+        return files
+    cutoff = time.time() - newer_than
+    out = []
+    for f in files:
+        try:
+            if f.stat().st_mtime >= cutoff:
+                out.append(f)
+        except OSError:
+            continue
+    return out
+
+
+def _select(files: list[Path], args) -> list[Path]:
+    """Apply --newer-than and --files-from to a source's discovered files.
+
+    --files-from only narrows: a listed path the source did not discover (wrong
+    source, outside its roots, not a history file) is ignored, so the list can
+    never widen what a source may read or rewrite.
+    """
+    files = _recent(files, _opt(args, "newer_than", None))
+    listed = _opt(args, "files_from", None)
+    if listed is None:
+        return files
+    try:
+        lines = Path(listed).expanduser().read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    wanted = {
+        str(Path(line.strip()).expanduser().resolve()) for line in lines if line.strip()
+    }
+    return [f for f in files if str(f.resolve()) in wanted]
 
 
 def _preflight_gates(
@@ -1887,6 +1999,11 @@ def _preflight_gates(
             ],
         )
         return 2, False
+
+    if _opt(args, "settled", None) is not None:
+        # Per-file proof (age + no open handle) replaces the whole-agent ps
+        # gate: an agent can be running while most of its history is settled.
+        return None, False
 
     running, marker = is_agent_running(source.process_markers)
     if running and not args.force:

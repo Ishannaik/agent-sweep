@@ -49,9 +49,12 @@ class SafetyError(Exception):
     them — so callers must not offer `--force` for those.
     """
 
-    def __init__(self, *args, force_recoverable: bool = False):
+    def __init__(self, *args, force_recoverable: bool = False, deferred: bool = False):
         super().__init__(*args)
         self.force_recoverable = force_recoverable
+        # True when the file is merely not safe to rewrite *yet* (changed since
+        # it was scanned, or a database under --settled): retry later, not an error.
+        self.deferred = deferred
 
 
 @dataclass
@@ -124,6 +127,8 @@ def safe_write(
     backup: bool = True,
     fmt: str = "jsonl",
     sidecars: Sequence[Path] = (),
+    in_place: bool = False,
+    expect_sha256: str | None = None,
 ) -> WriteRecord:
     """Atomically replace `path`'s content with `new_content`.
 
@@ -156,9 +161,27 @@ def safe_write(
         already exists, to avoid clobbering a prior backup).
       - Audit: appends a record to ~/.agentsweep/audit.jsonl with
         SHA256 of both versions.
+
+    `in_place` (used by --settled) overwrites the existing inode instead of
+    replacing it, after a compare-and-swap check against `expect_sha256` (the
+    file's hash when its redactions were computed). os.replace gives the path
+    a new inode: a writer that still holds the old one keeps appending to an
+    unlinked file and that output is lost. Writing in place keeps the inode,
+    so an appender's later writes land after the redacted content, and keeps
+    ACLs, extended attributes and hard links. The residual window is the
+    milliseconds between the final hash check and the write. A crash mid-write
+    is recoverable from the same-directory guard copy written first.
+    Databases (bytes content or sidecars) are never rewritten in place.
     """
     original_bytes = path.read_bytes()
     original_hash = _sha256(original_bytes)
+    if expect_sha256 is not None and original_hash != expect_sha256:
+        raise SafetyError(f"{path.name} changed since it was scanned", deferred=True)
+    if in_place and (sidecars or isinstance(new_content, bytes)):
+        raise SafetyError(
+            f"{path.name} is a database; not rewritten while settled-mode runs",
+            deferred=True,
+        )
 
     if isinstance(new_content, bytes):
         new_bytes = new_content
@@ -254,6 +277,27 @@ def safe_write(
                 sc_file.write(sidecar.read_bytes())
             sidecar_backups.append(sidecar_bak)
 
+    if in_place:
+        try:
+            _write_in_place(path, original_bytes, original_hash, new_bytes)
+        except Exception:
+            if backup_path is not None and backup_path.exists():
+                try:
+                    backup_path.unlink()
+                except OSError:
+                    pass
+            raise
+        record = WriteRecord(
+            path=path,
+            original_sha256=original_hash,
+            new_sha256=new_hash,
+            backup=backup_path,
+            bytes_before=len(original_bytes),
+            bytes_after=len(new_bytes),
+        )
+        _append_audit(record)
+        return record
+
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent),
         prefix=f".{path.name}.",
@@ -261,10 +305,16 @@ def safe_write(
     )
     tmp_path = Path(tmp_name)
     try:
+        orig_stat = path.stat()
         with os.fdopen(fd, "wb") as f:
             f.write(new_bytes)
             f.flush()
             os.fsync(f.fileno())
+        # Keep the file's permissions and timestamps: mkstemp creates 0600 with
+        # mtime "now", which would change who can read the file and reorder
+        # every agent's "recent sessions" list after a redaction pass.
+        os.chmod(tmp_path, orig_stat.st_mode & 0o7777)
+        os.utime(tmp_path, ns=(orig_stat.st_atime_ns, orig_stat.st_mtime_ns))
         os.replace(tmp_path, path)
     except Exception:
         if tmp_path.exists():
@@ -356,3 +406,70 @@ def _append_audit(record: WriteRecord) -> None:
             )
     except OSError:
         pass
+
+
+def _write_in_place(
+    path: Path, original_bytes: bytes, original_hash: str, new_bytes: bytes
+) -> None:
+    """Overwrite `path`'s own inode with `new_bytes` (see safe_write in_place).
+
+    A same-directory 0600 guard copy of the original is written (and the
+    directory fsynced) first. It is removed only once the target is known to
+    hold a complete version - the new bytes, the restored original, or the
+    untouched original. If restoring fails too, the guard stays: it is then the
+    only complete copy.
+    """
+    st = path.stat()
+    fd, guard_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".guard"
+    )
+    guard = Path(guard_name)
+    consistent = False
+    try:
+        with os.fdopen(fd, "wb") as g:
+            g.write(original_bytes)
+            g.flush()
+            os.fsync(g.fileno())
+        _fsync_dir(path.parent)
+        with open(path, "r+b") as f:
+            # Final compare-and-swap: anything written since the redactions
+            # were computed means a writer is still active. Defer.
+            if _sha256(f.read()) != original_hash:
+                consistent = True  # not touched by us
+                raise SafetyError(f"{path.name} changed while redacting", deferred=True)
+            try:
+                f.seek(0)
+                f.write(new_bytes)
+                f.truncate()
+                f.flush()
+                os.fsync(f.fileno())
+                consistent = True
+            except Exception:
+                f.seek(0)
+                f.write(original_bytes)
+                f.truncate()
+                f.flush()
+                os.fsync(f.fileno())
+                consistent = True  # restored
+                raise
+        os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+    finally:
+        if consistent:
+            try:
+                guard.unlink()
+            except OSError:
+                pass
+            _fsync_dir(path.parent)
+
+
+def _fsync_dir(directory: Path) -> None:
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
