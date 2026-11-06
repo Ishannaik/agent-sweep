@@ -25,6 +25,7 @@ from ._helpers import (
     _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
+    _sqlite_verification_identities,
 )
 
 
@@ -198,6 +199,22 @@ class OpenCodeSource(Source):
         # Only consulted for str returns, i.e. the legacy storage/*.json
         # files; the SQLite path returns source-validated bytes.
         return "json"
+
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        """Use SQLite metadata identities for the database, base identities otherwise."""
+        if path == self._db_path():
+            return _sqlite_verification_identities(
+                path,
+                entries,
+                self._sqlite_text_columns,
+                target_keypaths,
+            )
+        return super().verification_identities(path, entries, target_keypaths)
 
     def _iter_strings_sqlite(self, path: Path) -> Iterator[tuple[int, KeyPath, str]]:
         try:

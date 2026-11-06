@@ -102,6 +102,20 @@ class Source(ABC):
         returned.
         """
 
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        """Return stable identities for a decoded file's string locations.
+
+        ``target_keypaths`` identifies every location being rewritten in this
+        transaction. SQLite sources use it to exclude just those columns from
+        row metadata, so the same identities survive their VACUUM rewrite.
+        """
+        return [(line, tuple(keypath)) for line, keypath, _value in entries]
+
     def content_format(self, path: Path) -> str:
         """Declare how the redactor must validate str content for `path`.
 

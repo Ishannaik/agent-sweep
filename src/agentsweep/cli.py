@@ -33,7 +33,7 @@ from pathlib import Path
 
 from . import __version__
 
-VERBS = {"scan", "fix", "undo", "purge"}
+VERBS = {"scan", "fix", "undo", "purge", "selftest"}
 
 _PYPI_URL = "https://pypi.org/pypi/agentsweep/json"
 
@@ -212,6 +212,8 @@ def _interactive() -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch CLI verbs while keeping selftest JSON failures machine-clean."""
+
     if argv is None:
         argv = sys.argv[1:]
 
@@ -229,6 +231,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if argv and argv[0] == "completion":
         return _run_completion(argv[1:])
+
+    # Selftest is deliberately machine-clean: parsing and execution must not
+    # import terminal UI machinery, including for --json failures.
+    if argv and argv[0] == "selftest":
+        try:
+            return _run_selftest(_parse_selftest(argv[1:]))
+        except KeyboardInterrupt:
+            return 130
 
     # Honor NO_COLOR / --no-color before any styled output (menu, banner,
     # update notice). The flag is parsed per-verb below; catch it here too so
@@ -334,8 +344,49 @@ def _add_common(ap: argparse.ArgumentParser) -> None:
     )
 
 
-def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
+def _add_rule_filter_arguments(ap: argparse.ArgumentParser) -> None:
+    """Register the common explicit scanner-rule selection flags."""
+    ap.add_argument(
+        "--exclude-rule",
+        action="append",
+        default=[],
+        metavar="RULE_ID",
+        help="Suppress findings from this rule id. Repeatable.",
+    )
+    ap.add_argument(
+        "--only-rule",
+        action="append",
+        default=[],
+        metavar="RULE_ID",
+        help="Keep only findings from this rule id. Repeatable.",
+    )
+
+
+def _validate_rule_filters(
+    ap: argparse.ArgumentParser, args: argparse.Namespace
+) -> None:
+    """Validate and normalize the common explicit scanner-rule selection flags."""
     from .scanner import DETECTOR_IDS, RULES
+
+    if args.exclude_rule and args.only_rule:
+        ap.error("cannot use --exclude-rule with --only-rule")
+
+    all_rule_ids = {rule_id for rule_id, _display, _pattern in RULES} | set(
+        DETECTOR_IDS
+    )
+    unknown = sorted(
+        set(args.exclude_rule).union(args.only_rule).difference(all_rule_ids)
+    )
+    if unknown:
+        joined = ", ".join(unknown)
+        ap.error(f"unknown rule id(s): {joined} (see: agentsweep explain --list)")
+
+    args.exclude_rule = set(args.exclude_rule)
+    args.only_rule = set(args.only_rule)
+
+
+def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
+    """Parse a scan or fix command and normalize its shared policy options."""
 
     ap = argparse.ArgumentParser(
         prog=f"agentsweep {verb}",
@@ -415,20 +466,7 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         help="Force .agentsweepignore suppression on, even if a "
         "config file sets no_ignore = true.",
     )
-    ap.add_argument(
-        "--exclude-rule",
-        action="append",
-        default=[],
-        metavar="RULE_ID",
-        help="Suppress findings from this rule id. Repeatable.",
-    )
-    ap.add_argument(
-        "--only-rule",
-        action="append",
-        default=[],
-        metavar="RULE_ID",
-        help="Keep only findings from this rule id. Repeatable.",
-    )
+    _add_rule_filter_arguments(ap)
     # Redaction flags (used by `fix` / legacy --fix; harmless on `scan`).
     ap.add_argument(
         "--no-backup",
@@ -452,6 +490,11 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
         metavar="TEMPLATE",
         help="Custom placeholder for redacted secrets, e.g. '[SECRET]'. "
         "{rule} is substituted if present. Default: [REDACTED:{rule}]",
+    )
+    ap.add_argument(
+        "--verify-scanner",
+        action="store_true",
+        help="Fail closed unless the scanner positive-control passes.",
     )
     args = ap.parse_args(rest)
     args.fix = verb == "fix"
@@ -493,21 +536,7 @@ def _parse_run(verb: str, rest: list[str]) -> argparse.Namespace:
     if getattr(args, "ignore", False):
         args.no_ignore = False
 
-    if args.exclude_rule and args.only_rule:
-        ap.error("cannot use --exclude-rule with --only-rule")
-
-    all_rule_ids = {rule_id for rule_id, _display, _pattern in RULES} | set(
-        DETECTOR_IDS
-    )
-    unknown = sorted(
-        set(args.exclude_rule).union(args.only_rule).difference(all_rule_ids)
-    )
-    if unknown:
-        joined = ", ".join(unknown)
-        ap.error(f"unknown rule id(s): {joined} (see: agentsweep explain --list)")
-
-    args.exclude_rule = set(args.exclude_rule)
-    args.only_rule = set(args.only_rule)
+    _validate_rule_filters(ap, args)
 
     if args.format is not None:
         if args.json:
@@ -619,6 +648,85 @@ def _run_explain(rest: list[str]) -> int:
     return 2
 
 
+def _parse_selftest(rest: list[str]) -> argparse.Namespace:
+    """Parse the isolated scanner positive-control command."""
+    ap = argparse.ArgumentParser(
+        prog="agentsweep selftest",
+        description="Verify scanner detection with an isolated synthetic corpus.",
+    )
+    ap.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="Root whose .agentsweepignore context to use (default: cwd).",
+    )
+    ap.add_argument(
+        "--no-ignore",
+        action="store_true",
+        help="Ignore any .agentsweepignore files.",
+    )
+    _add_rule_filter_arguments(ap)
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable selftest result.",
+    )
+    args = ap.parse_args(rest)
+    _validate_rule_filters(ap, args)
+    return args
+
+
+def _run_selftest(args: argparse.Namespace) -> int:
+    """Run and report the scanner positive control without touching history."""
+    from .selftest import run_selftest
+
+    result = run_selftest(
+        args.root,
+        no_ignore=args.no_ignore,
+        exclude_rules=args.exclude_rule,
+        only_rules=None if not args.only_rule else args.only_rule,
+    )
+    payload = result.as_dict()
+    if args.json:
+        print(json.dumps(payload, sort_keys=True))
+    elif result.ok:
+        exercised = ", ".join(
+            item["rule"] for item in payload["coverage"] if item["status"] == "ok"
+        )
+        skipped = ", ".join(
+            item["rule"]
+            for item in payload["coverage"]
+            if item["status"] == "skipped-by-rule-filter"
+        )
+        print(f"Scanner selftest passed (Claude JSONL control): {exercised}")
+        if skipped:
+            print(f"  skipped by rule filter: {skipped}")
+    else:
+        print(
+            "Scanner selftest failed; scanner verification is not safe to use.",
+            file=sys.stderr,
+        )
+        active = ", ".join(
+            item["rule"]
+            for item in payload["coverage"]
+            if item["status"] != "skipped-by-rule-filter"
+        )
+        skipped = ", ".join(
+            item["rule"]
+            for item in payload["coverage"]
+            if item["status"] == "skipped-by-rule-filter"
+        )
+        if active:
+            print(f"  active controls: {active}", file=sys.stderr)
+        if skipped:
+            print(f"  skipped by rule filter: {skipped}", file=sys.stderr)
+        if result.selection_error:
+            print(f"  control error: {result.selection_error}", file=sys.stderr)
+        elif result.error_type:
+            print(f"  control error: {result.error_type}", file=sys.stderr)
+    return 0 if result.ok else 2
+
+
 def _parse_undo(rest: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         prog="agentsweep undo",
@@ -673,6 +781,8 @@ def _with_rule_id_completer(action: argparse.Action) -> argparse.Action:
 
 
 def _get_completion_parser() -> argparse.ArgumentParser:
+    """Build the argcomplete parser that mirrors every supported CLI verb."""
+
     ap = argparse.ArgumentParser(
         prog="agentsweep",
         description="Find and redact secrets in AI coding agent histories.",
@@ -761,6 +871,11 @@ def _get_completion_parser() -> argparse.ArgumentParser:
         help="Custom placeholder for redacted secrets, e.g. '[SECRET]'. "
         "{rule} is substituted if present. Default: [REDACTED:{rule}]",
     )
+    scan_p.add_argument(
+        "--verify-scanner",
+        action="store_true",
+        help="Fail closed unless the scanner positive-control passes.",
+    )
 
     # fix
     fix_p = subparsers.add_parser("fix", description="Redact secrets in history.")
@@ -838,6 +953,11 @@ def _get_completion_parser() -> argparse.ArgumentParser:
         help="Custom placeholder for redacted secrets, e.g. '[SECRET]'. "
         "{rule} is substituted if present. Default: [REDACTED:{rule}]",
     )
+    fix_p.add_argument(
+        "--verify-scanner",
+        action="store_true",
+        help="Fail closed unless the scanner positive-control passes.",
+    )
 
     # undo
     undo_p = subparsers.add_parser("undo", description="Restore backups.")
@@ -866,6 +986,40 @@ def _get_completion_parser() -> argparse.ArgumentParser:
     )
     purge_p.add_argument(
         "--yes", action="store_true", help="Skip the confirmation prompt."
+    )
+
+    # selftest
+    selftest_p = subparsers.add_parser(
+        "selftest", description="Verify scanner detection with a synthetic corpus."
+    )
+    selftest_p.add_argument(
+        "--root",
+        type=Path,
+        help="Root whose .agentsweepignore context to use.",
+    )
+    selftest_p.add_argument(
+        "--no-ignore", action="store_true", help="Ignore any .agentsweepignore files."
+    )
+    _with_rule_id_completer(
+        selftest_p.add_argument(
+            "--exclude-rule",
+            action="append",
+            default=[],
+            metavar="RULE_ID",
+            help="Exclude this positive-control rule. Repeatable.",
+        )
+    )
+    _with_rule_id_completer(
+        selftest_p.add_argument(
+            "--only-rule",
+            action="append",
+            default=[],
+            metavar="RULE_ID",
+            help="Exercise only this positive-control rule. Repeatable.",
+        )
+    )
+    selftest_p.add_argument(
+        "--json", action="store_true", help="Emit a machine-readable selftest result."
     )
 
     # list-sources

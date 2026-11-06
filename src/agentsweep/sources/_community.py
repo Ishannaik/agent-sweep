@@ -21,6 +21,7 @@ from ._helpers import (
     _quote_ident,
     _redact_sqlite_copy,
     sqlite_sidecars,
+    _sqlite_verification_identities,
 )
 
 
@@ -135,6 +136,22 @@ class HermesSource(Source):
             return []
         return sqlite_sidecars(path)
 
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        """Use SQLite metadata identities only for the database-backed history."""
+        if path == self._db():
+            return _sqlite_verification_identities(
+                path,
+                entries,
+                self._sqlite_text_columns,
+                target_keypaths,
+            )
+        return super().verification_identities(path, entries, target_keypaths)
+
 
 class GooseSource(Source):
     """Goose (block/goose) — SQLite sessions.db + legacy per-session JSONL.
@@ -222,6 +239,22 @@ class GooseSource(Source):
         if path.suffix == ".jsonl":
             return []
         return sqlite_sidecars(path)
+
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        """Use SQLite metadata identities only for the database-backed history."""
+        if path == self._db():
+            return _sqlite_verification_identities(
+                path,
+                entries,
+                self._sqlite_text_columns,
+                target_keypaths,
+            )
+        return super().verification_identities(path, entries, target_keypaths)
 
 
 class LlmSource(Source):
@@ -368,3 +401,17 @@ class LlmSource(Source):
 
     def sidecars(self, path: Path) -> list[Path]:
         return sqlite_sidecars(path)
+
+    def verification_identities(
+        self,
+        path: Path,
+        entries: list[tuple[int, KeyPath, str]],
+        target_keypaths: frozenset[tuple[object, ...]],
+    ) -> list[object]:
+        """Return metadata-based identities that survive this SQLite rewrite."""
+        return _sqlite_verification_identities(
+            path,
+            entries,
+            self._sqlite_text_columns,
+            target_keypaths,
+        )
