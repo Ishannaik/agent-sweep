@@ -111,6 +111,8 @@ def test_prefilter_backend_is_lossless_vs_running_all_rules():
         "just some normal english prose about keys tokens and secrets",
         "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
         "gitlab and github and git all mentioned here with glpat-a1b2c3a1b2c3a1b2c3ab",
+        "ghs_" + "APPID_JWT.payload-" * 30,
+        "ghu_" + "a1" * 18,
         "",
     ]
 

@@ -38,7 +38,7 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ("github-oauth", "GitHub OAuth token",
         re.compile(r"\bgho_[A-Za-z0-9]{36}\b")),
     ("github-app", "GitHub App token",
-        re.compile(r"\b(?:ghs|ghu)_[A-Za-z0-9]{36}\b")),
+        re.compile(r"\b(?:ghs_[A-Za-z0-9.\-_]{36,}(?![A-Za-z0-9.\-_])|ghu_[A-Za-z0-9]{36}\b)")),
     ("github-fine-grained", "GitHub fine-grained PAT",
         re.compile(r"\bgithub_pat_[A-Za-z0-9_]{82}\b")),
     ("stripe-live", "Stripe live secret key",
