@@ -76,6 +76,15 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         )),
     ("anthropic", "Anthropic API key",
         re.compile(r"\bsk-ant-(?:api|sid)[0-9]*-[A-Za-z0-9_-]{32,}\b")),
+    ("anthropic-oauth-token", "Anthropic OAuth token",
+        # Claude Code stores its login/setup token as sk-ant-oatNN-<body>
+        # (observed body: ~95 URL-safe chars). The floor mirrors the anthropic
+        # rule; the cap bounds the scan. The lookarounds stop a match from
+        # being carved out of a longer adjacent token.
+        re.compile(
+            r"(?<![A-Za-z0-9_-])sk-ant-oat[0-9]{2}-"
+            r"[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])"
+        )),
     ("google-api", "Google API key",
         re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
     ("google-oauth-client-secret", "Google OAuth client secret",
@@ -702,6 +711,7 @@ _PREFILTER.update({
     "supabase-secret-key":   ("sb_secret_",),
     "neon-role-password":  ("npg" "_",),
     "tavily-api-key":      ("tvly" "-",),
+    "anthropic-oauth-token": ("sk-ant-oat",),
     "cloudflare-account-api-token": ("cfat_",),
     "cloudflare-global-api-key": ("cfk_",),
     "terraform-api-token": ("atlasv1.",),
@@ -892,6 +902,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "stripe-webhook-secret": "Roll: https://dashboard.stripe.com/webhooks (select the endpoint, then roll its signing secret)",
     "openai": "Revoke: https://platform.openai.com/api-keys",
     "anthropic": "Revoke: https://console.anthropic.com/settings/keys",
+    "anthropic-oauth-token": "Rotate: run `claude logout` then `claude login` to replace the exposed Claude Code OAuth token; if it came from `claude setup-token`, generate a new one and stop using the old one.",
     "google-api": "Rotate: https://console.cloud.google.com/apis/credentials",
     "google-oauth-client-secret": "Rotate: https://console.cloud.google.com/apis/credentials (OAuth 2.0 Client IDs > reset secret)",
     "google-service-account-key": "Revoke: https://console.cloud.google.com/iam-admin/serviceaccounts (delete the compromised key, generate a new one)",

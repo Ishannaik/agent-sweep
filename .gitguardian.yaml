@@ -21,6 +21,8 @@ secret:
       match: "cfat_"
     - name: "Cloudflare global API key prefix anchor (detection-rule literal, not a real secret)"
       match: "cfk_"
+    - name: "Anthropic OAuth token prefix anchor (detection-rule literal, not a real secret)"
+      match: "sk-ant-oat"
     - name: "Neon role-password prefix anchor (detection-rule literal, not a real secret)"
       match: "npg_"
     - name: "Tavily API-key synthetic test fixture (test-only synthetic, not a real secret)"
