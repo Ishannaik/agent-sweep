@@ -902,7 +902,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "stripe-webhook-secret": "Roll: https://dashboard.stripe.com/webhooks (select the endpoint, then roll its signing secret)",
     "openai": "Revoke: https://platform.openai.com/api-keys",
     "anthropic": "Revoke: https://console.anthropic.com/settings/keys",
-    "anthropic-oauth-token": "Rotate: run `claude logout` then `claude login` to replace the exposed Claude Code OAuth token; if it came from `claude setup-token`, generate a new one and stop using the old one.",
+    "anthropic-oauth-token": "Rotate: run `claude auth logout` then `claude auth login` to replace the exposed Claude Code OAuth token; if it came from `claude setup-token`, generate a new one and stop using the old one.",
     "google-api": "Rotate: https://console.cloud.google.com/apis/credentials",
     "google-oauth-client-secret": "Rotate: https://console.cloud.google.com/apis/credentials (OAuth 2.0 Client IDs > reset secret)",
     "google-service-account-key": "Revoke: https://console.cloud.google.com/iam-admin/serviceaccounts (delete the compromised key, generate a new one)",

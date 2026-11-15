@@ -29,7 +29,7 @@ def test_detects_oauth_token_and_includes_rotation_guidance():
 
     assert [f.rule for f in findings] == ["anthropic-oauth-token"]
     assert findings[0].value == token
-    assert "claude login" in ROTATION_GUIDANCE["anthropic-oauth-token"]
+    assert "claude auth login" in ROTATION_GUIDANCE["anthropic-oauth-token"]
 
 
 def test_detects_realistic_length_token_inside_text():
