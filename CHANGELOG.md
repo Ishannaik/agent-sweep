@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add persistent safe TOML defaults with CLI precedence, and warn about and ignore safety-gating flags from config files.
 - Add `--no-color` and `NO_COLOR` support across human output and update notices, treating `FORCE_COLOR=0` as not forcing color.
 - Add secret detectors for Google OAuth and service-account credentials, Cohere, DeepSeek, Fireworks AI, Groq, Mistral AI, OpenRouter, Together AI, xAI/Grok, and Docker Hub personal-access tokens.
+- Add a secret detector for LangSmith personal access tokens and service keys (`lsv2_pt_` / `lsv2_sk_` prefixes) with key-revocation guidance.
 - Add a non-root Docker image, a pre-commit hook, and a Unix man page.
 - Flash the live scan finding count when new secrets are detected.
 

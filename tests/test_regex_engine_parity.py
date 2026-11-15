@@ -25,6 +25,7 @@ def _core_fixtures() -> dict[str, str]:
         "openai": "sk-proj-" + "a" * 40,
         "pinecone-api-key": "pcsk_" + "a" * 104,
         "anthropic": "sk-ant-api03-" + "a" * 32,
+        "langsmith-api-key": "lsv2_" + "pt_" + "a" * 32 + "_" + "b" * 10,
         "google-api": "AIza" + "a" * 35,
         "google-oauth-client-secret": "GOCSPX-" + "a" * 28,
         "google-service-account-key": (

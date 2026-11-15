@@ -72,6 +72,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     "db-url-with-password": None,  # no generic DB-URL rule upstream
     "neon-role-password": None,  # no gitleaks equivalent
     "tavily-api-key": None,  # no gitleaks equivalent
+    "langsmith-api-key": None,  # no gitleaks equivalent yet (rule proposed upstream, not merged)
     "cloudflare-account-api-token": None,  # no gitleaks equivalent
     "cloudflare-global-api-key": None,  # gitleaks' rule targets the legacy 37-hex key
     "npm-token": "npm-access-token",

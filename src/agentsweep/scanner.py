@@ -107,6 +107,15 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
                    r"[^:/\s]+:[^@\s'\"]+@[^\s'\"/]+")),
     ("neon-role-password", "Neon role password",
         re.compile(r"(?<![A-Za-z0-9_-])npg_[A-Za-z0-9]{12,64}(?![A-Za-z0-9_-])")),
+    ("langsmith-api-key", "LangSmith API key",
+        # lsv2_pt_ (personal access token) or lsv2_sk_ (service key), then a
+        # 32-char body, an underscore and a 10-char tail, all lowercase
+        # alphanumeric. Fixed-width quantifiers keep it bounded; the
+        # lookarounds stop a match being carved out of a longer token.
+        re.compile(
+            r"(?<![A-Za-z0-9_-])lsv2_(?:pt|sk)_[a-z0-9]{32}_[a-z0-9]{10}"
+            r"(?![A-Za-z0-9_-])"
+        )),
     ("tavily-api-key", "Tavily API key",
         # Dashboard API keys are tvly- followed by exactly 40 alphanumeric
         # body chars; the quantifier is bounded so short/near-miss strings
@@ -702,6 +711,7 @@ _PREFILTER.update({
     "supabase-secret-key":   ("sb_secret_",),
     "neon-role-password":  ("npg" "_",),
     "tavily-api-key":      ("tvly" "-",),
+    "langsmith-api-key":   ("lsv2" "_pt_", "lsv2" "_sk_"),
     "cloudflare-account-api-token": ("cfat_",),
     "cloudflare-global-api-key": ("cfk_",),
     "terraform-api-token": ("atlasv1.",),
@@ -905,6 +915,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "private-key-pem": "Regenerate the key pair and rotate any authorized_keys / cert stores that reference it.",
     "db-url-with-password": "Change the database user's password and update connection strings.",
     "neon-role-password": "Rotate: Neon console > project > Roles (reset the role's password), or POST /projects/{project_id}/branches/{branch_id}/roles/{role_name}/reset_password via the Neon API.",
+    "langsmith-api-key": "Revoke: https://smith.langchain.com/settings (API Keys: delete the exposed personal access token or service key, then create a new one). Review recent traces and runs for data the key could read.",
     "tavily-api-key": "Revoke: Tavily dashboard > API Keys (click regenerate on the exposed key): https://app.tavily.com/home",
     "vercel-api-token": "Revoke and rotate at https://vercel.com/account/tokens.",
     "cloudflare-account-api-token": "Rotate: Cloudflare dashboard > Manage Account > Account API Tokens (roll or revoke the token).",
