@@ -62,6 +62,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     "stripe-test": "stripe-access-token",
     "openai": "openai-api-key",
     "anthropic": "anthropic-api-key",
+    "anthropic-oauth-token": None,  # no gitleaks equivalent
     "google-api": "gcp-api-key",
     "slack-bot": "slack-bot-token",
     "slack-user": "slack-user-token",
