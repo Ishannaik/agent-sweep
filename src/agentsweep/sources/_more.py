@@ -51,22 +51,10 @@ from ._helpers import (
     _redact_sqlite_copy,
     sqlite_sidecars,
 )
-from ._vscode import _VSCodeSqliteSource
+from ._vscode import _VSCodeSqliteSource, _vscode_appdata_base
 
 
 # ── shared helpers ────────────────────────────────────────────────────────────
-
-
-def _vscode_appdata_base() -> Path:
-    """The per-OS base dir VS Code-fork editors put their data folder under."""
-    if sys.platform == "win32":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            return Path(appdata)
-    elif sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support"
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    return Path(xdg) if xdg else (Path.home() / ".config")
 
 
 def _all_table_columns(con: sqlite3.Connection) -> list[tuple[str, str]]:
@@ -269,14 +257,16 @@ class WarpSource(_GenericSqliteSource):
 class GrokCliSource(_GenericSqliteSource):
     """Grok CLI (superagent-ai/grok-cli) — ~/.grok/grok.db (messages table).
 
-    Experimental: path/schema from research, not a real install. This is a
-    different product from xAI Grok Build, which stores JSONL under
-    ~/.grok/sessions/ (see GrokBuildSource). A missing grok.db is a no-op.
+    Verified against grok-dev 1.1.7: messages.message_json stores the
+    transcript as JSON. This is a different product from xAI Grok Build,
+    which stores JSONL under ~/.grok/sessions/ (see GrokBuildSource).
+    A missing grok.db is a no-op.
     """
 
     name = "grok-cli"
     display_name = "Grok CLI"
     process_markers = GROK_CLI_MARKERS
+    experimental = False
 
     @classmethod
     def default_root(cls) -> Path:

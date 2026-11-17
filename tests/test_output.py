@@ -452,9 +452,8 @@ def test_output_file_parent_does_not_exist_does_not_crash(tmp_path, capsys):
     code = main(["scan", "--root", str(root), "--json", "-o", str(out_file)])
     captured = capsys.readouterr()
 
-    # Exit code should still reflect findings (1) or write-error (2 via _write_text)
-    # but should not be a Python exception / unhandled crash.
-    assert code in (1, 2)
+    # Exit code should be 2 (write-error) — not a Python exception / unhandled crash.
+    assert code == 2
     # No Python traceback on stderr
     assert "Traceback" not in captured.err
 
@@ -510,7 +509,7 @@ def test_json_write_failure_no_false_written_claim(tmp_path, capsys):
     code = main(["scan", "--root", str(root), "--json", "-o", str(bad_out)])
     captured = capsys.readouterr()
 
-    assert code == 1
+    assert code == 2
     assert "Could not write" in captured.err
     assert "written to" not in captured.err
     assert not bad_out.exists()
@@ -524,9 +523,68 @@ def test_human_write_failure_no_false_written_claim(tmp_path, capsys):
     code = main(["scan", "--root", str(root), "-o", str(bad_out)])
     captured = capsys.readouterr()
 
-    assert code == 1
+    assert code == 2
     assert "Could not write" in captured.err
     assert "written to" not in (captured.out + captured.err)
+    assert not bad_out.exists()
+
+
+def test_sarif_write_failure_exits_2(tmp_path, capsys):
+    """SARIF: findings + -o write fails -> exit 2, stderr shows error, stdout clean."""
+    root = _mkroot(tmp_path)
+    bad_out = tmp_path / "no_such_dir" / "out.sarif"
+
+    code = main(["scan", "--root", str(root), "--format", "sarif", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
+    assert not bad_out.exists()
+
+
+def test_json_no_history_with_output_write_failure_exits_2(tmp_path, capsys):
+    """JSON + -o on an empty root: write failure -> exit 2, stdout clean."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    bad_out = tmp_path / "no_such_dir" / "report.json"
+
+    code = main(["scan", "--root", str(empty), "--json", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
+    assert not bad_out.exists()
+
+
+def test_sarif_no_history_with_output_write_failure_exits_2(tmp_path, capsys):
+    """SARIF + -o on an empty root: write failure -> exit 2, stdout clean."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    bad_out = tmp_path / "no_such_dir" / "report.sarif"
+
+    code = main(["scan", "--root", str(empty), "--format", "sarif", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
+    assert not bad_out.exists()
+
+
+def test_json_no_history_stats_with_output_write_failure_exits_2(tmp_path, capsys):
+    """JSON + --stats + -o on an empty root: write failure -> exit 2, stdout clean."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    bad_out = tmp_path / "no_such_dir" / "report.json"
+
+    code = main(["scan", "--root", str(empty), "--json", "--stats", "-o", str(bad_out)])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert "Could not write" in captured.err
+    assert captured.out == ""
     assert not bad_out.exists()
 
 
