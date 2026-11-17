@@ -44,6 +44,7 @@ def _core_fixtures() -> dict[str, str]:
         "neon-role-password": "npg_" + "a" * 12,
         "cloudflare-account-api-token": "cfat" + "_" + "a" * 40 + "0" * 8,
         "cloudflare-global-api-key": "cfk" + "_" + "a" * 40 + "0" * 8,
+        "cloudflare-user-api-token": "cfut" + "_" + "a" * 40 + "0" * 8,
         "npm-token": "npm_" + "a" * 36,
         "pypi-token": "pypi-AgEIcHlwaS5vcmc" + "a" * 50,
         "sendgrid": "SG." + "a" * 22 + "." + "b" * 43,
