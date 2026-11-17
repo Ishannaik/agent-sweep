@@ -124,12 +124,21 @@ def run(
     if not files:
         print(f"No history files found under {source.root}", file=sys.stderr)
         stats_flag = getattr(args, "stats", False)
+        exit_code = 0
         if machine:
-            if args.json and stats_flag:
-                empty_stats = _stats_payload({}, source_key=source.name)
-                _emit_json_payload({"findings": [], "stats": empty_stats}, output, 0)
-            else:
-                _print_empty_machine_output()
+            if as_sarif:
+                exit_code = _emit_sarif(_json_payload({}, source), output, 0)
+            elif args.json:
+                if stats_flag:
+                    empty_stats = _stats_payload({}, source_key=source.name)
+                    exit_code = _emit_json_payload(
+                        {"findings": [], "stats": empty_stats}, output, 0
+                    )
+                else:
+                    if output is not None:
+                        exit_code = _emit_json_payload({"findings": []}, output, 0)
+                    else:
+                        _print_empty_machine_output()
         else:
             ui.stage(
                 1,
@@ -141,7 +150,7 @@ def run(
             )
             if stats_flag:
                 _show_stats(_stats_payload({}, source_key=source.name))
-        return 0
+        return exit_code
 
     ignores = (
         ignore_mod.IgnoreSet()
@@ -215,20 +224,22 @@ def run(
 
     if not found_by_file:
         ui.stage(3, "ok", "FINDINGS", "no secrets found")
+        output_write_ok = True
         if getattr(args, "stats", False):
             empty_stats = _stats_payload(found_by_file, source_key=source.name)
             if output is not None:
-                if _write_text(
+                output_write_ok = _write_text(
                     output,
                     json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
-                ):
+                )
+                if output_write_ok:
                     print(f"0 finding(s) written to {output}", file=sys.stderr)
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
         _warn_leftover_backups(source, as_json=False)
         ui.contribute_line()
-        return 0
+        return 0 if output_write_ok else 2
 
     total = sum(len(v) for v in found_by_file.values())
     ui.stage(
@@ -239,7 +250,7 @@ def run(
         if getattr(args, "stats", False)
         else None
     )
-    _show_findings(found_by_file, source, output, stats=stats_payload)
+    output_ok = _show_findings(found_by_file, source, output, stats=stats_payload)
     if stats_payload is not None:
         _show_stats(stats_payload)
 
@@ -256,7 +267,7 @@ def run(
         ui.contribute_line()
         if _findings_out is not None:
             _findings_out.append((source, found_by_file))
-        return 1
+        return 2 if not output_ok else 1
 
     gate_err, gate_recoverable = _preflight_gates(source, source_cls, args)
     if gate_err is not None:
@@ -277,7 +288,10 @@ def run(
     )
     if _force_recoverable_out is not None:
         _force_recoverable_out.append(recoverable)
-    return _render_redact_result(rows, errors, found_by_file)
+    fix_code = _render_redact_result(rows, errors, found_by_file)
+    if not output_ok:
+        return 2
+    return fix_code
 
 
 def _render_redact_result(rows, errors: int, found_by_file: dict) -> int:
@@ -444,19 +458,25 @@ def run_all(args) -> int:
         )
         print(msg, file=sys.stderr)
         stats_flag = _opt(args, "stats", False)
+        exit_code = 0
         if as_json:
-            if stats_flag:
-                _emit_json_payload(
+            if as_sarif:
+                exit_code = _emit_sarif([], output, 0)
+            elif stats_flag:
+                exit_code = _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
             else:
-                print("[]")
+                if output is not None:
+                    exit_code = _emit_json_payload({"findings": []}, output, 0)
+                else:
+                    print("[]")
         else:
             ui.banner(__version__)
             ui.warn_line(msg)
             if stats_flag:
                 _show_stats(_stats_payload_multi([]))
-        return 0
+        return exit_code
 
     if not as_json:
         ui.banner(__version__)
@@ -542,13 +562,19 @@ def run_all(args) -> int:
     if total_files == 0:
         print("No history files found under any selected source", file=sys.stderr)
         stats_flag = _opt(args, "stats", False)
+        exit_code = 0
         if as_json:
-            if stats_flag:
-                _emit_json_payload(
+            if as_sarif:
+                exit_code = _emit_sarif([], output, 0)
+            elif stats_flag:
+                exit_code = _emit_json_payload(
                     {"findings": [], "stats": _stats_payload_multi([])}, output, 0
                 )
             else:
-                print("[]")
+                if output is not None:
+                    exit_code = _emit_json_payload({"findings": []}, output, 0)
+                else:
+                    print("[]")
         else:
             ui.stage(
                 1,
@@ -565,7 +591,7 @@ def run_all(args) -> int:
             ui.stage(4, "skip", "REDACT", "nothing to redact")
             ui.stage(5, "skip", "ROTATE", "nothing to rotate")
             ui.contribute_line()
-        return 0
+        return exit_code
 
     if not as_json:
         ui.stage(
@@ -783,20 +809,22 @@ def run_all(args) -> int:
     dirty = [(k, s, fbf) for k, s, _files, fbf, _sc, _sup, _tr in per_source if fbf]
     if not dirty:
         ui.stage(3, "ok", "FINDINGS", "no secrets found")
+        output_write_ok = True
         if getattr(args, "stats", False):
             empty_stats = _stats_payload_multi(per_source)
             if output is not None:
-                if _write_text(
+                output_write_ok = _write_text(
                     output,
                     json.dumps({"findings": [], "stats": empty_stats}, indent=2) + "\n",
-                ):
+                )
+                if output_write_ok:
                     print(f"0 finding(s) written to {output}", file=sys.stderr)
             _show_stats(empty_stats)
         ui.stage(4, "skip", "REDACT", "nothing to redact")
         ui.stage(5, "skip", "ROTATE", "nothing to rotate")
         _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=False)
         ui.contribute_line()
-        return 0
+        return 0 if output_write_ok else 2
 
     grand = sum(len(items) for _k, _s, fbf in dirty for items in fbf.values())
     ui.stage(3, "fail", "FINDINGS", f"{grand} secret(s) across {len(dirty)} source(s)")
@@ -837,6 +865,7 @@ def run_all(args) -> int:
     stats_payload = (
         _stats_payload_multi(per_source) if getattr(args, "stats", False) else None
     )
+    output_write_ok = True
     if output is not None:
         output_payload: JsonPayload = combined_payload
         if stats_payload is not None:
@@ -844,7 +873,10 @@ def run_all(args) -> int:
                 "findings": combined_payload,
                 "stats": stats_payload,
             }
-        if _write_text(output, json.dumps(output_payload, indent=2) + "\n"):
+        output_write_ok = _write_text(
+            output, json.dumps(output_payload, indent=2) + "\n"
+        )
+        if output_write_ok:
             ui.warn_line(f"{len(combined_payload)} finding(s) also written to {output}")
     elif needs_overflow:
         report = Path.cwd() / DEFAULT_REPORT_NAME
@@ -855,7 +887,10 @@ def run_all(args) -> int:
         _show_stats(stats_payload)
 
     if _opt(args, "fix", False):
-        return _fix_all_sources(args, dirty)
+        fix_code = _fix_all_sources(args, dirty)
+        if not output_write_ok:
+            return 2
+        return fix_code
 
     dirty_names = ", ".join(k for k, _s, _f in dirty)
     ui.stage(
@@ -870,7 +905,7 @@ def run_all(args) -> int:
     ui.rotation_panel(_rotation_items_multi(dirty))
     _warn_leftover_backups_multi([s for _k, s, *_ in per_source], as_json=False)
     ui.contribute_line()
-    return 1
+    return 2 if not output_write_ok else 1
 
 
 def _fix_all_sources(args, dirty: list[tuple[str, Source, dict]]) -> int:
@@ -1421,7 +1456,8 @@ def _emit_sarif(payload: list[dict], output: Path | None, suppressed: int) -> in
     if output is not None:
         if _write_text(output, text):
             print(f"{len(payload)} finding(s) written to {output}", file=sys.stderr)
-        return code
+            return code
+        return 2
 
     print(text, end="")
     if suppressed:
@@ -1443,7 +1479,8 @@ def _emit_json_payload(
     if output is not None:
         if _write_text(output, json.dumps(payload, indent=2) + "\n"):
             print(f"{count} finding(s) written to {output}", file=sys.stderr)
-        return code
+            return code
+        return 2
 
     flood = count > JSON_FLOOD_LIMIT and getattr(sys.stdout, "isatty", lambda: False)()
 
@@ -1512,7 +1549,7 @@ def _show_findings(
     output: Path | None,
     *,
     stats: JsonObject | None = None,
-) -> None:
+) -> bool:
     """Human findings table — capped on a real terminal so a huge scan can't
     bury the screen; the full set always goes to a report file in that case
     (or to -o if given)."""
@@ -1545,6 +1582,8 @@ def _show_findings(
         ui.findings_table(rows, source.root)
         if wrote_output:
             ui.warn_line(f"{len(rows)} finding(s) also written to {output}")
+
+    return output is None or wrote_output
 
 
 def _text_report(found_by_file: dict, source: Source) -> str:

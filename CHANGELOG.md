@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Resolve Cursor and Windsurf history on Linux when `XDG_CONFIG_HOME` is unset (and on Windows when `APPDATA` is unset): they now fall back to `~/.config` instead of a cwd-relative `Cursor/User` / `Windsurf/User`, sharing the resolver Trae, Void and PearAI already use.
 - Scan current OpenCode SQLite schemas and fail loudly when a known table has none of its expected text columns.
 - Bound Aider discovery by pruning cache and vendor trees, while retaining `.config` histories and warning when the 12-level depth cap requires `--root`.
 - Preserve CRLF line endings during redaction.

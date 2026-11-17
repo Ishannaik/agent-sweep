@@ -25,6 +25,18 @@ from ._helpers import (
 )
 
 
+def _vscode_appdata_base() -> Path:
+    """The per-OS base dir VS Code-fork editors put their data folder under."""
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            return Path(appdata)
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support"
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    return Path(xdg) if xdg else (Path.home() / ".config")
+
+
 class _VSCodeSqliteSource(Source):
     """Shared base for VS Code-fork agents (Cursor, Windsurf) that store
     history in SQLite state.vscdb files under globalStorage and workspaceStorage.
@@ -129,18 +141,8 @@ class CursorSource(_VSCodeSqliteSource):
     process_markers = CURSOR_MARKERS
 
     @classmethod
-    def _appdata_base(cls) -> Path:
-        if sys.platform == "win32":
-            appdata = os.environ.get("APPDATA", "")
-            if appdata:
-                return Path(appdata)
-        elif sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support"
-        return Path(os.environ.get("XDG_CONFIG_HOME", "")) or (Path.home() / ".config")
-
-    @classmethod
     def default_root(cls) -> Path:
-        return cls._appdata_base() / "Cursor" / "User"
+        return _vscode_appdata_base() / "Cursor" / "User"
 
     def _agent_transcripts_root(self) -> Path:
         return Path.home() / ".cursor" / "projects"
@@ -200,18 +202,8 @@ class WindsurfSource(_VSCodeSqliteSource):
     process_markers = WINDSURF_MARKERS
 
     @classmethod
-    def _appdata_base(cls) -> Path:
-        if sys.platform == "win32":
-            appdata = os.environ.get("APPDATA", "")
-            if appdata:
-                return Path(appdata)
-        elif sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support"
-        return Path(os.environ.get("XDG_CONFIG_HOME", "")) or (Path.home() / ".config")
-
-    @classmethod
     def default_root(cls) -> Path:
-        return cls._appdata_base() / "Windsurf" / "User"
+        return _vscode_appdata_base() / "Windsurf" / "User"
 
     def _memories_root(self) -> Path:
         return Path.home() / ".codeium" / "windsurf" / "memories"

@@ -124,6 +124,8 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         )),
     ("cloudflare-account-api-token", "Cloudflare account API token",
         re.compile(r"(?<![A-Za-z0-9_-])cfat_[A-Za-z0-9]{40}[0-9a-fA-F]{8}(?![A-Za-z0-9_-])")),
+    ("cloudflare-global-api-key", "Cloudflare global API key",
+        re.compile(r"(?<![A-Za-z0-9_-])cfk_[A-Za-z0-9]{40}[0-9a-fA-F]{8}(?![A-Za-z0-9_-])")),
     ("npm-token", "npm access token",
         re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("pypi-token", "PyPI upload token",
@@ -516,6 +518,13 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile('(?i)[\\w.\\-]{0,50}?yandex[\\w.\\- \\t]{0,20}[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(YC[a-zA-Z0-9_\\-]{38})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
     ('yandex-oauth-access-token', 'Yandex OAuth Access Token',
         re.compile('(?i)[\\w.\\-]{0,50}?yandex[\\w.\\- \\t]{0,20}[\\s\'"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60\'"\\s=]{0,5}(t1\\.[A-Za-z0-9_\\-]{1,100}={0,2}\\.[A-Za-z0-9_\\-]{86}={0,2})(?:[\\x60\'"\\s;]|\\\\[nr]|$)')),
+    ('replicate-api-token', 'Replicate API token',
+        # Replicate docs state the credential is a 40-char string that always
+        # starts with the `r8_` prefix; body is alphanumeric (no `-` or `_` per
+        # the official spec). Lower bound stays at 32 so any future body-length
+        # bump is still caught; upper bound is bounded per the issue's review
+        # rule against unbounded quantifiers.
+        re.compile(r'(?<![A-Za-z0-9_])r8_[A-Za-z0-9]{32,80}(?![A-Za-z0-9_])')),
 ]
 
 # Keep the public registry as real ``re.Pattern`` objects. The CLI, tests, and
@@ -702,10 +711,12 @@ _PREFILTER.update({
     "neon-role-password":  ("npg" "_",),
     "tavily-api-key":      ("tvly" "-",),
     "cloudflare-account-api-token": ("cfat_",),
+    "cloudflare-global-api-key": ("cfk_",),
     "resend-api-key":      ("re_",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
+    "replicate-api-token": ("r8" "_",),
 })
 
 
@@ -907,6 +918,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "vercel-api-token": "Revoke and rotate at https://vercel.com/account/tokens.",
     "resend-api-key": "Revoke: Resend dashboard > API Keys (delete the exposed key and create a new one): https://resend.com/api-keys",
     "cloudflare-account-api-token": "Rotate: Cloudflare dashboard > Manage Account > Account API Tokens (roll or revoke the token).",
+    "cloudflare-global-api-key": "Rotate: Cloudflare dashboard > My Profile > API Tokens > Global API Key (click Change to roll it); prefer scoped API tokens going forward.",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
     "pypi-token": "Revoke: https://pypi.org/manage/account/token/",
     "sendgrid": "Rotate: https://app.sendgrid.com/settings/api_keys",
@@ -1092,4 +1104,5 @@ ROTATION_GUIDANCE: dict[str, str] = {
     'yandex-api-key': 'Rotate: https://console.cloud.yandex.com/iam (IAM -> Service accounts -> API keys)',
     'yandex-aws-access-token': 'Rotate: https://console.cloud.yandex.com/iam (IAM -> Service accounts -> Static access keys)',
     'yandex-oauth-access-token': 'Revoke: https://oauth.yandex.com/ (Manage tokens -> Revoke)',
+    'replicate-api-token': 'Revoke: https://replicate.com/account/api-tokens',
 }
