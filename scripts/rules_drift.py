@@ -74,6 +74,7 @@ OURS_TO_GITLEAKS: dict[str, str | None] = {
     "tavily-api-key": None,  # no gitleaks equivalent
     "cloudflare-account-api-token": None,  # no gitleaks equivalent
     "cloudflare-global-api-key": None,  # gitleaks' rule targets the legacy 37-hex key
+    "resend-api-key": None,  # no gitleaks equivalent
     "npm-token": "npm-access-token",
     "pypi-token": "pypi-upload-token",
     "sendgrid": "sendgrid-api-token",

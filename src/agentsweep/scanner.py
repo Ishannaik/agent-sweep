@@ -114,6 +114,14 @@ _RAW_RULES: list[tuple[str, str, re.Pattern[str]]] = [
         re.compile(r"(?<![A-Za-z0-9_-])tvly-[A-Za-z0-9]{40}(?![A-Za-z0-9_-])")),
     ("vercel-api-token", "Vercel API Access Token",
         re.compile(r"\bvcp_[A-Za-z0-9]{24}\b")),
+    ("resend-api-key", "Resend API key",
+        # re_ + 8 base58 chars + _ + 24 base58 chars. The bare re_ prefix is
+        # too generic to match on alone, so the full two-segment shape and
+        # both boundaries are required.
+        re.compile(
+            r"(?<![A-Za-z0-9_-])re_[1-9A-HJ-NP-Za-km-z]{8}_[1-9A-HJ-NP-Za-km-z]{24}"
+            r"(?![A-Za-z0-9_-])"
+        )),
     ("cloudflare-account-api-token", "Cloudflare account API token",
         re.compile(r"(?<![A-Za-z0-9_-])cfat_[A-Za-z0-9]{40}[0-9a-fA-F]{8}(?![A-Za-z0-9_-])")),
     ("cloudflare-global-api-key", "Cloudflare global API key",
@@ -704,6 +712,7 @@ _PREFILTER.update({
     "tavily-api-key":      ("tvly" "-",),
     "cloudflare-account-api-token": ("cfat_",),
     "cloudflare-global-api-key": ("cfk_",),
+    "resend-api-key":      ("re_",),
     "terraform-api-token": ("atlasv1.",),
     "maxmind-license-key": ("_mmk",),
     "freemius-secret-key": ("secret_key",),
@@ -907,6 +916,7 @@ ROTATION_GUIDANCE: dict[str, str] = {
     "neon-role-password": "Rotate: Neon console > project > Roles (reset the role's password), or POST /projects/{project_id}/branches/{branch_id}/roles/{role_name}/reset_password via the Neon API.",
     "tavily-api-key": "Revoke: Tavily dashboard > API Keys (click regenerate on the exposed key): https://app.tavily.com/home",
     "vercel-api-token": "Revoke and rotate at https://vercel.com/account/tokens.",
+    "resend-api-key": "Revoke: Resend dashboard > API Keys (delete the exposed key and create a new one): https://resend.com/api-keys",
     "cloudflare-account-api-token": "Rotate: Cloudflare dashboard > Manage Account > Account API Tokens (roll or revoke the token).",
     "cloudflare-global-api-key": "Rotate: Cloudflare dashboard > My Profile > API Tokens > Global API Key (click Change to roll it); prefer scoped API tokens going forward.",
     "npm-token": "Revoke: https://www.npmjs.com/settings/~/tokens",
